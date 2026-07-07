@@ -537,16 +537,21 @@ export default function POSBilling({
 
                             {/* Itemized List */}
                             <div className="border-t border-slate-100 pt-3 mt-2 space-y-2">
-                              {order.items.map((item, index) => (
-                                <div key={index} className="flex justify-between text-xs text-slate-600 font-medium">
-                                  <span>
-                                    {item.quantity}x {item.menuItem.name}
-                                  </span>
-                                  <span className="font-mono text-slate-700">
-                                    INR {item.quantity * item.menuItem.price}
-                                  </span>
-                                </div>
-                              ))}
+                              {(order.items || []).map((item, index) => {
+                                if (!item) return null;
+                                const itemName = item.menuItem?.name || "Unknown Item";
+                                const itemPrice = item.menuItem?.price || 0;
+                                return (
+                                  <div key={index} className="flex justify-between text-xs text-slate-600 font-medium">
+                                    <span>
+                                      {item.quantity}x {itemName}
+                                    </span>
+                                    <span className="font-mono text-slate-700">
+                                      INR {item.quantity * itemPrice}
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
 
@@ -634,100 +639,102 @@ export default function POSBilling({
           </span>
         </div>
 
-        {/* Cart Item list */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#f8fafc]/50">
-          {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
-              <span className="text-4xl filter grayscale mb-3">🛒</span>
-              <p className="text-sm font-bold text-slate-500">Cart is empty</p>
-              <p className="text-xs text-slate-400 mt-1">Select items from catalog to start ordering</p>
-            </div>
-          ) : (
-            cart.map((item) => (
-              <div
-                key={item.menuItem.id}
-                className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col shadow-sm"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-800 line-clamp-1">
-                      {item.menuItem.name}
-                    </h4>
-                    <p className="text-xs text-slate-500 font-medium">INR {item.menuItem.price} each</p>
-                  </div>
-                  <button
-                    onClick={() => handleDeleteItem(item.menuItem.id)}
-                    className="text-slate-400 hover:text-rose-500 p-1 transition"
-                    id={`pos-delete-cart-item-${item.menuItem.id}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Notes and Quantities row */}
-                <div className="flex items-center justify-between mt-3">
-                  {/* Note trigger */}
-                  <div className="relative">
-                    {editingNoteId === item.menuItem.id ? (
-                      <div className="flex items-center space-x-1">
-                        <input
-                          type="text"
-                          placeholder="Note..."
-                          value={noteText}
-                          onChange={(e) => setNoteText(e.target.value)}
-                          className="bg-white border border-slate-300 rounded text-xs px-2 py-1 w-28 focus:outline-none focus:border-blue-500 text-slate-800"
-                        />
-                        <button
-                          onClick={() => handleNoteSave(item.menuItem.id)}
-                          className="bg-blue-600 text-white p-1 rounded hover:bg-blue-700 text-xs font-bold"
-                          id={`pos-save-note-${item.menuItem.id}`}
-                        >
-                          OK
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setEditingNoteId(item.menuItem.id);
-                          setNoteText(itemNotes[item.menuItem.id] || "");
-                        }}
-                        className="flex items-center space-x-1.5 text-xs text-slate-400 hover:text-blue-500 transition font-semibold"
-                        id={`pos-add-note-btn-${item.menuItem.id}`}
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                        <span className="truncate max-w-[120px]">
-                          {itemNotes[item.menuItem.id] ? itemNotes[item.menuItem.id] : "Add Chef Note"}
-                        </span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Quantity adjustment buttons */}
-                  <div className="flex items-center space-x-1.5 bg-slate-50 rounded-lg border border-slate-200 p-0.5">
-                    <button
-                      onClick={() => handleRemoveFromCart(item.menuItem.id)}
-                      className="w-6 h-6 bg-white hover:bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition"
-                    >
-                      <Minus className="w-3 h-3" />
-                    </button>
-                    <span className="text-xs font-bold text-slate-800 px-1.5 font-mono">
-                      {item.quantity}
-                    </span>
-                    <button
-                      onClick={() => handleAddToCart(item.menuItem)}
-                      className="w-6 h-6 bg-white hover:bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition"
-                    >
-                      <Plus className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
+        {/* Scrollable Container (Items + Forms + Summary) */}
+        <div className="flex-1 overflow-y-auto flex flex-col bg-[#f8fafc]/50">
+          {/* Cart Item list */}
+          <div className="p-4 space-y-3 flex-1 min-h-[160px]">
+            {cart.length === 0 ? (
+              <div className="h-full min-h-[160px] flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                <span className="text-4xl filter grayscale mb-3">🛒</span>
+                <p className="text-sm font-bold text-slate-500">Cart is empty</p>
+                <p className="text-xs text-slate-400 mt-1">Select items from catalog to start ordering</p>
               </div>
-            ))
-          )}
-        </div>
+            ) : (
+              cart.map((item) => (
+                <div
+                  key={item.menuItem.id}
+                  className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col shadow-sm"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800 line-clamp-1">
+                        {item.menuItem.name}
+                      </h4>
+                      <p className="text-xs text-slate-500 font-medium">INR {item.menuItem.price} each</p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteItem(item.menuItem.id)}
+                      className="text-slate-400 hover:text-rose-500 p-1 transition"
+                      id={`pos-delete-cart-item-${item.menuItem.id}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
 
-        {/* Checkout Forms & Total summaries */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50 shrink-0 space-y-4">
+                  {/* Notes and Quantities row */}
+                  <div className="flex items-center justify-between mt-3">
+                    {/* Note trigger */}
+                    <div className="relative">
+                      {editingNoteId === item.menuItem.id ? (
+                        <div className="flex items-center space-x-1">
+                          <input
+                            type="text"
+                            placeholder="Note..."
+                            value={noteText}
+                            onChange={(e) => setNoteText(e.target.value)}
+                            className="bg-white border border-slate-300 rounded text-xs px-2 py-1 w-28 focus:outline-none focus:border-blue-500 text-slate-800"
+                          />
+                          <button
+                            onClick={() => handleNoteSave(item.menuItem.id)}
+                            className="bg-blue-600 text-white p-1 rounded hover:bg-blue-700 text-xs font-bold"
+                            id={`pos-save-note-${item.menuItem.id}`}
+                          >
+                            OK
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setEditingNoteId(item.menuItem.id);
+                            setNoteText(itemNotes[item.menuItem.id] || "");
+                          }}
+                          className="flex items-center space-x-1.5 text-xs text-slate-400 hover:text-blue-500 transition font-semibold"
+                          id={`pos-add-note-btn-${item.menuItem.id}`}
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          <span className="truncate max-w-[120px]">
+                            {itemNotes[item.menuItem.id] ? itemNotes[item.menuItem.id] : "Add Chef Note"}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Quantity adjustment buttons */}
+                    <div className="flex items-center space-x-1.5 bg-slate-50 rounded-lg border border-slate-200 p-0.5">
+                      <button
+                        onClick={() => handleRemoveFromCart(item.menuItem.id)}
+                        className="w-6 h-6 bg-white hover:bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="text-xs font-bold text-slate-800 px-1.5 font-mono">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => handleAddToCart(item.menuItem)}
+                        className="w-6 h-6 bg-white hover:bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Checkout Forms & Total summaries */}
+          <div className="p-4 border-t border-slate-200 bg-slate-50 space-y-4">
           {/* Order Type Selector */}
           <div className="flex gap-2">
             <button
@@ -876,22 +883,27 @@ export default function POSBilling({
             </div>
           )}
 
-          {/* Checkout Submit trigger button */}
-          <button
-            onClick={handleSubmitOrderToKitchen}
-            disabled={cart.length === 0}
-            className={`w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 shadow-md transition duration-150 ${
-              cart.length === 0
-                ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
-                : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/10 hover:shadow-emerald-600/20 active:scale-[0.98]"
-            }`}
-            id="pos-submit-to-kitchen-btn"
-          >
-            <ChefHat className="w-4.5 h-4.5" />
-            <span>Submit Order (Send to KDS)</span>
-          </button>
         </div>
       </div>
+
+      {/* Checkout Footer (Fixed at bottom) */}
+      <div className="p-4 border-t border-slate-200 bg-white shrink-0">
+        {/* Checkout Submit trigger button */}
+        <button
+          onClick={handleSubmitOrderToKitchen}
+          disabled={cart.length === 0}
+          className={`w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 shadow-md transition duration-150 ${
+            cart.length === 0
+              ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+              : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/10 hover:shadow-emerald-600/20 active:scale-[0.98]"
+          }`}
+          id="pos-submit-to-kitchen-btn"
+        >
+          <ChefHat className="w-4.5 h-4.5" />
+          <span>Submit Order (Send to KDS)</span>
+        </button>
+      </div>
+    </div>
 
       {/* PAYMENT SELECTION POPUP MODAL */}
       {showPaymentModal && (

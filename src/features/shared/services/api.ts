@@ -86,8 +86,25 @@ export interface CopilotResponse {
  * Centralized API Client Service for UI-backend database communication.
  */
 export class ApiClient {
+  private static getHeaders(tenantId?: string, sessionId?: string): Record<string, string> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json"
+    };
+    if (tenantId) {
+      headers["x-tenant-id"] = tenantId;
+    }
+    const sessId = sessionId || localStorage.getItem("veggiepos_current_session_id");
+    if (sessId) {
+      headers["x-session-id"] = sessId;
+    }
+    return headers;
+  }
+
   private static handleHttpError(response: Response, contextMessage: string): void {
     if (!response.ok) {
+      if (response.status === 401) {
+        window.dispatchEvent(new CustomEvent("veggiepos_session_expired"));
+      }
       throw new Error(`${contextMessage}: Server returned status ${response.status}`);
     }
     const contentType = response.headers.get("content-type");
@@ -96,17 +113,46 @@ export class ApiClient {
     }
   }
 
+  private static handleApiResponse<T extends { success: boolean; error?: string }>(context: string, data: T): T {
+    if (!data.success) {
+      const errMsg = data.error || "The server rejected this transaction.";
+      this.logApiError(context, new Error(errMsg));
+    }
+    return data;
+  }
+
+  private static logApiError(context: string, error: any): void {
+    if (error && error.message && error.message.includes("status 401")) {
+      console.warn(`${context} (Session Expired/Unauthorized):`, error.message);
+    } else {
+      console.error(`${context}:`, error);
+    }
+
+    // Dispatch custom event to trigger global visual Toast notifications
+    if (typeof window !== "undefined") {
+      const errMsg = error?.message || "Unknown communication failure";
+      window.dispatchEvent(new CustomEvent("veggiepos_api_error", {
+        detail: {
+          context: context.replace(/^ApiClient\./, ""), // clean up class prefix
+          message: errMsg
+        }
+      }));
+    }
+  }
+
   /**
    * Fetches the full tenant synchronized state from the server database.
    */
-  public static async getTenantSync(tenantId: string): Promise<SyncResponse> {
+  public static async getTenantSync(tenantId: string, sessionId?: string): Promise<SyncResponse> {
     try {
-      const response = await fetch(`/api/sync?tenantId=${encodeURIComponent(tenantId)}`);
+      const response = await fetch(`/api/sync?tenantId=${encodeURIComponent(tenantId)}`, {
+        headers: this.getHeaders(tenantId, sessionId)
+      });
       this.handleHttpError(response, "Fetch sync state failed");
       const data: SyncResponse = await response.json();
-      return data;
+      return this.handleApiResponse(`ApiClient.getTenantSync for tenant ${tenantId}`, data);
     } catch (error: any) {
-      console.error(`ApiClient.getTenantSync error for tenant ${tenantId}:`, error);
+      this.logApiError(`ApiClient.getTenantSync error for tenant ${tenantId}`, error);
       return {
         success: false,
         initialized: false,
@@ -118,18 +164,18 @@ export class ApiClient {
   /**
    * Saves the updated tenant synchronized state back to the server database.
    */
-  public static async saveTenantSync(tenantId: string, payload: SyncPayload): Promise<SyncResponse> {
+  public static async saveTenantSync(tenantId: string, payload: SyncPayload, sessionId?: string): Promise<SyncResponse> {
     try {
       const response = await fetch(`/api/sync?tenantId=${encodeURIComponent(tenantId)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: this.getHeaders(tenantId, sessionId),
         body: JSON.stringify(payload)
       });
       this.handleHttpError(response, "Save sync state failed");
       const data: SyncResponse = await response.json();
-      return data;
+      return this.handleApiResponse(`ApiClient.saveTenantSync for tenant ${tenantId}`, data);
     } catch (error: any) {
-      console.error(`ApiClient.saveTenantSync error for tenant ${tenantId}:`, error);
+      this.logApiError(`ApiClient.saveTenantSync error for tenant ${tenantId}`, error);
       return {
         success: false,
         initialized: false,
@@ -145,14 +191,14 @@ export class ApiClient {
     try {
       const response = await fetch("/api/reports/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload)
       });
       this.handleHttpError(response, "Report generation failed");
       const data: ReportResponse = await response.json();
-      return data;
+      return this.handleApiResponse("ApiClient.generateReport", data);
     } catch (error: any) {
-      console.error("ApiClient.generateReport error:", error);
+      this.logApiError("ApiClient.generateReport error", error);
       return {
         success: false,
         report: "",
@@ -169,19 +215,59 @@ export class ApiClient {
     try {
       const response = await fetch("/api/copilot-chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: this.getHeaders(payload.tenantId),
         body: JSON.stringify(payload)
       });
       this.handleHttpError(response, "Copilot request failed");
       const data: CopilotResponse = await response.json();
-      return data;
+      return this.handleApiResponse("ApiClient.sendCopilotMessage", data);
     } catch (error: any) {
-      console.error("ApiClient.sendCopilotMessage error:", error);
+      this.logApiError("ApiClient.sendCopilotMessage error", error);
       return {
         success: false,
         reply: "Unable to reach operational assistance. Please check connectivity or view logs.",
         isImportant: false,
         isSimulated: true,
+        error: error.message || "Unknown communication error"
+      };
+    }
+  }
+
+  /**
+   * Fetches a safe public list of staff members without sensitive fields like PIN.
+   */
+  public static async getStaffDirectory(tenantId: string): Promise<{ success: boolean; staff?: any[]; error?: string }> {
+    try {
+      const response = await fetch(`/api/auth/staff-directory?tenantId=${encodeURIComponent(tenantId)}`, {
+        headers: this.getHeaders(tenantId)
+      });
+      this.handleHttpError(response, "Staff directory fetch failed");
+      const data = await response.json();
+      return this.handleApiResponse(`ApiClient.getStaffDirectory for tenant ${tenantId}`, data);
+    } catch (error: any) {
+      this.logApiError(`ApiClient.getStaffDirectory error for tenant ${tenantId}`, error);
+      return {
+        success: false,
+        error: error.message || "Unknown communication error"
+      };
+    }
+  }
+
+  /**
+   * Fetches the Supabase connection keys for frontend Realtime subscriptions.
+   */
+  public static async getSupabaseConfig(): Promise<{ success: boolean; supabaseUrl?: string; supabaseAnonKey?: string; error?: string }> {
+    try {
+      const response = await fetch("/api/supabase-config", {
+        headers: this.getHeaders()
+      });
+      this.handleHttpError(response, "Fetch Supabase config failed");
+      const data = await response.json();
+      return this.handleApiResponse("ApiClient.getSupabaseConfig", data);
+    } catch (error: any) {
+      this.logApiError("ApiClient.getSupabaseConfig error", error);
+      return {
+        success: false,
         error: error.message || "Unknown communication error"
       };
     }

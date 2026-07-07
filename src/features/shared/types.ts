@@ -104,13 +104,19 @@ export interface RestaurantTenant {
   id: string;
   name: string;
   tenantId: string;
-  status: 'active' | 'pending';
+  status: 'active' | 'pending' | 'suspended';
   created: string;
   initialPassword?: string;
   ownerName?: string;
   ownerPhone?: string;
   email?: string;
   region?: string;
+  plan?: 'free' | 'pro' | 'enterprise';
+  planStatus?: string;
+  usage?: {
+    staffCount: number;
+    monthlyOrders: number;
+  };
 }
 
 export interface InventorySettings {
@@ -120,4 +126,8 @@ export interface InventorySettings {
   managerCanEditRecipes: boolean;
   kdsSoundAlerts: boolean;
   quickPinRequired: boolean;
+  sentryDsn?: string;
+  slackWebhookUrl?: string;
+  emailAlertAddress?: string;
+  enableAlerts?: boolean;
 }

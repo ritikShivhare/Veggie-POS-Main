@@ -90,7 +90,8 @@ export default function DeliveryIntegration({
       return;
     }
 
-    const randomItems = [...menuItems].sort(() => 0.5 - Math.random()).slice(0, 2);
+    const safeMenuItems = menuItems || [];
+    const randomItems = [...safeMenuItems].sort(() => 0.5 - Math.random()).slice(0, 2);
     if (randomItems.length === 0) {
       alert("No menu items available to simulate an order.");
       return;

@@ -248,7 +248,7 @@ export const INITIAL_STAFF: StaffMember[] = [
     id: "s-rahul",
     name: "Rahul Sharma",
     role: "Owner",
-    pin: "1111",
+    pin: "11111",
     permissions: ["billing", "inventory", "reports", "settings"]
   },
   {
@@ -384,6 +384,18 @@ export const INITIAL_TENANTS: RestaurantTenant[] = [
     ownerName: "Rahul Sharma",
     ownerPhone: "9876543210",
     email: "owner@veggie.com",
+    region: "North India / Delhi"
+  },
+  {
+    id: "t-3",
+    name: "Reetesh Dhaba",
+    tenantId: "veg-reetesh-dhaba",
+    status: "active",
+    created: "2026-07-04",
+    initialPassword: "password12345",
+    ownerName: "Reetesh",
+    ownerPhone: "9876543211",
+    email: "reetesh@dhaba.com",
     region: "North India / Delhi"
   },
   {

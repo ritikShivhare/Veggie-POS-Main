@@ -1,4 +1,4 @@
-export type AppEventType = "INVENTORY_UPDATE" | "ORDER_COMPLETE" | "PAYMENT_SUCCESS";
+export type AppEventType = "INVENTORY_UPDATE" | "ORDER_COMPLETE" | "PAYMENT_SUCCESS" | "TENANT_REGISTERED";
 
 export interface AppEvent<T = any> {
   id: string;

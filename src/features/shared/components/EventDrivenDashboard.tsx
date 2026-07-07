@@ -65,10 +65,11 @@ export default function EventDrivenDashboard() {
   const [activePane, setActivePane] = useState<"simulator" | "logs" | "architecture">("simulator");
 
   // Simulation states
-  const [invItem, setInvItem] = useState("Tomato (Veg)");
-  const [invChange, setInvChange] = useState<number>(-5);
-  const [invLevel, setInvLevel] = useState<number>(12);
+  const [invItem, setInvItem] = useState("Tomato");
+  const [invChange, setInvChange] = useState<number>(-150);
+  const [invLevel, setInvLevel] = useState<number>(850);
   const [invManager, setInvManager] = useState("Suresh Kumar");
+  const [invUnit, setInvUnit] = useState("g");
 
   const [ordId, setOrdId] = useState(() => `ORD-${Math.floor(100000 + Math.random() * 900000)}`);
   const [ordTotal, setOrdTotal] = useState<number>(450);
@@ -330,34 +331,94 @@ export default function EventDrivenDashboard() {
                         <label className="text-slate-400 block font-bold mb-1">Ingredient</label>
                         <select
                           value={invItem}
-                          onChange={(e) => setInvItem(e.target.value)}
+                          onChange={(e) => {
+                            const selectedName = e.target.value;
+                            setInvItem(selectedName);
+                            // Auto-set default unit and some realistic stock level
+                            let defaultUnit = "g";
+                            let defaultStock = 1000;
+                            let defaultChange = -100;
+                            if (selectedName === "Paneer") {
+                              defaultStock = 1200;
+                              defaultChange = -200;
+                            } else if (selectedName === "Amul Butter") {
+                              defaultStock = 400;
+                              defaultChange = -100;
+                            } else if (selectedName === "Basmati Rice") {
+                              defaultStock = 8500;
+                              defaultChange = -500;
+                            } else if (selectedName === "Tomato") {
+                              defaultStock = 850;
+                              defaultChange = -150;
+                            } else if (selectedName === "Onion") {
+                              defaultStock = 12000;
+                              defaultChange = -1000;
+                            } else if (selectedName === "Garlic") {
+                              defaultStock = 2000;
+                              defaultChange = -200;
+                            } else if (selectedName === "Maida Flour") {
+                              defaultStock = 6000;
+                              defaultChange = -500;
+                            }
+                            setInvLevel(defaultStock);
+                            setInvChange(defaultChange);
+                            setInvUnit(defaultUnit);
+                          }}
                           className="w-full p-1.5 bg-white border border-slate-200 rounded text-[11px] font-semibold outline-none"
                         >
-                          <option value="Tomato (Veg)">Tomato (Veg)</option>
-                          <option value="Paneer Cube (Farmed)">Paneer Cube (Farmed)</option>
-                          <option value="Cheese Mozzarella">Cheese Mozzarella</option>
-                          <option value="Mushroom Slices">Mushroom Slices</option>
+                          <option value="Paneer">Paneer</option>
+                          <option value="Amul Butter">Amul Butter</option>
+                          <option value="Basmati Rice">Basmati Rice</option>
+                          <option value="Tomato">Tomato</option>
+                          <option value="Onion">Onion</option>
+                          <option value="Garlic">Garlic</option>
+                          <option value="Maida Flour">Maida Flour</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-slate-400 block font-bold mb-1">Unit of Measure</label>
+                        <select
+                          value={invUnit}
+                          onChange={(e) => setInvUnit(e.target.value)}
+                          className="w-full p-1.5 bg-white border border-slate-200 rounded text-[11px] font-semibold outline-none"
+                        >
+                          <option value="g">g (Grams)</option>
+                          <option value="kg">kg (Kilograms)</option>
+                          <option value="ml">ml (Milliliters)</option>
+                          <option value="l">l (Liters)</option>
+                          <option value="pieces">pieces (Pcs)</option>
                         </select>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-slate-400 block font-bold mb-1">Adjustment</label>
-                          <input
-                            type="number"
-                            value={invChange}
-                            onChange={(e) => setInvChange(Number(e.target.value))}
-                            className="w-full p-1 bg-white border border-slate-200 rounded text-[11px] font-bold text-center outline-none"
-                          />
+                          <label className="text-slate-400 block font-bold mb-1">Adjustment ({invUnit})</label>
+                          <div className="relative flex items-center">
+                            <input
+                              type="number"
+                              value={invChange}
+                              onChange={(e) => setInvChange(Number(e.target.value))}
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-center outline-none pr-9"
+                            />
+                            <span className="absolute right-1.5 text-[9px] text-slate-400 font-mono font-bold uppercase pointer-events-none bg-slate-100/50 px-1 rounded border border-slate-200/50">
+                              {invUnit}
+                            </span>
+                          </div>
                         </div>
                         <div>
-                          <label className="text-slate-400 block font-bold mb-1">Current Stock</label>
-                          <input
-                            type="number"
-                            value={invLevel}
-                            onChange={(e) => setInvLevel(Number(e.target.value))}
-                            className="w-full p-1 bg-white border border-slate-200 rounded text-[11px] font-bold text-center outline-none"
-                          />
+                          <label className="text-slate-400 block font-bold mb-1">Current Stock ({invUnit})</label>
+                          <div className="relative flex items-center">
+                            <input
+                              type="number"
+                              value={invLevel}
+                              onChange={(e) => setInvLevel(Number(e.target.value))}
+                              className="w-full p-1.5 bg-white border border-slate-200 rounded text-[11px] font-bold text-center outline-none pr-9"
+                            />
+                            <span className="absolute right-1.5 text-[9px] text-slate-400 font-mono font-bold uppercase pointer-events-none bg-slate-100/50 px-1 rounded border border-slate-200/50">
+                              {invUnit}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
@@ -378,6 +439,7 @@ export default function EventDrivenDashboard() {
                       itemName: invItem,
                       changeAmount: invChange,
                       newQuantity: invLevel,
+                      unit: invUnit,
                       updatedBy: invManager
                     })}
                     disabled={simulating !== null}

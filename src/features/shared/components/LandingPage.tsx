@@ -84,8 +84,8 @@ export default function LandingPage({
     if (!regOwnerPhone.trim()) return setRegError("Owner Phone Number is required.");
     if (!regEmail.trim()) return setRegError("Email ID is required.");
     if (regPassword.length < 6) return setRegError("Password must be at least 6 characters.");
-    if (regPin.length !== 4 || isNaN(Number(regPin))) {
-      return setRegError("PIN passcode must be exactly 4 numeric digits.");
+    if (regPin.length !== 5 || isNaN(Number(regPin))) {
+      return setRegError("Owner PIN passcode must be exactly 5 numeric digits.");
     }
 
     onRegisterBusiness({
@@ -104,8 +104,8 @@ export default function LandingPage({
 
     if (!loginBusinessName.trim()) return setLoginError("Business Name is required.");
     if (!loginEmail.trim()) return setLoginError("Email ID is required.");
-    if (loginPin.length !== 4 || isNaN(Number(loginPin))) {
-      return setLoginError("PIN must be exactly 4 numeric digits.");
+    if (loginPin.length !== 5 || isNaN(Number(loginPin))) {
+      return setLoginError("PIN must be exactly 5 numeric digits.");
     }
 
     onLoginBusiness({
@@ -188,7 +188,7 @@ export default function LandingPage({
           </div>
 
           {/* Call to Action */}
-          <div className="pt-8 flex items-center justify-center w-full">
+          <div className="pt-8 flex flex-col items-center justify-center w-full">
             <button
               onClick={() => setShowConsoleModal(true)}
               className="px-6 py-3.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-pink-500/20 hover:shadow-pink-500/30 transition duration-150 cursor-pointer flex items-center gap-2"
@@ -363,18 +363,18 @@ export default function LandingPage({
 
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono">4-Digit PIN Code</label>
+                      <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono">5-Digit Owner PIN Code</label>
                       <div className="relative group">
                         <HelpCircle className="w-3.5 h-3.5 text-slate-400 cursor-pointer hover:text-slate-600" />
                         <div className="absolute right-0 bottom-full mb-1.5 hidden group-hover:block bg-slate-800 text-white text-[9px] p-2 rounded shadow-lg whitespace-nowrap z-50">
-                          PIN used to log in to the billing screen
+                          PIN used by the Owner to open/unlock the terminal
                         </div>
                       </div>
                     </div>
                     <input
                       type="password"
-                      maxLength={4}
-                      placeholder="e.g. 1111"
+                      maxLength={5}
+                      placeholder="e.g. 11111"
                       value={regPin}
                       onChange={(e) => setRegPin(e.target.value.replace(/\D/g, ""))}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs tracking-widest text-center font-mono font-bold focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 text-slate-800"
@@ -448,11 +448,11 @@ export default function LandingPage({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono">4-Digit PIN Code</label>
+                    <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono">5-Digit Owner PIN</label>
                     <input
                       type="password"
-                      maxLength={4}
-                      placeholder="e.g. 1111"
+                      maxLength={5}
+                      placeholder="e.g. 11111"
                       value={loginPin}
                       onChange={(e) => setLoginPin(e.target.value.replace(/\D/g, ""))}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs tracking-widest text-center font-mono font-bold focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 text-slate-800"
@@ -804,6 +804,37 @@ export default function LandingPage({
               V
             </div>
             <p className="text-xs font-bold text-slate-400">VeggiePOS App</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 md:gap-6 font-medium text-slate-500">
+            <button
+              onClick={() => {
+                window.history.pushState({}, "", "/terms");
+                window.dispatchEvent(new Event("popstate"));
+              }}
+              className="hover:text-pink-500 transition duration-150 cursor-pointer text-[11px]"
+            >
+              Terms of Service
+            </button>
+            <span className="text-slate-800 hidden sm:inline">•</span>
+            <button
+              onClick={() => {
+                window.history.pushState({}, "", "/privacy");
+                window.dispatchEvent(new Event("popstate"));
+              }}
+              className="hover:text-pink-500 transition duration-150 cursor-pointer text-[11px]"
+            >
+              Privacy Policy
+            </button>
+            <span className="text-slate-800 hidden sm:inline">•</span>
+            <button
+              onClick={() => {
+                window.history.pushState({}, "", "/refund-policy");
+                window.dispatchEvent(new Event("popstate"));
+              }}
+              className="hover:text-pink-500 transition duration-150 cursor-pointer text-[11px]"
+            >
+              Refund Policy
+            </button>
           </div>
           <p className="text-[11px] text-slate-600">
             Designed for all types of restaurants, cafes, and bakeries. Built with safe and private data storage.

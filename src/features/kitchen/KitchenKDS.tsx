@@ -207,11 +207,11 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
 
                   {/* Items List */}
                   <div className="border-t border-b border-slate-100 py-3 my-2 space-y-2.5">
-                    {order.items.map((item, idx) => (
+                    {(order.items || []).map((item, idx) => (
                       <div key={idx} className="text-xs">
                         <div className="flex justify-between items-start">
                           <span className="font-bold text-slate-800">
-                            {item.quantity}x {item.menuItem.name}
+                            {item?.quantity || 1}x {item?.menuItem?.name || "Unknown Item"}
                           </span>
                         </div>
                         {item.note && (

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Shift, StaffMember } from "../shared/types";
+import { Shift, StaffMember, StaffRole } from "../shared/types";
 import { Clock, Play, LogOut, CheckCircle2, UserCheck, Eye, UserPlus, AlertCircle, ShieldAlert } from "lucide-react";
 
 interface StaffShiftsProps {
@@ -88,9 +88,9 @@ export default function StaffShifts({
     const newStaff: StaffMember = {
       id: `s-${Date.now()}`,
       name: newName.trim(),
-      role: newRole,
+      role: (newRole === "Cashier" || newRole === "Chef" ? "Staff" : newRole) as StaffRole,
       pin: newPin,
-      permissions: newPerms
+      permissions: newPerms as any
     };
 
     onUpdateStaffList([...staffList, newStaff]);

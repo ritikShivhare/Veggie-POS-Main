@@ -1,0 +1,425 @@
+import express from "express";
+import bcrypt from "bcryptjs";
+import {
+  sessionService,
+  notificationService,
+  staffRepo,
+  settingsRepo,
+  ingredientRepo,
+  menuRepo,
+  recipeRepo,
+  customerRepo,
+  orderRepo,
+  purchaseRepo,
+  shiftRepo,
+  eventBus,
+  auditLogService,
+  getGlobalTenantsList,
+  saveGlobalTenantsList,
+  DEFAULT_TENANT_ID,
+  authMiddleware
+} from "../server/context";
+
+const router = express.Router();
+
+interface PendingSignup {
+  businessName: string;
+  ownerName: string;
+  ownerPhone: string;
+  email: string;
+  pin: string;
+  region: string;
+  tenantId: string;
+  verificationCode: string;
+  createdAt: number;
+}
+const pendingSignups = new Map<string, PendingSignup>();
+
+// Self-Serve Signup Flow with Email Verification
+router.post("/auth/signup", async (req, res) => {
+  const { businessName, ownerName, ownerPhone, email, pin, region } = req.body;
+  if (!businessName || !ownerName || !email || !pin) {
+    return res.status(400).json({ success: false, error: "Missing required registration parameters" });
+  }
+
+  try {
+    const cleanedName = businessName.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const randomSuffix = Math.floor(100 + Math.random() * 900);
+    const tenantId = `veg-${cleanedName}-${randomSuffix}`;
+
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const pendingToken = `ptok-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    pendingSignups.set(pendingToken, {
+      businessName,
+      ownerName,
+      ownerPhone: ownerPhone || "",
+      email,
+      pin,
+      region: region || "North India / Delhi",
+      tenantId,
+      verificationCode,
+      createdAt: Date.now()
+    });
+
+    // Send verification email via NotificationService
+    await notificationService.send(tenantId, {
+      title: "VeggiePOS Email Verification",
+      message: `Dear ${ownerName}, thank you for registering "${businessName}". Your email verification code is: ${verificationCode}. Enter this to complete your setup.`,
+      severity: "info",
+      channels: ["email"],
+      recipientEmail: email,
+      metadata: { verificationCode, tenantId }
+    });
+
+    res.json({
+      success: true,
+      pendingToken,
+      tenantId,
+      email,
+      verificationCode, // sent so frontend can auto-fill or display for frictionless demo
+      message: "Verification code sent to email."
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/auth/verify", async (req, res) => {
+  const { pendingToken, verificationCode } = req.body;
+  if (!pendingToken || !verificationCode) {
+    return res.status(400).json({ success: false, error: "Token and verification code are required" });
+  }
+
+  const signup = pendingSignups.get(pendingToken);
+  if (!signup) {
+    return res.status(400).json({ success: false, error: "Registration session has expired or is invalid" });
+  }
+
+  if (signup.verificationCode !== verificationCode) {
+    return res.status(400).json({ success: false, error: "INVALID_CODE", message: "The verification code entered is incorrect. Please try again." });
+  }
+
+  try {
+    const newOwnerId = `s-${signup.ownerName.toLowerCase().replace(/[^a-z0-9]/g, "")}-${Math.floor(100 + Math.random() * 900)}`;
+    const newOwner = {
+      id: newOwnerId,
+      name: signup.ownerName,
+      role: "Owner" as any,
+      pin: signup.pin,
+      permissions: ["billing", "inventory", "reports", "settings"]
+    };
+
+    const newSettings = {
+      autoDeductStock: true,
+      blockOrdersIfInsufficient: true,
+      managerCanAddPurchases: true,
+      managerCanEditRecipes: true,
+      kdsSoundAlerts: false,
+      quickPinRequired: false
+    };
+
+    // Save initial slices using repos
+    await staffRepo.saveAll(signup.tenantId, [newOwner] as any[]);
+    await settingsRepo.save(signup.tenantId, newSettings);
+
+    // Seed default inventory and menu items
+    const defaultIngredients = [
+      { id: "i-paneer", name: "Paneer", unit: "g", currentStock: 1200, minStock: 2000, costPerUnit: 0.4 },
+      { id: "i-butter", name: "Amul Butter", unit: "g", currentStock: 400, minStock: 1000, costPerUnit: 0.6 },
+      { id: "i-rice", name: "Basmati Rice", unit: "g", currentStock: 8500, minStock: 5000, costPerUnit: 0.1 },
+      { id: "i-tomato", name: "Tomato", unit: "g", currentStock: 850, minStock: 3000, costPerUnit: 0.05 },
+      { id: "i-onion", name: "Onion", unit: "g", currentStock: 12000, minStock: 8000, costPerUnit: 0.04 },
+      { id: "i-garlic", name: "Garlic", unit: "g", currentStock: 2000, minStock: 1000, costPerUnit: 0.2 },
+      { id: "i-maida", name: "Maida Flour", unit: "g", currentStock: 6000, minStock: 4000, costPerUnit: 0.08 }
+    ];
+
+    const defaultMenuItems = [
+      { id: "m-thali", name: "Special Thali", nameHindi: "स्पेशल थाली", price: 220, category: "Recommended", imageUrl: "🍱", isVegetarian: true, isAvailable: true },
+      { id: "m-paneer-butter", name: "Paneer Butter Masala", nameHindi: "पनीर बटर मसाला", price: 180, category: "Main Course", imageUrl: "🥘", isVegetarian: true, isAvailable: true },
+      { id: "m-butter-naan", name: "Butter Naan", nameHindi: "बटर नान", price: 50, category: "Breads", imageUrl: "🫓", isVegetarian: true, isAvailable: true }
+    ];
+
+    const defaultRecipes = [
+      { menuItemId: "m-paneer-butter", ingredients: [{ ingredientId: "i-paneer", quantity: 200 }, { ingredientId: "i-butter", quantity: 30 }, { ingredientId: "i-tomato", quantity: 150 }] }
+    ];
+
+    const defaultCustomers = [
+      { id: "c-1", name: "Amit Kumar", phone: "9876543210", email: "amit@gmail.com", loyaltyPoints: 120, tier: "Silver", totalSpent: 12400 },
+      { id: "c-2", name: "Priya Sharma", phone: "9123456789", email: "priya@yahoo.com", loyaltyPoints: 340, tier: "Gold", totalSpent: 34800 }
+    ];
+
+    await ingredientRepo.saveAll(signup.tenantId, defaultIngredients);
+    await menuRepo.saveAll(signup.tenantId, defaultMenuItems);
+    await recipeRepo.saveAll(signup.tenantId, defaultRecipes);
+    await customerRepo.saveAll(signup.tenantId, defaultCustomers as any[]);
+    await orderRepo.saveAll(signup.tenantId, []);
+    await purchaseRepo.saveAll(signup.tenantId, []);
+    await shiftRepo.saveAll(signup.tenantId, []);
+
+    // Also, publish registration event to EventBus
+    eventBus.publish(signup.tenantId, "TENANT_REGISTERED", {
+      tenantId: signup.tenantId,
+      name: signup.businessName,
+      owner: signup.ownerName,
+      email: signup.email,
+      region: signup.region
+    });
+
+    await auditLogService.log(
+      signup.tenantId,
+      "TENANT_INIT",
+      "SYSTEM",
+      `Self-serve signup completed. New tenant "${signup.businessName}" initialized successfully.`,
+      { region: signup.region, owner: signup.ownerName }
+    );
+
+    // Add verified signup to the global tenants list
+    try {
+      const list = await getGlobalTenantsList();
+      if (!list.some(t => t.tenantId === signup.tenantId)) {
+        list.push({
+          id: `t-${Date.now()}`,
+          name: signup.businessName,
+          tenantId: signup.tenantId,
+          status: "active",
+          created: new Date().toISOString().slice(0, 10),
+          region: signup.region || "North India / Delhi",
+          ownerName: signup.ownerName,
+          email: signup.email,
+          ownerPhone: signup.ownerPhone || ""
+        });
+        await saveGlobalTenantsList(list);
+      }
+    } catch (err) {
+      console.error("Failed to append to global tenants list:", err);
+    }
+
+    // Create session for immediate auto-login
+    const userAgent = req.headers["user-agent"] || "Unknown User Agent";
+    const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
+    const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
+
+    const session = await sessionService.createSession(
+      signup.tenantId,
+      newOwner.id,
+      newOwner.name,
+      newOwner.role,
+      ip,
+      userAgent
+    );
+
+    // Remove from pending map
+    pendingSignups.delete(pendingToken);
+
+    res.json({
+      success: true,
+      session,
+      tenant: {
+        id: `t-${Date.now()}`,
+        name: signup.businessName,
+        tenantId: signup.tenantId,
+        status: "active",
+        created: new Date().toISOString().slice(0, 10),
+        region: signup.region
+      },
+      user: {
+        id: newOwner.id,
+        name: newOwner.name,
+        role: newOwner.role,
+        permissions: newOwner.permissions
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/auth/login", async (req, res) => {
+  const { pin, email, tenantId = DEFAULT_TENANT_ID } = req.body;
+  const userAgent = req.headers["user-agent"] || "Unknown User Agent";
+  const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
+  const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
+
+  try {
+    const staff = (await staffRepo.getAll(tenantId)) || [];
+    let matchingUser = staff.find((s) => s.pin === pin);
+    
+    const userId = matchingUser ? matchingUser.id : "unknown";
+    const userName = matchingUser ? matchingUser.name : (email ? email.split('@')[0] : "Unknown User");
+    const role = matchingUser ? matchingUser.role : "Staff";
+
+    const lockout = await sessionService.checkLockout(tenantId, userId, ip);
+    if (lockout.locked) {
+      return res.status(423).json({
+        success: false,
+        error: "ACCOUNT_LOCKED",
+        message: `Too many failed login attempts. Access is locked out until ${new Date(lockout.lockedUntil!).toLocaleTimeString()}.`,
+        lockedUntil: lockout.lockedUntil
+      });
+    }
+
+    if (!matchingUser) {
+      const failStatus = await sessionService.registerFailedLogin(
+        tenantId,
+        userId,
+        userName,
+        role,
+        ip,
+        userAgent,
+        "Incorrect PIN code entered"
+      );
+      
+      return res.status(401).json({
+        success: false,
+        error: "INVALID_CREDENTIALS",
+        message: "Incorrect passcode PIN code. Please try again.",
+        remainingAttempts: failStatus.remainingAttempts,
+        locked: failStatus.locked,
+        lockedUntil: failStatus.lockedUntil
+      });
+    }
+
+    const session = await sessionService.createSession(
+      tenantId,
+      matchingUser.id,
+      matchingUser.name,
+      matchingUser.role,
+      ip,
+      userAgent
+    );
+
+    res.json({
+      success: true,
+      session,
+      user: {
+        id: matchingUser.id,
+        name: matchingUser.name,
+        role: matchingUser.role,
+        permissions: matchingUser.permissions
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/auth/validate", async (req, res) => {
+  const { sessionId, tenantId = DEFAULT_TENANT_ID } = req.body;
+  try {
+    let session = await sessionService.validateAndTouchSession(tenantId, sessionId);
+    if (!session && tenantId !== "saas-admin") {
+      // Fallback check in case SaaS Owner validates session with business tenant ID context
+      session = await sessionService.validateAndTouchSession("saas-admin", sessionId);
+    }
+    if (!session) {
+      return res.json({ success: false, error: "SESSION_EXPIRED", message: "Session is inactive or has expired due to idle timeout." });
+    }
+    res.json({ success: true, session });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/auth/logout", async (req, res) => {
+  const { sessionId, tenantId = DEFAULT_TENANT_ID } = req.body;
+  try {
+    let success = await sessionService.revokeSession(tenantId, sessionId);
+    if (!success && tenantId !== "saas-admin") {
+      success = await sessionService.revokeSession("saas-admin", sessionId);
+    }
+    res.json({ success, message: "Logged out successfully" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get("/auth/staff-directory", async (req, res) => {
+  const tenantId = (req.headers["x-tenant-id"] as string) || (req.query.tenantId as string) || DEFAULT_TENANT_ID;
+  try {
+    const staff = (await staffRepo.getAll(tenantId)) || [];
+    // Only return ID, name, role, and avatar to avoid leaking PIN codes
+    const publicStaff = staff.map((s) => ({
+      id: s.id,
+      name: s.name,
+      role: s.role,
+      avatar: (s as any).avatar || null,
+    }));
+    res.json({ success: true, staff: publicStaff });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get("/auth/sessions-data", authMiddleware, async (req, res) => {
+  const { tenantId = DEFAULT_TENANT_ID } = req.query;
+  const tid = String(tenantId);
+  try {
+    const activeSessions = await sessionService.getActiveSessions(tid);
+    const loginHistory = await sessionService.getLoginHistory(tid);
+    const securitySettings = await sessionService.getSecuritySettings(tid);
+    res.json({
+      success: true,
+      activeSessions,
+      loginHistory,
+      securitySettings
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/auth/sessions/revoke", authMiddleware, async (req, res) => {
+  const { sessionId, tenantId = DEFAULT_TENANT_ID } = req.body;
+  try {
+    const success = await sessionService.revokeSession(tenantId, sessionId);
+    res.json({ success: true, message: `Session revoked successfully.` });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/auth/sessions/revoke-all", authMiddleware, async (req, res) => {
+  const { tenantId = DEFAULT_TENANT_ID, exceptSessionId } = req.body;
+  try {
+    if (exceptSessionId) {
+      const active = await sessionService.getActiveSessions(tenantId);
+      const remaining = active.filter(s => s.sessionId === exceptSessionId);
+      const db = require("../server/features/shared/database").Database.getInstance();
+      await db.saveObject(tenantId, "system_active_sessions", remaining);
+    } else {
+      await sessionService.revokeAllSessions(tenantId);
+    }
+    res.json({ success: true, message: "All other active sessions have been terminated." });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/auth/history/clear", authMiddleware, async (req, res) => {
+  const { tenantId = DEFAULT_TENANT_ID } = req.body;
+  try {
+    await sessionService.clearLoginHistory(tenantId);
+    res.json({ success: true, message: "Login history successfully wiped." });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/auth/settings/update", authMiddleware, async (req, res) => {
+  const { tenantId = DEFAULT_TENANT_ID, sessionTimeoutMinutes, maxFailedAttempts, lockoutDurationSeconds, enableBruteForceProtection } = req.body;
+  try {
+    const settings = {
+      sessionTimeoutMinutes: Number(sessionTimeoutMinutes) || 15,
+      maxFailedAttempts: Number(maxFailedAttempts) || 3,
+      lockoutDurationSeconds: Number(lockoutDurationSeconds) || 60,
+      enableBruteForceProtection: enableBruteForceProtection !== undefined ? Boolean(enableBruteForceProtection) : true
+    };
+    await sessionService.saveSecuritySettings(tenantId, settings);
+    res.json({ success: true, message: "Security parameters successfully updated.", settings });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+export default router;

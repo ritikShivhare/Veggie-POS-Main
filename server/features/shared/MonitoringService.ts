@@ -1,4 +1,5 @@
 import { Database } from "./database";
+import crypto from "crypto";
 
 export type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG" | "METRIC";
 
@@ -70,8 +71,17 @@ export class MonitoringService {
 
     if (level === "ERROR") {
       console.error(logOutput);
+      this.sendAlerts(level, service, message, context).catch(err => {
+        console.error("[MonitoringService] Failed to dispatch error alerts:", err);
+      });
     } else if (level === "WARN") {
       console.warn(logOutput);
+      // Optional: send warn alerts if they are critical issues
+      if (service === "DATABASE" || service === "SYSTEM" || message.includes("CRITICAL") || message.includes("failure")) {
+        this.sendAlerts(level, service, message, context).catch(err => {
+          console.error("[MonitoringService] Failed to dispatch warning alerts:", err);
+        });
+      }
     } else {
       console.log(logOutput);
     }
@@ -165,5 +175,240 @@ export class MonitoringService {
       activeThreads: mockThreads,
       databaseQueriesMs: avgDbLatency
     };
+  }
+
+  /**
+   * Dispatches alerts to Sentry, Slack, and Email.
+   */
+  public async sendAlerts(
+    level: LogLevel,
+    service: string,
+    message: string,
+    context: any = {}
+  ): Promise<void> {
+    const slackWebhooks: string[] = [];
+    const sentryDsns: string[] = [];
+    const emailAddresses: string[] = [];
+    let alertsEnabled = true;
+
+    // Load tenant-specific settings if tenantId is available
+    const tenantId = context.tenantId || "global";
+    if (tenantId && tenantId !== "global" && tenantId !== "Unknown Tenant") {
+      try {
+        const settings = await this.db.getObject<any>(tenantId, "settings");
+        if (settings) {
+          if (settings.enableAlerts === false) {
+            alertsEnabled = false;
+          }
+          if (settings.slackWebhookUrl) {
+            slackWebhooks.push(settings.slackWebhookUrl);
+          }
+          if (settings.sentryDsn) {
+            sentryDsns.push(settings.sentryDsn);
+          }
+          if (settings.emailAlertAddress) {
+            emailAddresses.push(settings.emailAlertAddress);
+          }
+        }
+      } catch (err) {
+        console.warn("[MonitoringService] Failed to load tenant-specific alerting configurations:", err);
+      }
+    }
+
+    // Load global/Env-specific configurations
+    if (process.env.SLACK_WEBHOOK_URL) {
+      slackWebhooks.push(process.env.SLACK_WEBHOOK_URL);
+    }
+    if (process.env.SENTRY_DSN) {
+      sentryDsns.push(process.env.SENTRY_DSN);
+    }
+    if (process.env.EMAIL_ALERT_ADDRESS) {
+      emailAddresses.push(process.env.EMAIL_ALERT_ADDRESS);
+    }
+
+    // Clean up empty values and de-duplicate
+    const uniqueWebhooks = [...new Set(slackWebhooks.filter(Boolean))];
+    const uniqueDsns = [...new Set(sentryDsns.filter(Boolean))];
+    const uniqueEmails = [...new Set(emailAddresses.filter(Boolean))];
+
+    if (!alertsEnabled) {
+      console.log(`[MonitoringService] Alerting is explicitly disabled for tenant: ${tenantId}`);
+      return;
+    }
+
+    if (uniqueWebhooks.length === 0 && uniqueDsns.length === 0 && uniqueEmails.length === 0) {
+      return;
+    }
+
+    console.log(`[MonitoringService] Dispatching alerts for level [${level}] from service [${service}]: "${message}" to ${uniqueWebhooks.length} Slack channels, ${uniqueDsns.length} Sentry instances, and ${uniqueEmails.length} Emails.`);
+
+    // --- 1. SLACK WEBHOOK DISPATCHER ---
+    for (const webhook of uniqueWebhooks) {
+      try {
+        if (webhook === "https://hooks.slack.com/services/T00/B00/X00" || webhook.includes("YOUR_") || webhook.includes("your_")) {
+          console.log(`[MonitoringService] Skipping alert dispatch to placeholder Slack webhook: ${webhook}`);
+          continue;
+        }
+
+        const slackPayload = {
+          text: `🚨 *VeggiePOS Alert: Critical [${level}] in ${service}*`,
+          attachments: [
+            {
+              color: level === "ERROR" ? "#e11d48" : "#f59e0b",
+              blocks: [
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: `*Error Message:*\n\`\`\`${message}\`\`\``
+                  }
+                },
+                {
+                  type: "section",
+                  fields: [
+                    { type: "mrkdwn", text: `*Environment:*\nPRODUCTION` },
+                    { type: "mrkdwn", text: `*Service:*\n${service}` },
+                    { type: "mrkdwn", text: `*Tenant ID:*\n${tenantId}` },
+                    { type: "mrkdwn", text: `*Timestamp:*\n${new Date().toISOString()}` }
+                  ]
+                }
+              ]
+            }
+          ]
+        };
+
+        if (context.stack || context.url) {
+          slackPayload.attachments[0].blocks.push({
+            type: "section",
+            text: {
+              type: "mrkdwn",
+              text: `*Diagnostics:*\n- *URL:* ${context.url || "N/A"}\n- *User:* ${context.userId || "N/A"}\n- *Component:* ${context.component || "Backend"}`
+            }
+          });
+        }
+
+        const response = await fetch(webhook, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(slackPayload)
+        });
+
+        if (!response.ok) {
+          console.error(`[Slack Alert] Failed to post alert to Slack Webhook. Status: ${response.status} ${response.statusText}`);
+        } else {
+          console.log(`[Slack Alert] Sent successfully.`);
+        }
+      } catch (err: any) {
+        console.error(`[Slack Alert] Error posting to webhook ${webhook}:`, err.message);
+      }
+    }
+
+    // --- 2. SENTRY DSN DISPATCHER ---
+    for (const dsn of uniqueDsns) {
+      try {
+        if (dsn.includes("your_sentry_key") || dsn === "https://your_sentry_key@o0.ingest.sentry.io/your_project_id" || dsn.includes("YOUR_") || dsn.includes("your_")) {
+          console.log(`[MonitoringService] Skipping alert dispatch to placeholder Sentry DSN: ${dsn}`);
+          continue;
+        }
+
+        const match = dsn.match(/https:\/\/([^@]+)@([^/]+)\/(.+)/);
+        if (!match) {
+          console.warn(`[Sentry Alert] Invalid Sentry DSN specified: ${dsn}`);
+          continue;
+        }
+
+        const publicKey = match[1];
+        const host = match[2];
+        const projectId = match[3];
+        const sentryUrl = `https://${host}/api/${projectId}/store/?sentry_key=${publicKey}&sentry_version=7`;
+
+        const sentryPayload = {
+          event_id: crypto.randomUUID().replace(/-/g, ""),
+          timestamp: new Date().toISOString().split(".")[0],
+          platform: "javascript",
+          level: level.toLowerCase(),
+          logger: service,
+          message: {
+            message: message,
+          },
+          exception: {
+            values: [
+              {
+                type: "Error",
+                value: message,
+                stacktrace: {
+                  frames: context.stack
+                    ? context.stack.split("\n").map((line: string) => ({ filename: line.trim() }))
+                    : []
+                }
+              }
+            ]
+          },
+          tags: {
+            tenantId,
+            environment: "production",
+            service,
+            component: context.component || "Unknown"
+          },
+          extra: {
+            url: context.url || "N/A",
+            userId: context.userId || "N/A",
+            userAgent: context.userAgent || "N/A"
+          }
+        };
+
+        const response = await fetch(sentryUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sentryPayload)
+        });
+
+        if (!response.ok) {
+          console.error(`[Sentry Alert] Failed to post event to Sentry ingest. Status: ${response.status} ${response.statusText}`);
+        } else {
+          console.log(`[Sentry Alert] Event reported successfully to Sentry project ${projectId}.`);
+        }
+      } catch (err: any) {
+        console.error(`[Sentry Alert] Error posting to DSN ${dsn}:`, err.message);
+      }
+    }
+
+    // --- 3. EMAIL ALERT DISPATCHER (SIMULATOR) ---
+    for (const email of uniqueEmails) {
+      try {
+        if (!email || email === "alerts@yourdomain.com" || email.includes("yourdomain.com")) {
+          console.log(`[MonitoringService] Skipping alert dispatch to placeholder Email Address: ${email}`);
+          continue;
+        }
+
+        console.log(`
+======================================================================
+📧 [EMAIL ALERT DISPATCHER] OUTGOING EMAIL INITIATED
+======================================================================
+To: ${email}
+Subject: [VeggiePOS ALERT] Critical [${level}] in ${service}
+Body:
+  An application error has occurred on VeggiePOS Production.
+  
+  Details:
+  ------------------------------------------------------------------
+  Time:        ${new Date().toISOString()}
+  Service:     ${service}
+  Tenant:      ${tenantId}
+  User:        ${context.userId || "Unknown User"}
+  Message:     ${message}
+  
+  Diagnostics:
+  URL:         ${context.url || "N/A"}
+  Component:   ${context.component || "Backend"}
+  
+  Stack Trace / Stack Frames:
+  ${context.stack || "No stack trace available"}
+======================================================================
+        `);
+      } catch (err: any) {
+        console.error(`[Email Alert] Error logging email alert to ${email}:`, err.message);
+      }
+    }
   }
 }

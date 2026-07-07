@@ -37,6 +37,7 @@ interface SaasAdminDashboardProps {
     pin: string;
   }) => void;
   orders: Order[];
+  currentSessionId?: string | null;
 }
 
 interface SyncLog {
@@ -54,11 +55,17 @@ export default function SaasAdminDashboard({
   activeTenant,
   onSelectTenant,
   onRegisterBusiness,
-  orders
+  orders,
+  currentSessionId
 }: SaasAdminDashboardProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [regionFilter, setRegionFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // Local state for live synced backend data
+  const [localTenants, setLocalTenants] = useState<RestaurantTenant[]>(tenants);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Registration states for direct quick-register inside admin panel
   const [showQuickRegister, setShowQuickRegister] = useState(false);
@@ -74,6 +81,34 @@ export default function SaasAdminDashboard({
   // Live Sync Log generation
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
+
+  const fetchTenants = async () => {
+    if (!currentSessionId) {
+      setLocalTenants(tenants);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/admin/tenants", {
+        headers: {
+          "x-session-id": currentSessionId,
+          "x-tenant-id": "saas-admin"
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLocalTenants(data.tenants);
+      }
+    } catch (err: any) {
+      console.error("Failed to load live tenants:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTenants();
+  }, [currentSessionId, tenants]);
 
   // Generate initial mock sync log stream
   useEffect(() => {
@@ -119,8 +154,8 @@ export default function SaasAdminDashboard({
 
     // Stream random simulated live database sync events
     const interval = setInterval(() => {
-      if (tenants.length === 0) return;
-      const randomTenant = tenants[Math.floor(Math.random() * tenants.length)];
+      if (localTenants.length === 0) return;
+      const randomTenant = localTenants[Math.floor(Math.random() * localTenants.length)];
       const events = [
         "POS_BILL_DEDUCT_STOCK",
         "SYNC_INGREDIENT_LEDGER",
@@ -146,7 +181,7 @@ export default function SaasAdminDashboard({
     }, 12000);
 
     return () => clearInterval(interval);
-  }, [tenants]);
+  }, [localTenants]);
 
   const handleForceSync = () => {
     setIsSyncingAll(true);
@@ -160,13 +195,70 @@ export default function SaasAdminDashboard({
         tenantId: "all-tenants",
         eventType: "FORCE_RE_SYNC_ALL_STORES",
         syncStatus: "SUCCESS",
-        recordsCount: tenants.length
+        recordsCount: localTenants.length
       };
       setSyncLogs((prev) => [newLog, ...prev]);
     }, 1500);
   };
 
-  const handleQuickRegisterSubmit = (e: React.FormEvent) => {
+  const handleSuspendTenant = async (tenantId: string) => {
+    if (!currentSessionId) {
+      alert("Session required to manage tenants.");
+      return;
+    }
+    if (!confirm(`Are you sure you want to suspend this tenant workspace (${tenantId})? All their API calls will return 403 Forbidden.`)) {
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/tenants/suspend", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-session-id": currentSessionId,
+          "x-tenant-id": "saas-admin"
+        },
+        body: JSON.stringify({ tenantId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        fetchTenants();
+      } else {
+        alert(data.error || data.message || "Failed to suspend tenant.");
+      }
+    } catch (err: any) {
+      alert(err.message || "Connection error.");
+    }
+  };
+
+  const handleActivateTenant = async (tenantId: string) => {
+    if (!currentSessionId) {
+      alert("Session required to manage tenants.");
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/tenants/activate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-session-id": currentSessionId,
+          "x-tenant-id": "saas-admin"
+        },
+        body: JSON.stringify({ tenantId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(data.message);
+        fetchTenants();
+      } else {
+        alert(data.error || data.message || "Failed to activate tenant.");
+      }
+    } catch (err: any) {
+      alert(err.message || "Connection error.");
+    }
+  };
+
+  const handleQuickRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError("");
     setRegSuccess("");
@@ -175,37 +267,85 @@ export default function SaasAdminDashboard({
     if (!ownerName.trim()) return setRegError("Owner Full Name is required.");
     if (!ownerPhone.trim()) return setRegError("Owner Phone Number is required.");
     if (!email.trim()) return setRegError("Email ID is required.");
-    if (pin.length !== 4 || isNaN(Number(pin))) {
-      return setRegError("PIN passcode must be exactly 4 digits.");
+    if (pin.length !== 5 || isNaN(Number(pin))) {
+      return setRegError("Owner PIN passcode must be exactly 5 digits.");
     }
 
-    // Call upstream registration logic
-    onRegisterBusiness({
-      businessName,
-      ownerName,
-      ownerPhone,
-      email,
-      region,
-      pin
-    });
-
-    setRegSuccess(`Restaurant "${businessName}" successfully registered & database schema initialized!`);
-    
-    // Reset fields
-    setBusinessName("");
-    setOwnerName("");
-    setOwnerPhone("");
-    setEmail("");
-    setPin("");
-    
-    setTimeout(() => {
-      setShowQuickRegister(false);
-      setRegSuccess("");
-    }, 3000);
+    if (currentSessionId) {
+      try {
+        const res = await fetch("/api/admin/tenants/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-session-id": currentSessionId,
+            "x-tenant-id": "saas-admin"
+          },
+          body: JSON.stringify({
+            businessName,
+            ownerName,
+            ownerPhone,
+            email,
+            region,
+            pin
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setRegSuccess(`Restaurant "${businessName}" successfully registered & database schema initialized!`);
+          fetchTenants();
+          
+          // Trigger the App.tsx prop logic too to keep client collections in sync if needed
+          onRegisterBusiness({
+            businessName,
+            ownerName,
+            ownerPhone,
+            email,
+            region,
+            pin
+          });
+          
+          // Reset fields
+          setBusinessName("");
+          setOwnerName("");
+          setOwnerPhone("");
+          setEmail("");
+          setPin("");
+          setTimeout(() => {
+            setShowQuickRegister(false);
+            setRegSuccess("");
+          }, 3000);
+        } else {
+          setRegError(data.error || data.message || "Registration failed.");
+        }
+      } catch (err: any) {
+        setRegError(err.message || "Connection error.");
+      }
+    } else {
+      // Fallback fallback
+      onRegisterBusiness({
+        businessName,
+        ownerName,
+        ownerPhone,
+        email,
+        region,
+        pin
+      });
+      setRegSuccess(`Restaurant "${businessName}" successfully registered locally!`);
+      // Reset fields
+      setBusinessName("");
+      setOwnerName("");
+      setOwnerPhone("");
+      setEmail("");
+      setPin("");
+      setTimeout(() => {
+        setShowQuickRegister(false);
+        setRegSuccess("");
+      }, 3000);
+    }
   };
 
   // Filtered lists
-  const filteredTenants = tenants.filter((t) => {
+  const filteredTenants = localTenants.filter((t) => {
     const matchesSearch =
       t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.tenantId.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -445,11 +585,11 @@ export default function SaasAdminDashboard({
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase font-mono text-slate-500">4-Digit Passcode PIN</label>
+                <label className="text-[10px] font-bold uppercase font-mono text-slate-500">5-Digit Owner PIN</label>
                 <input
                   type="text"
-                  maxLength={4}
-                  placeholder="e.g. 1111"
+                  maxLength={5}
+                  placeholder="e.g. 11111"
                   value={pin}
                   onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
                   className="w-full bg-white border border-slate-200 rounded-xl py-2 px-3 text-xs tracking-widest text-center font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-pink-500"
@@ -505,6 +645,7 @@ export default function SaasAdminDashboard({
               <option value="all">All Status (सभी स्टेटस)</option>
               <option value="active">Active System</option>
               <option value="pending">Pending Onboarding</option>
+              <option value="suspended">Suspended Workspace</option>
             </select>
           </div>
         </div>
@@ -518,35 +659,39 @@ export default function SaasAdminDashboard({
                 <th className="p-4">Owner & Contact</th>
                 <th className="p-4">Region</th>
                 <th className="p-4">Created Date</th>
-                <th className="p-4">Sync Integrity</th>
-                <th className="p-4 text-center">Action Switcher</th>
+                <th className="p-4">Plan & Status</th>
+                <th className="p-4">Usage Stats</th>
+                <th className="p-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-600">
               {filteredTenants.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-10 text-center text-slate-400 italic">
+                  <td colSpan={7} className="p-10 text-center text-slate-400 italic">
                     No matching registered restaurants found. Try clearing filters or register a new one.
                   </td>
                 </tr>
               ) : (
                 filteredTenants.map((t) => {
                   const isActiveWorkspace = activeTenant.tenantId === t.tenantId;
+                  const isSuspended = t.status === "suspended";
                   
                   return (
                     <tr
                       key={t.id}
                       className={`transition-colors ${
                         isActiveWorkspace ? "bg-indigo-50/30 font-medium" : "hover:bg-slate-50/50"
-                      }`}
+                      } ${isSuspended ? "bg-red-50/10 opacity-80" : ""}`}
                     >
                       {/* Name & ID */}
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${
-                            isActiveWorkspace 
-                              ? "bg-indigo-100 text-indigo-700"
-                              : "bg-pink-50 text-pink-600"
+                            isSuspended
+                              ? "bg-red-100 text-red-700"
+                              : isActiveWorkspace 
+                                ? "bg-indigo-100 text-indigo-700"
+                                : "bg-pink-50 text-pink-600"
                           }`}>
                             {t.name.charAt(0)}
                           </div>
@@ -556,6 +701,11 @@ export default function SaasAdminDashboard({
                               {isActiveWorkspace && (
                                 <span className="px-2 py-0.5 bg-indigo-600 text-white rounded text-[8px] font-mono font-bold">
                                   ACTIVE
+                                </span>
+                              )}
+                              {isSuspended && (
+                                <span className="px-2 py-0.5 bg-red-600 text-white rounded text-[8px] font-mono font-bold animate-pulse">
+                                  SUSPENDED
                                 </span>
                               )}
                             </div>
@@ -591,36 +741,73 @@ export default function SaasAdminDashboard({
                         {t.created}
                       </td>
 
-                      {/* Database Sync Integrity */}
+                      {/* Plan and Status */}
                       <td className="p-4">
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                            <span className="text-emerald-700 font-bold">100% Synced</span>
+                            <span className={`w-2 h-2 rounded-full ${isSuspended ? "bg-red-500" : "bg-emerald-500"}`} />
+                            <span className="font-bold capitalize text-slate-700">
+                              {t.plan || "pro"} Plan
+                            </span>
                           </div>
-                          <p className="text-[9px] text-slate-400 font-mono">Local SQL Schema Verified</p>
+                          <p className="text-[9px] text-slate-400 font-mono">
+                            Status: <span className={isSuspended ? "text-red-600 font-bold" : "text-emerald-600 font-bold"}>{isSuspended ? "Suspended" : "Active"}</span>
+                          </p>
                         </div>
                       </td>
 
-                      {/* Switch Button */}
-                      <td className="p-4 text-center">
-                        {isActiveWorkspace ? (
-                          <div className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-200">
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Selected</span>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              onSelectTenant(t);
-                              alert(`Workspace switched successfully to "${t.name}"!`);
-                            }}
-                            className="px-3.5 py-1.5 bg-white hover:bg-pink-50 text-pink-600 rounded-xl text-xs font-bold border border-pink-200 hover:border-pink-300 transition flex items-center justify-center gap-1 mx-auto cursor-pointer shadow-sm"
-                          >
-                            <span>Activate Workspace</span>
-                            <ChevronRight className="w-3 h-3" />
-                          </button>
-                        )}
+                      {/* Usage Stats */}
+                      <td className="p-4">
+                        <div className="text-[11px] text-slate-600 space-y-0.5">
+                          <div>Staff: <span className="font-mono font-bold text-slate-800">{t.usage?.staffCount ?? 1}</span></div>
+                          <div>Monthly Orders: <span className="font-mono font-bold text-slate-800">{t.usage?.monthlyOrders ?? 0}</span></div>
+                        </div>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="p-4">
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                          {/* Workspace select button */}
+                          {isActiveWorkspace ? (
+                            <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold border border-indigo-200">
+                              <Check className="w-3 h-3" />
+                              <span>Current</span>
+                            </div>
+                          ) : (
+                            <button
+                              disabled={isSuspended}
+                              onClick={() => {
+                                onSelectTenant(t);
+                                alert(`Workspace switched successfully to "${t.name}"!`);
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border flex items-center gap-0.5 shadow-sm transition ${
+                                isSuspended
+                                  ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                                  : "bg-white hover:bg-indigo-50 text-indigo-600 border-indigo-200 hover:border-indigo-300 cursor-pointer"
+                              }`}
+                            >
+                              <span>Switch</span>
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                          )}
+
+                          {/* Suspend / Activate toggle */}
+                          {isSuspended ? (
+                            <button
+                              onClick={() => handleActivateTenant(t.tenantId)}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold shadow-sm transition cursor-pointer"
+                            >
+                              Unsuspend
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleSuspendTenant(t.tenantId)}
+                              className="px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 hover:border-red-350 rounded-lg text-[10px] font-bold shadow-sm transition cursor-pointer"
+                            >
+                              Suspend
+                            </button>
+                          )}
+                        </div>
                       </td>
 
                     </tr>

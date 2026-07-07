@@ -1,5 +1,5 @@
 import React from "react";
-import { StaffMember, Shift } from "../types";
+import { StaffMember, Shift, RestaurantTenant } from "../types";
 import {
   LayoutDashboard,
   ChefHat,
@@ -31,6 +31,7 @@ interface SidebarProps {
   onShiftAction: () => void;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
+  activeTenant: RestaurantTenant;
 }
 
 export default function Sidebar({
@@ -41,7 +42,8 @@ export default function Sidebar({
   activeShift,
   onShiftAction,
   isOpenMobile,
-  onCloseMobile
+  onCloseMobile,
+  activeTenant
 }: SidebarProps) {
   // Local state for collapse/slim mode on desktop
   const [isCollapsed, setIsCollapsed] = React.useState(true);
@@ -89,20 +91,22 @@ export default function Sidebar({
     { id: "billing", label: "POS Billing", icon: ShoppingCart, permission: "billing" },
     { id: "kds", label: "Kitchen (KDS)", icon: ChefHat, permission: "billing" },
     { id: "crm", label: "CRM & Loyalty", icon: Users, permission: "billing" },
-    { id: "delivery", label: "Zomato & Swiggy", icon: Smartphone, permission: "billing" },
     { id: "inventory", label: "Inventory & Recipes", icon: Boxes, permission: "inventory" },
     { id: "shifts", label: "Staff Shifts", icon: Clock, permission: "billing" },
     { id: "ai-reports", label: "Automated AI Reports", icon: FileText, permission: "reports" },
     { id: "jobs", label: "Background Jobs", icon: Cpu, permission: "settings" },
     { id: "notifications", label: "Notification Center", icon: Bell, permission: "billing" },
     { id: "events", label: "Events & Audit", icon: Zap, permission: "billing" },
-    { id: "monitoring", label: "System Telemetry", icon: Activity, permission: "reports" },
     { id: "security", label: "Security & Sessions", icon: Shield, permission: "settings" },
     { id: "settings", label: "Settings", icon: Settings, permission: "settings" }
   ];
 
   // Filter menu items by permissions and roles
   const filteredMenuItems = menuItems.filter((item) => {
+    if (item.id === "saas-admin") {
+      // Completely removed from the restaurant terminal sidebar as requested
+      return false;
+    }
     if (item.role && currentStaff.role !== item.role) return false;
     if (item.permission && !currentStaff.permissions.includes(item.permission as any)) return false;
     return true;
