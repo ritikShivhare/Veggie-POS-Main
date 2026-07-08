@@ -51,6 +51,7 @@ export default function POSBilling({
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<"Cash" | "UPI">("UPI");
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [receivedAmount, setReceivedAmount] = useState<string>("");
 
   // Categories list
   const categories = ["All", "Recommended", "Starters", "Main Course", "Rice & Biryani", "Breads", "Chinese", "Desserts", "Beverages"];
@@ -154,6 +155,11 @@ export default function POSBilling({
   const total = useMemo(() => {
     return Number((subtotal + tax - loyaltyDiscount).toFixed(2));
   }, [subtotal, tax, loyaltyDiscount]);
+
+  const orderAmount = billingOrder ? billingOrder.total : total;
+  const parsedReceived = parseFloat(receivedAmount);
+  const actualReceived = isNaN(parsedReceived) ? 0 : parsedReceived;
+  const changeDue = Math.max(0, actualReceived - orderAmount);
 
   // Submit order to kitchen (KDS)
   const handleSubmitOrderToKitchen = () => {
@@ -284,9 +290,14 @@ export default function POSBilling({
       new Date().toISOString()
     );
 
-    alert(`Order #${billingOrder.orderNumber} successfully paid & settled via ${selectedPayment}!`);
+    let settlementMsg = `Order #${billingOrder.orderNumber} successfully paid & settled via ${selectedPayment}!`;
+    if (selectedPayment === "Cash" && receivedAmount) {
+      settlementMsg += `\n\nAmount Received: INR ${actualReceived.toFixed(2)}\nChange Returned: INR ${changeDue.toFixed(2)}`;
+    }
+    alert(settlementMsg);
     setBillingOrder(null);
     setShowPaymentModal(false);
+    setReceivedAmount("");
   };  return (
     <div className="flex h-full bg-[#f8fafc] text-slate-800 font-sans overflow-hidden relative">
       {/* LEFT PANEL: Menu Catalog or Active Billing Desk */}
@@ -566,6 +577,7 @@ export default function POSBilling({
                             <button
                               onClick={() => {
                                 setBillingOrder(order);
+                                setReceivedAmount(order.total.toFixed(2));
                                 setShowPaymentModal(true);
                               }}
                               className={`w-full py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 select-none ${
@@ -642,7 +654,7 @@ export default function POSBilling({
         {/* Scrollable Container (Items + Forms + Summary) */}
         <div className="flex-1 overflow-y-auto flex flex-col bg-[#f8fafc]/50">
           {/* Cart Item list */}
-          <div className="p-4 space-y-3 flex-1 min-h-[160px]">
+          <div className="p-4 space-y-3 shrink-0">
             {cart.length === 0 ? (
               <div className="h-full min-h-[160px] flex flex-col items-center justify-center text-center p-6 text-slate-400">
                 <span className="text-4xl filter grayscale mb-3">🛒</span>
@@ -914,7 +926,10 @@ export default function POSBilling({
 
             <div className="grid grid-cols-2 gap-3 mb-6">
               <button
-                onClick={() => setSelectedPayment("UPI")}
+                onClick={() => {
+                  setSelectedPayment("UPI");
+                  setReceivedAmount(orderAmount.toFixed(2));
+                }}
                 className={`flex flex-col items-center p-4 rounded-xl border transition ${
                   selectedPayment === "UPI"
                     ? "bg-blue-50 border-blue-500 text-blue-600 font-bold shadow-sm"
@@ -925,7 +940,10 @@ export default function POSBilling({
                 <span className="text-[10px] font-mono uppercase font-bold tracking-wider">Pay via UPI</span>
               </button>
               <button
-                onClick={() => setSelectedPayment("Cash")}
+                onClick={() => {
+                  setSelectedPayment("Cash");
+                  setReceivedAmount("");
+                }}
                 className={`flex flex-col items-center p-4 rounded-xl border transition ${
                   selectedPayment === "Cash"
                     ? "bg-blue-50 border-blue-500 text-blue-600 font-bold shadow-sm"
@@ -937,15 +955,69 @@ export default function POSBilling({
               </button>
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs mb-6 space-y-2">
-              <div className="flex justify-between text-slate-500">
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs mb-6 space-y-3">
+              <div className="flex justify-between text-slate-500 items-center">
                 <span>Total Due:</span>
-                <span className="font-bold text-slate-800">INR {total.toFixed(2)}</span>
+                <span className="font-bold text-slate-800 text-sm font-mono">INR {orderAmount.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-slate-500">
+              <div className="flex justify-between text-slate-500 items-center">
                 <span>Payment Method:</span>
                 <span className="text-blue-600 font-bold font-mono uppercase">{selectedPayment}</span>
               </div>
+
+              {/* Amount Received Input */}
+              <div className="border-t border-slate-200/60 pt-3 space-y-2">
+                <label className="block text-[11px] font-semibold text-slate-500">
+                  Payment Received:
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-slate-400 font-bold text-xs">INR</span>
+                  <input
+                    type="number"
+                    step="any"
+                    value={receivedAmount}
+                    onChange={(e) => setReceivedAmount(e.target.value)}
+                    className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-xs font-bold font-mono text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                {/* Quick denomination buttons for cash */}
+                {selectedPayment === "Cash" && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setReceivedAmount(orderAmount.toFixed(2))}
+                      className="px-2 py-0.5 bg-white border border-slate-200 hover:border-slate-300 rounded text-[10px] font-semibold text-slate-600 transition"
+                    >
+                      Exact
+                    </button>
+                    {[100, 200, 500, 1000, 2000]
+                      .filter((val) => val >= orderAmount)
+                      .slice(0, 4)
+                      .map((val) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setReceivedAmount(val.toString())}
+                          className="px-2 py-0.5 bg-white border border-slate-200 hover:border-slate-300 rounded text-[10px] font-semibold text-slate-600 transition"
+                        >
+                          INR {val}
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Change due calculation */}
+              {selectedPayment === "Cash" && (
+                <div className="flex justify-between items-center border-t border-slate-200/60 pt-3 text-slate-500">
+                  <span className="font-semibold text-slate-600">Change Due:</span>
+                  <span className={`font-bold font-mono text-sm ${changeDue > 0 ? "text-emerald-600" : "text-slate-700"}`}>
+                    INR {changeDue.toFixed(2)}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="flex space-x-3">

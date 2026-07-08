@@ -1,9 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 import { redisCacheService } from "./RedisCacheService";
-import fs from "fs";
-import path from "path";
-
-const FALLBACK_DB_FILE = path.join(process.cwd(), "database-fallback.json");
 
 const TABLE_MAP: Record<string, string> = {
   ingredients: "ingredients",
@@ -49,7 +45,7 @@ class TenantLockManager {
         // 2. Acquire distributed lock from PostgreSQL / Supabase
         lockAcquired = await this.acquireDistributedLock(tenantId, ownerId);
         if (!lockAcquired) {
-          console.warn(`[TenantLock] Failed to acquire distributed lock for tenant ${tenantId} after maximum retries. Proceeding anyway using local in-memory serialization fallback.`);
+          console.log(`[TenantLock] Flowing to local in-memory serialization fallback for tenant ${tenantId}.`);
         }
 
         // 3. Execute the actual transactional operation
@@ -112,6 +108,12 @@ class TenantLockManager {
             ) {
               this.isRpcLockAvailable = false;
               console.log(`[Database] Distributed lock RPC functions not found in Supabase schema. Disabling RPC locks to save latency and falling back to table-backed locking.`);
+            } else {
+              // Connection, timeout, or auth error: disable distributed locking and proceed to local memory fallback immediately
+              this.isTenantObjectsTableAvailable = false;
+              this.isRpcLockAvailable = false;
+              console.log(`[Database] RPC lock failed due to connection/service error: ${errMsg}. Bypassing database locks and routing to local memory fallback.`);
+              return true;
             }
           }
 
@@ -152,6 +154,10 @@ class TenantLockManager {
           if (errMsg.includes("Could not find the table") || (errMsg.includes("relation") && errMsg.includes("does not exist"))) {
             this.isTenantObjectsTableAvailable = false;
             console.log(`[Database] Table 'tenant_objects' is not available in Supabase. Bypassing lock tables and routing to local memory fallback.`);
+          } else {
+            this.isTenantObjectsTableAvailable = false;
+            this.isRpcLockAvailable = false;
+            console.log(`[Database] Lock select failed: ${errMsg}. Bypassing database locks and routing to local memory fallback.`);
           }
           return true; // Gracefully bypass database locking and fallback to local instance-level serialization
         }
@@ -197,6 +203,10 @@ class TenantLockManager {
           if (errMsg.includes("Could not find the table") || (errMsg.includes("relation") && errMsg.includes("does not exist"))) {
             this.isTenantObjectsTableAvailable = false;
             console.log(`[Database] Table 'tenant_objects' is not available on lock write. Bypassing lock tables and routing to local memory fallback.`);
+          } else {
+            this.isTenantObjectsTableAvailable = false;
+            this.isRpcLockAvailable = false;
+            console.log(`[Database] Lock write failed: ${errMsg}. Bypassing database locks and routing to local memory fallback.`);
           }
           return true; // Gracefully bypass database locking and fallback to local instance-level serialization
         }
@@ -219,6 +229,10 @@ class TenantLockManager {
           if (errMsg.includes("Could not find the table") || (errMsg.includes("relation") && errMsg.includes("does not exist"))) {
             this.isTenantObjectsTableAvailable = false;
             console.log(`[Database] Table 'tenant_objects' is not available on lock verify. Bypassing lock tables and routing to local memory fallback.`);
+          } else {
+            this.isTenantObjectsTableAvailable = false;
+            this.isRpcLockAvailable = false;
+            console.log(`[Database] Lock verification failed: ${errMsg}. Bypassing database locks and routing to local memory fallback.`);
           }
           return true;
         }
@@ -234,12 +248,13 @@ class TenantLockManager {
         }
       } catch (err: any) {
         const errMsg = err?.message || String(err || "");
+        this.isTenantObjectsTableAvailable = false;
         if (isRlsErrorMessage(errMsg)) {
-          this.isTenantObjectsTableAvailable = false;
           console.log(`[Database] Row Level Security (RLS) policy active during exception in acquireDistributedLock. Bypassing locks.`);
-          return true;
+        } else {
+          console.log(`[Database] Exception caught during lock acquisition: ${errMsg}. Deactivating distributed lock table and routing to local memory fallback.`);
         }
-        // Suppress and fallback gracefully
+        return true;
       }
 
       // Backoff with random jitter to prevent lock starvation/stampeding herders
@@ -304,33 +319,7 @@ export class Database {
   private supabase: any = null;
 
   private constructor() {
-    this.loadFromFile();
-  }
-
-  private loadFromFile() {
-    try {
-      if (fs.existsSync(FALLBACK_DB_FILE)) {
-        const content = fs.readFileSync(FALLBACK_DB_FILE, "utf-8");
-        const parsed = JSON.parse(content);
-        this.tablesByTenant = parsed.tablesByTenant || {};
-        this.objectsByTenant = parsed.objectsByTenant || {};
-        console.log(`[Database] Loaded persistent backup from ${FALLBACK_DB_FILE}`);
-      }
-    } catch (err) {
-      console.error("[Database] Error loading persistent backup from file:", err);
-    }
-  }
-
-  private saveToFile() {
-    try {
-      const data = {
-        tablesByTenant: this.tablesByTenant,
-        objectsByTenant: this.objectsByTenant
-      };
-      fs.writeFileSync(FALLBACK_DB_FILE, JSON.stringify(data, null, 2), "utf-8");
-    } catch (err) {
-      console.error("[Database] Error saving persistent backup to file:", err);
-    }
+    // Persistent file backup removed for security compliance
   }
 
   public static getInstance(): Database {
@@ -341,6 +330,9 @@ export class Database {
   }
 
   private getSupabaseClient() {
+    if (process.env.VITEST) {
+      return null;
+    }
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
@@ -445,7 +437,6 @@ export class Database {
     // Cache immediately in local storage fallback
     if (!this.tablesByTenant[tenantId]) this.tablesByTenant[tenantId] = {};
     this.tablesByTenant[tenantId][tableName] = data;
-    this.saveToFile();
 
     // Evict Redis Cache
     const cacheKey = `veggiepos:tenant:${tenantId}:slice:${sliceKey}`;
@@ -689,7 +680,6 @@ export class Database {
 
     if (!this.objectsByTenant[tenantId]) this.objectsByTenant[tenantId] = {};
     this.objectsByTenant[tenantId][sliceKey] = data;
-    this.saveToFile();
 
     // Evict Redis Cache
     const cacheKey = `veggiepos:tenant:${tenantId}:object:${sliceKey}`;

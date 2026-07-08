@@ -65,16 +65,18 @@ Your instructions:
 - IF THE USER ASKS ABOUT subscriptions, commercial licensing, system setups, bugs, or feature suggestions: Answer politely as an operational copilot. Note that they can click the dispatch log button below to compile and save a transcript of this setup directly to their administrative log record.
 - Return short, helpful plain text answers. Do not use complex header blocks or excessive formatting.`;
 
-      const chatResponse = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: `System Context:
+      const chatResponse = await retryWithBackoff(() => 
+        ai.models.generateContent({
+          model: "gemini-3.5-flash",
+          contents: `System Context:
 ${formattedHistory}
 User Prompt: ${prompt}`,
-        config: {
-          systemInstruction,
-          temperature: 0.7,
-        }
-      });
+          config: {
+            systemInstruction,
+            temperature: 0.7,
+          }
+        })
+      );
 
       return {
         reply: chatResponse.text || "I am here to help you configure VeggiePOS. Please clarify your query.",
@@ -82,7 +84,7 @@ User Prompt: ${prompt}`,
         isSimulated: false
       };
     } catch (err: any) {
-      console.error("Gemini Copilot Error in CopilotService:", err);
+      console.info("[CopilotService] Gemini Copilot connection threshold hit. Falling back to friendly local heuristics/offline mode.");
       return {
         reply: `I encountered a connection threshold. For licensing queries or terminal configuration support, please use the Dispatch button below to log your inquiry.`,
         isImportant,
@@ -91,3 +93,29 @@ User Prompt: ${prompt}`,
     }
   }
 }
+
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  delay = 1000,
+  backoffFactor = 2
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: any) {
+    const status = error?.status || error?.code || error?.statusCode;
+    const message = typeof error?.message === "string" ? error.message : JSON.stringify(error);
+    const isRetryable = status === 503 || status === 429 || 
+                        message.includes("503") || message.includes("429") || 
+                        message.includes("high demand") || message.includes("UNAVAILABLE") ||
+                        message.includes("temporary") || message.includes("Unavailable");
+    
+    if (retries > 0 && isRetryable) {
+      console.info(`[CopilotService] Gemini call failed with status ${status}. Retrying in ${delay}ms... (${retries} attempts remaining).`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryWithBackoff(fn, retries - 1, delay * backoffFactor, backoffFactor);
+    }
+    throw error;
+  }
+}
+

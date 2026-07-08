@@ -7,7 +7,6 @@ import SaasAdminDashboard from "./features/saas/SaasAdminDashboard";
 import SaasAdminLogin from "./features/saas/SaasAdminLogin";
 import PinLogin from "./features/staff/PinLogin";
 import POSBilling from "./features/pos/POSBilling";
-import KitchenKDS from "./features/kitchen/KitchenKDS";
 import InventoryManagement from "./features/inventory/InventoryManagement";
 import StaffShifts from "./features/staff/StaffShifts";
 import CRMLoyalty from "./features/crm/CRMLoyalty";
@@ -21,10 +20,12 @@ import NotificationCenter from "./features/shared/components/NotificationCenter"
 import EventDrivenDashboard from "./features/shared/components/EventDrivenDashboard";
 import SessionManagementDashboard from "./features/shared/components/SessionManagementDashboard";
 import Dashboard from "./features/shared/components/Dashboard";
-import AIReportsView from "./features/shared/components/AIReportsView";
-import SettingsPanel from "./features/shared/components/SettingsPanel";
 import { ToastContainer } from "./features/shared/components/ToastContainer";
 import { toast } from "./features/shared/services/toast";
+
+const KitchenKDS = React.lazy(() => import("./features/kitchen/KitchenKDS"));
+const AIReportsView = React.lazy(() => import("./features/shared/components/AIReportsView"));
+const SettingsPanel = React.lazy(() => import("./features/shared/components/SettingsPanel"));
 
 import {
   Bell,
@@ -529,11 +530,18 @@ function AppContent() {
           )}
 
           {activeTab === "kds" && (
-            <KitchenKDS
-              orders={orders}
-              onUpdateOrderStatus={handleUpdateOrderStatus}
-              kdsSoundAlerts={settings.kdsSoundAlerts}
-            />
+            <React.Suspense fallback={
+              <div className="flex flex-col items-center justify-center p-12 space-y-4">
+                <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
+                <p className="text-sm font-medium text-slate-400 font-mono">Loading Kitchen Display System...</p>
+              </div>
+            }>
+              <KitchenKDS
+                orders={orders}
+                onUpdateOrderStatus={handleUpdateOrderStatus}
+                kdsSoundAlerts={settings.kdsSoundAlerts}
+              />
+            </React.Suspense>
           )}
 
           {activeTab === "crm" && (
@@ -576,16 +584,25 @@ function AppContent() {
               currentStaff={currentStaff}
               staffList={staffList}
               onUpdateStaffList={setStaffList}
+              activeTenant={activeTenant}
+              setActiveTab={setActiveTab}
             />
           )}
 
           {activeTab === "ai-reports" && (
-            <AIReportsView
-              handleGenerateAIReport={handleGenerateAIReport}
-              isGeneratingReport={isGeneratingReport}
-              reportError={reportError}
-              aiReport={aiReport}
-            />
+            <React.Suspense fallback={
+              <div className="flex flex-col items-center justify-center p-12 space-y-4">
+                <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
+                <p className="text-sm font-medium text-slate-400 font-mono">Loading Reports & Analytics...</p>
+              </div>
+            }>
+              <AIReportsView
+                handleGenerateAIReport={handleGenerateAIReport}
+                isGeneratingReport={isGeneratingReport}
+                reportError={reportError}
+                aiReport={aiReport}
+              />
+            </React.Suspense>
           )}
 
           {activeTab === "saas-admin" && (
@@ -640,27 +657,34 @@ function AppContent() {
           )}
 
           {activeTab === "settings" && (
-            <SettingsPanel
-              activeTenant={activeTenant}
-              settings={settings}
-              setSettings={setSettings}
-              toastMessage={toastMessage}
-              setToastMessage={setToastMessage}
-              currentStaff={currentStaff}
-              staffList={staffList}
-              setStaffList={setStaffList}
-              menuItems={menuItems}
-              ingredients={ingredients}
-              recipes={recipes}
-              orders={orders}
-              customers={customers}
-              setCustomers={setCustomers}
-              purchases={purchases}
-              shifts={shifts}
-              handleLogout={handleLogout}
-              tenants={tenants}
-              setTenants={setTenants}
-            />
+            <React.Suspense fallback={
+              <div className="flex flex-col items-center justify-center p-12 space-y-4">
+                <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
+                <p className="text-sm font-medium text-slate-400 font-mono">Loading Settings & Configurations...</p>
+              </div>
+            }>
+              <SettingsPanel
+                activeTenant={activeTenant}
+                settings={settings}
+                setSettings={setSettings}
+                toastMessage={toastMessage}
+                setToastMessage={setToastMessage}
+                currentStaff={currentStaff}
+                staffList={staffList}
+                setStaffList={setStaffList}
+                menuItems={menuItems}
+                ingredients={ingredients}
+                recipes={recipes}
+                orders={orders}
+                customers={customers}
+                setCustomers={setCustomers}
+                purchases={purchases}
+                shifts={shifts}
+                handleLogout={handleLogout}
+                tenants={tenants}
+                setTenants={setTenants}
+              />
+            </React.Suspense>
           )}
 
           {activeTab === "security" && (

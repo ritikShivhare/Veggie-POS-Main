@@ -49,6 +49,7 @@ export default function SettingsPanel({
   const [testingSlack, setTestingSlack] = useState(false);
   const [testingSentry, setTestingSentry] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const triggerTestAlert = async (type: "Slack Webhook" | "Sentry DSN" | "Email Address") => {
     if (type === "Slack Webhook") setTestingSlack(true);
@@ -470,18 +471,37 @@ export default function SettingsPanel({
                             />
                           </div>
                           {staff.role !== "Owner" && (
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`Are you sure you want to completely delete ${staff.name} and revoke all access? This cannot be undone.`)) {
-                                  const updatedList = staffList.filter((s) => s.id !== staff.id);
-                                  setStaffList(updatedList);
-                                }
-                              }}
-                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200/50 transition cursor-pointer"
-                              title="Delete Staff Member"
-                            >
-                              <UserMinus className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {deleteConfirmId === staff.id ? (
+                                <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 p-1 rounded-xl animate-fadeIn">
+                                  <span className="text-[10px] text-rose-750 font-bold px-1 select-none">Sure?</span>
+                                  <button
+                                    onClick={() => {
+                                      const updatedList = staffList.filter((s) => s.id !== staff.id);
+                                      setStaffList(updatedList);
+                                      setDeleteConfirmId(null);
+                                    }}
+                                    className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold uppercase transition cursor-pointer"
+                                  >
+                                    Delete
+                                  </button>
+                                  <button
+                                    onClick={() => setDeleteConfirmId(null)}
+                                    className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-semibold transition cursor-pointer"
+                                  >
+                                    No
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setDeleteConfirmId(staff.id)}
+                                  className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200/50 transition cursor-pointer"
+                                  title="Delete Staff Member"
+                                >
+                                  <UserMinus className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>

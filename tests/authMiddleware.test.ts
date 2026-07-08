@@ -92,6 +92,9 @@ describe("Express authMiddleware Unit Tests", () => {
       "x-session-id": "invalid-token-abc"
     };
 
+    // Register session in mapping index for O(1) resolution
+    SessionService.getInstance().registerSessionTenant("invalid-token-abc", "veg-main-001");
+
     // Spy on session service validation to return null (invalid session)
     const sessionSpy = vi
       .spyOn(SessionService.getInstance(), "validateAndTouchSession")
@@ -117,6 +120,9 @@ describe("Express authMiddleware Unit Tests", () => {
       "x-tenant-id": "veg-main-001",
       "x-session-id": "valid-active-session-token"
     };
+
+    // Register session in mapping index for O(1) resolution
+    SessionService.getInstance().registerSessionTenant("valid-active-session-token", "veg-main-001");
 
     const dummySession: any = {
       sessionId: "valid-active-session-token",

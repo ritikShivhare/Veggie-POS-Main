@@ -18,7 +18,7 @@ export default function SaasAdminLogin({
   setShowAdminPanel
 }: SaasAdminLoginProps) {
   // SaaS Owner Multi-Factor Authentication State
-  const [mfaRequire, setMfaRequire] = useState<{ pin: string; secret: string; testToken: string } | null>(null);
+  const [mfaRequire, setMfaRequire] = useState<{ pin: string } | null>(null);
   const [mfaCode, setMfaCode] = useState<string>("");
   const [mfaError, setMfaError] = useState<string>("");
 
@@ -103,57 +103,6 @@ export default function SaasAdminLogin({
               )}
             </div>
 
-            {/* QR Code and Manual Setup Key Box */}
-            <div className="bg-slate-950/65 rounded-2xl p-4 border border-slate-800 space-y-3">
-              <div className="text-[10px] font-bold uppercase font-mono text-slate-400 tracking-wider">
-                Google Authenticator Setup
-              </div>
-              
-              <div className="flex flex-col sm:flex-row items-center gap-3">
-                <div className="bg-white p-1.5 rounded-xl flex items-center justify-center shrink-0">
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=otpauth%3A%2F%2Ftotp%2FVeggiePOS%3ASaaS-Owner%3Fsecret%3D${mfaRequire.secret}%26issuer%3DVeggiePOS`} 
-                    alt="TOTP QR Code" 
-                    className="w-[100px] h-[100px]"
-                    referrerPolicy="no-referrer"
-                  />
-                </div>
-                <div className="space-y-1 text-left">
-                  <p className="text-[11px] text-slate-400 leading-normal">
-                    Scan this QR code with Google Authenticator or enter the key manually:
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <code className="bg-slate-900 px-2 py-1 rounded text-pink-400 text-[10px] font-mono font-bold select-all break-all block">
-                      {mfaRequire.secret}
-                    </code>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Test Assistance Box */}
-            <div className="bg-indigo-950/25 border border-indigo-900/50 rounded-2xl p-4 flex flex-col items-center gap-2">
-              <span className="text-[10px] font-bold uppercase font-mono text-indigo-300 tracking-wider">
-                Testing Assistant
-              </span>
-              <div className="flex items-center justify-between w-full">
-                <span className="text-[11px] text-slate-400 font-mono">Current Live OTP:</span>
-                <code className="text-sm font-bold text-indigo-400 font-mono tracking-wider">
-                  {mfaRequire.testToken}
-                </code>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setMfaCode(mfaRequire.testToken);
-                  setMfaError("");
-                }}
-                className="w-full py-1.5 bg-indigo-900/40 hover:bg-indigo-900/60 border border-indigo-700/30 text-indigo-200 rounded-xl text-[10px] font-bold transition duration-150 active:scale-95 cursor-pointer"
-              >
-                Auto-Fill Current OTP Code
-              </button>
-            </div>
-
             <div className="grid grid-cols-2 gap-3 pt-2">
               <button
                 type="button"
@@ -188,9 +137,7 @@ export default function SaasAdminLogin({
               if (data.success) {
                 if (data.require2FA) {
                   setMfaRequire({
-                    pin: inputPin,
-                    secret: data.totpSecret,
-                    testToken: data.testToken
+                    pin: inputPin
                   });
                   setMfaCode("");
                   setMfaError("");

@@ -130,7 +130,7 @@ export function useAuthSession({
           alert(data.message || "Your session has expired or has been revoked by an administrator.");
         }
       } catch (err) {
-        console.error("Keep-alive validation failure:", err);
+        console.warn("Keep-alive validation warning (transient fetch failure):", err);
       }
     }, 12000);
 

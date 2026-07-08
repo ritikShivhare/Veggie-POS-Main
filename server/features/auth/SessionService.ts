@@ -49,8 +49,56 @@ export class SessionService {
   // Track failed attempts in memory for transient brute-force protection
   private failedAttempts: Record<string, { count: number; lockedUntil: string }> = {};
 
+  // Direct sessionId-to-tenantId index for O(1) lookups
+  private sessionTenantIndex = new Map<string, string>();
+
   private constructor() {
     this.db = Database.getInstance();
+  }
+
+  /**
+   * Register a sessionId to tenantId mapping in the index
+   */
+  public registerSessionTenant(sessionId: string, tenantId: string): void {
+    this.sessionTenantIndex.set(sessionId, tenantId);
+  }
+
+  /**
+   * Remove a sessionId from the index
+   */
+  public unregisterSessionTenant(sessionId: string): void {
+    this.sessionTenantIndex.delete(sessionId);
+  }
+
+  /**
+   * Resolves the tenantId associated with a sessionId in O(1) using index or scans all tenants once if index is cold (e.g. server restart)
+   */
+  public async resolveTenantId(sessionId: string, getTenantsListFn: () => Promise<any[]>): Promise<string | null> {
+    // 1. Try O(1) direct index lookup
+    if (this.sessionTenantIndex.has(sessionId)) {
+      return this.sessionTenantIndex.get(sessionId) || null;
+    }
+
+    // 2. Cold start fallback: scan active sessions of all tenants and populate index
+    try {
+      const tenants = await getTenantsListFn();
+      const tenantIds = Array.from(new Set([
+        "veg-main-001",
+        "saas-admin",
+        ...tenants.map(t => t.tenantId)
+      ]));
+
+      for (const tid of tenantIds) {
+        const activeSessions = await this.getActiveSessions(tid);
+        for (const s of activeSessions) {
+          this.sessionTenantIndex.set(s.sessionId, tid);
+        }
+      }
+    } catch (err) {
+      console.error("[SessionService] Error loading sessions to populate O(1) index:", err);
+    }
+
+    return this.sessionTenantIndex.get(sessionId) || null;
   }
 
   public static getInstance(): SessionService {
@@ -209,6 +257,9 @@ export class SessionService {
     delete this.failedAttempts[failedKey];
     delete this.failedAttempts[ipKey];
 
+    // Register session in the O(1) index
+    this.registerSessionTenant(newSession.sessionId, tenantId);
+
     return newSession;
   }
 
@@ -307,6 +358,9 @@ export class SessionService {
     const sessions = await this.getActiveSessions(tenantId);
     const filtered = sessions.filter(s => s.sessionId !== sessionId);
     
+    // Remove from index
+    this.unregisterSessionTenant(sessionId);
+
     if (filtered.length !== sessions.length) {
       await this.db.saveObject(tenantId, "system_active_sessions", filtered);
       return true;
@@ -318,6 +372,14 @@ export class SessionService {
    * Clear or terminate all active sessions for a tenant (except maybe current, but handles bulk)
    */
   public async revokeAllSessions(tenantId: string): Promise<void> {
+    try {
+      const sessions = await this.getActiveSessions(tenantId);
+      for (const s of sessions) {
+        this.unregisterSessionTenant(s.sessionId);
+      }
+    } catch (err) {
+      console.error("[SessionService] Error cleaning index in revokeAllSessions:", err);
+    }
     await this.db.saveObject(tenantId, "system_active_sessions", []);
   }
 

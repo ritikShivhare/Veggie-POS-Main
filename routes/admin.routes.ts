@@ -35,7 +35,17 @@ router.post("/saas-admin/login", async (req, res) => {
       return res.status(400).json({ success: false, message: "PIN/Password is required." });
     }
 
-    const hashToUse = process.env.SAAS_OWNER_PASSWORD_HASH || "$2b$10$Uem3.luUTckJ2ShER7i7IeRK3qVpmIL6cdaXbIOu488m49ewVBSva";
+    const hashToUse = process.env.SAAS_OWNER_PASSWORD_HASH;
+    const secret = process.env.SAAS_OWNER_TOTP_SECRET;
+
+    if (!hashToUse || !secret) {
+      return res.status(503).json({
+        success: false,
+        error: "SERVICE_UNAVAILABLE",
+        message: "SaaS Owner login is currently disabled because security credentials are not fully configured in the server environment variables."
+      });
+    }
+
     const isMatch = await bcrypt.compare(inputPin, hashToUse);
 
     if (!isMatch) {
@@ -46,15 +56,11 @@ router.post("/saas-admin/login", async (req, res) => {
       });
     }
 
-    const secret = process.env.SAAS_OWNER_TOTP_SECRET || "VEGGIEPOSSAASOWNERSECURETOTPKEYY";
-
     if (!totp) {
       // Return success but indicate TOTP MFA is required to issue session
       return res.json({
         success: true,
         require2FA: true,
-        totpSecret: secret,
-        testToken: generateTOTP(secret),
         message: "Password verified. Please enter the 6-digit TOTP security code."
       });
     }

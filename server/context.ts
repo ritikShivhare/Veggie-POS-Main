@@ -157,23 +157,12 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     });
   }
 
-  // Find the session and validate it by scanning the global tenant lists or looking up
+  // Resolve the tenantId in O(1) using our direct sessionId-to-tenantId index
   let session: any = null;
-  
-  // We scan all tenants to find which tenant this sessionId belongs to
-  const tenants = await getGlobalTenantsList();
-  const tenantIds = Array.from(new Set([
-    "veg-main-001",
-    "saas-admin",
-    ...tenants.map(t => t.tenantId)
-  ]));
+  const resolvedTenantId = await sessionService.resolveTenantId(sessionId, getGlobalTenantsList);
 
-  for (const tid of tenantIds) {
-    const s = await sessionService.validateAndTouchSession(tid, sessionId);
-    if (s) {
-      session = s;
-      break;
-    }
+  if (resolvedTenantId) {
+    session = await sessionService.validateAndTouchSession(resolvedTenantId, sessionId);
   }
 
   if (!session) {
