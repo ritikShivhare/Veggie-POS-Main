@@ -51,7 +51,8 @@ app.use(
         origin.includes("localhost") ||
         origin.includes("127.0.0.1") ||
         origin.includes(".run.app") ||
-        origin.includes(".google.com");
+        origin.includes(".google.com") ||
+        origin.includes(".onrender.com");
 
       if (isAllowed) {
         callback(null, true);
