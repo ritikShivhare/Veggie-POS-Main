@@ -116,10 +116,15 @@ router.get("/admin/tenants", adminAuthMiddleware, async (req, res) => {
         const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
         const monthlyCount = orders.filter(o => o.date && o.date.startsWith(currentYearMonth)).length;
 
+        // Find Owner PIN passcode
+        const ownerMember = staffList.find(s => s.role === "Owner");
+        const ownerPin = ownerMember ? ownerMember.pin : "";
+
         return {
           ...t,
           plan: sub.plan || "free",
           planStatus: sub.status || "active",
+          ownerPin,
           usage: {
             staffCount: staffList.length,
             monthlyOrders: monthlyCount

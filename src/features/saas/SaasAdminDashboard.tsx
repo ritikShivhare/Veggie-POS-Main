@@ -725,6 +725,11 @@ export default function SaasAdminDashboard({
                         <div className="text-[10px] text-slate-500 flex flex-col gap-0.5">
                           <span className="flex items-center gap-1"><Mail className="w-3 h-3 text-slate-350" /> {t.email || "demo@veggiepos.com"}</span>
                           <span className="flex items-center gap-1"><Phone className="w-3 h-3 text-slate-350" /> {t.ownerPhone || "9876543210"}</span>
+                          {t.ownerPin && (
+                            <span className="flex items-center gap-1 text-[10px] font-bold font-mono text-indigo-700 bg-indigo-50/70 border border-indigo-100 px-1.5 py-0.5 rounded-md mt-1 w-max">
+                              🔑 Owner PIN: {t.ownerPin}
+                            </span>
+                          )}
                         </div>
                       </td>
 

@@ -117,6 +117,7 @@ export interface RestaurantTenant {
     staffCount: number;
     monthlyOrders: number;
   };
+  ownerPin?: string;
 }
 
 export interface InventorySettings {
