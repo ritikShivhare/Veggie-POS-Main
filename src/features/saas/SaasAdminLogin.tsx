@@ -18,7 +18,7 @@ export default function SaasAdminLogin({
   setShowAdminPanel
 }: SaasAdminLoginProps) {
   // SaaS Owner Multi-Factor Authentication State
-  const [mfaRequire, setMfaRequire] = useState<{ pin: string } | null>(null);
+  const [mfaRequire, setMfaRequire] = useState<{ password: string } | null>(null);
   const [mfaCode, setMfaCode] = useState<string>("");
   const [mfaError, setMfaError] = useState<string>("");
 
@@ -60,7 +60,7 @@ export default function SaasAdminLogin({
               const res = await fetch("/api/saas-admin/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ pin: mfaRequire.pin, totp: mfaCode })
+                body: JSON.stringify({ password: mfaRequire.password, totp: mfaCode })
               });
               const data = await res.json();
               if (data.success && data.user?.role === "SaaS Owner") {
@@ -113,7 +113,7 @@ export default function SaasAdminLogin({
                 }}
                 className="py-3 bg-transparent hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 rounded-2xl text-xs font-semibold transition cursor-pointer"
               >
-                Back to PIN
+                Back to Password
               </button>
               <button
                 type="submit"
@@ -126,18 +126,18 @@ export default function SaasAdminLogin({
         ) : (
           <form onSubmit={async (e) => {
             e.preventDefault();
-            const inputPin = (e.currentTarget.elements.namedItem("adminPin") as HTMLInputElement).value;
+            const inputPassword = (e.currentTarget.elements.namedItem("adminPassword") as HTMLInputElement).value;
             try {
               const res = await fetch("/api/saas-admin/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ pin: inputPin })
+                body: JSON.stringify({ password: inputPassword })
               });
               const data = await res.json();
               if (data.success) {
                 if (data.require2FA) {
                   setMfaRequire({
-                    pin: inputPin
+                    password: inputPassword
                   });
                   setMfaCode("");
                   setMfaError("");
@@ -152,21 +152,20 @@ export default function SaasAdminLogin({
                   alert(data.message || "Invalid response. Access Denied.");
                 }
               } else {
-                alert(data.message || "Invalid Super-Admin PIN. Access Denied.");
+                alert(data.message || "Invalid Super-Admin Password. Access Denied.");
               }
             } catch (err: any) {
               alert(err.message || "Connection error.");
             }
           }} className="space-y-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase font-mono text-slate-400 tracking-wider">Enter Admin PIN passcode</label>
+              <label className="text-[10px] font-bold uppercase font-mono text-slate-400 tracking-wider">Enter Admin Password</label>
               <input
-                name="adminPin"
+                name="adminPassword"
                 type="password"
-                maxLength={5}
                 required
-                placeholder="•••••"
-                className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3 px-4 text-center text-xl tracking-[1.5em] font-mono text-white focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+                placeholder="••••••••"
+                className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3 px-4 text-center text-lg font-sans text-white focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
               />
             </div>
 
