@@ -72,12 +72,14 @@ router.post("/auth/signup", async (req, res) => {
       metadata: { verificationCode, tenantId }
     });
 
+    // Print/log the verification code ONLY on the secure server terminal/logs (4th Suggestion)
+    console.log(`\n===============================================\n[SECURITY LOG] REGISTRATION VERIFICATION CODE\nEmail: ${email}\nTenant ID: ${tenantId}\nCode: ${verificationCode}\n===============================================\n`);
+
     res.json({
       success: true,
       pendingToken,
       tenantId,
       email,
-      verificationCode, // sent so frontend can auto-fill or display for frictionless demo
       message: "Verification code sent to email."
     });
   } catch (error: any) {
@@ -96,7 +98,11 @@ router.post("/auth/verify", async (req, res) => {
     return res.status(400).json({ success: false, error: "Registration session has expired or is invalid" });
   }
 
-  if (signup.verificationCode !== verificationCode) {
+  // Support 5th Suggestion: Master/Admin verification code bypass
+  const masterCode = process.env.MASTER_VERIFICATION_CODE;
+  const isCodeValid = signup.verificationCode === verificationCode || (masterCode && verificationCode === masterCode);
+
+  if (!isCodeValid) {
     return res.status(400).json({ success: false, error: "INVALID_CODE", message: "The verification code entered is incorrect. Please try again." });
   }
 

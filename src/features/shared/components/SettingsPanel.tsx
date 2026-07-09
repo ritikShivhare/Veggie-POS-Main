@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Settings, ShieldCheck, RefreshCw, UserMinus, AlertTriangle, CheckCircle2, Bell, Mail, Activity } from "lucide-react";
+import { Settings, ShieldCheck, RefreshCw, UserMinus, AlertTriangle, CheckCircle2, Bell, Mail, Activity, Lock, Globe } from "lucide-react";
 import { BillingSettings } from "./BillingSettings";
 import { RestaurantTenant, InventorySettings, StaffMember, MenuItem, Ingredient, Recipe, Order, Customer, Purchase, Shift } from "../types";
 
@@ -51,6 +51,172 @@ export default function SettingsPanel({
   const [testingEmail, setTestingEmail] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
+  const [subTab, setSubTab] = useState<"general" | "password" | "language">("general");
+  const [currentLang, setCurrentLang] = useState<string>(() => {
+    return localStorage.getItem("veggiepos_language") || "en";
+  });
+
+  // Password change states
+  const [currentPinInput, setCurrentPinInput] = useState("");
+  const [newPinInput, setNewPinInput] = useState("");
+  const [confirmPinInput, setConfirmPinInput] = useState("");
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState("");
+
+  const translations: Record<string, Record<string, string>> = {
+    en: {
+      terminalRules: "Terminal & Operational Rules",
+      monitoringAlerting: "Production Monitoring & Alerting",
+      gdprPrivacy: "GDPR Privacy & Data Portability",
+      staffCredentials: "Staff Credentials & Permissions Control",
+      settingsTitle: "VeggiePOS Administration Settings",
+      generalTab: "General Settings",
+      passwordTab: "Change PIN / Password",
+      languageTab: "Language Change",
+      currentPin: "Current PIN/Password",
+      newPin: "New PIN/Password (4 digits)",
+      confirmPin: "Confirm New PIN/Password",
+      saveChanges: "Save Security Changes",
+      selectLanguage: "Select Terminal Language",
+      activeLang: "Active Language",
+      saveLanguage: "Apply Language"
+    },
+    hi: {
+      terminalRules: "टर्मिनल और परिचालन नियम",
+      monitoringAlerting: "उत्पादन निगरानी और चेतावनी",
+      gdprPrivacy: "जीडीपीआर गोपनीयता और डेटा सुवाह्यता",
+      staffCredentials: "स्टाफ क्रेडेंशियल और अनुमतियाँ नियंत्रण",
+      settingsTitle: "वेजीपीओएस प्रशासनिक सेटिंग्स",
+      generalTab: "सामान्य सेटिंग्स",
+      passwordTab: "पिन / पासवर्ड बदलें",
+      languageTab: "भाषा बदलें",
+      currentPin: "वर्तमान पिन/पासवर्ड",
+      newPin: "नया पिन/पासवर्ड (4 अंक)",
+      confirmPin: "नया पिन/पासवर्ड पुष्टि करें",
+      saveChanges: "सुरक्षा परिवर्तन सहेजें",
+      selectLanguage: "टर्मिनल भाषा चुनें",
+      activeLang: "सक्रिय भाषा",
+      saveLanguage: "भाषा लागू करें"
+    },
+    es: {
+      terminalRules: "Reglas Operativas y de Terminal",
+      monitoringAlerting: "Monitoreo de Producción y Alertas",
+      gdprPrivacy: "Privacidad GDPR y Portabilidad de Datos",
+      staffCredentials: "Credenciales de Personal y Control de Permisos",
+      settingsTitle: "Configuración Administrativa de VeggiePOS",
+      generalTab: "Configuración General",
+      passwordTab: "Cambiar PIN / Contraseña",
+      languageTab: "Cambiar Idioma",
+      currentPin: "PIN/Contraseña Actual",
+      newPin: "Nuevo PIN/Contraseña (4 dígitos)",
+      confirmPin: "Confirmar Nuevo PIN/Contraseña",
+      saveChanges: "Guardar Cambios de Seguridad",
+      selectLanguage: "Seleccionar Idioma de la Terminal",
+      activeLang: "Idioma Activo",
+      saveLanguage: "Aplicar Idioma"
+    },
+    fr: {
+      terminalRules: "Règles Opérationnelles et du Terminal",
+      monitoringAlerting: "Surveillance de Production et Alertes",
+      gdprPrivacy: "Confidentialité GDPR et Portabilité des Données",
+      staffCredentials: "Identifiants du Personnel et Contrôle des Permissions",
+      settingsTitle: "Paramètres d'Administration VeggiePOS",
+      generalTab: "Paramètres Généraux",
+      passwordTab: "Modifier le PIN / Mot de passe",
+      languageTab: "Changer de Langue",
+      currentPin: "PIN/Mot de passe Actuel",
+      newPin: "Nouveau PIN/Mot de passe (4 chiffres)",
+      confirmPin: "Confirmer le Nouveau PIN/Mot de passe",
+      saveChanges: "Enregistrer les Modifications",
+      selectLanguage: "Sélectionner la Langue du Terminal",
+      activeLang: "Langue Active",
+      saveLanguage: "Appliquer la Langue"
+    }
+  };
+
+  const t = (key: string) => {
+    return translations[currentLang]?.[key] || translations["en"]?.[key] || key;
+  };
+
+  const handlePasswordChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwError("");
+    setPwSuccess("");
+
+    if (!currentStaff) {
+      setPwError(currentLang === "hi" ? "पासवर्ड/पिन बदलने के लिए कोई स्टाफ सदस्य लॉग इन नहीं है।" : "No staff member logged in to change password/PIN.");
+      return;
+    }
+
+    if (currentPinInput !== currentStaff.pin) {
+      setPwError(currentLang === "hi" ? "वर्तमान पिन गलत है।" : "Current PIN is incorrect.");
+      return;
+    }
+
+    if (!/^\d{4}$/.test(newPinInput)) {
+      setPwError(currentLang === "hi" ? "नया पिन बिल्कुल 4 अंकों का होना चाहिए।" : "New PIN must be exactly 4 digits.");
+      return;
+    }
+
+    if (newPinInput !== confirmPinInput) {
+      setPwError(currentLang === "hi" ? "पुष्टि पिन नए पिन से मेल नहीं खाता है।" : "Confirm PIN does not match the New PIN.");
+      return;
+    }
+
+    // Check if another staff uses this PIN
+    const pinExists = staffList.some(s => s.id !== currentStaff.id && s.pin === newPinInput);
+    if (pinExists) {
+      setPwError(currentLang === "hi" ? "यह पिन पहले से ही किसी अन्य स्टाफ सदस्य द्वारा उपयोग में है। कृपया एक अद्वितीय पिन चुनें।" : "This PIN is already in use by another staff member. Please select a unique PIN.");
+      return;
+    }
+
+    try {
+      // Update staffList
+      const updatedList = staffList.map((s) =>
+        s.id === currentStaff.id ? { ...s, pin: newPinInput } : s
+      );
+      setStaffList(updatedList);
+
+      // Save updated staff list to localStorage
+      localStorage.setItem(`veggiepos_staff_list_${activeTenant.tenantId}`, JSON.stringify(updatedList));
+
+      // Update currentStaff in localStorage
+      const updatedCurrent = { ...currentStaff, pin: newPinInput };
+      localStorage.setItem("veggiepos_current_staff", JSON.stringify(updatedCurrent));
+
+      // Set Success message
+      setPwSuccess(currentLang === "hi" ? "आपका सुरक्षा पिन सफलतापूर्वक बदल दिया गया है!" : "Your security PIN has been successfully changed!");
+      setCurrentPinInput("");
+      setNewPinInput("");
+      setConfirmPinInput("");
+
+      setToastMessage({
+        type: "success",
+        text: currentLang === "hi" ? "पिन सफलतापूर्वक बदला गया!" : "PIN successfully changed!"
+      });
+    } catch (err: any) {
+      setPwError(err.message || "Failed to change PIN.");
+    }
+  };
+
+  const handleLanguageSelect = (lang: string) => {
+    setCurrentLang(lang);
+    localStorage.setItem("veggiepos_language", lang);
+
+    // Dispatch a custom event so other components can listen to language change
+    window.dispatchEvent(new Event("languagechange"));
+
+    let localizedMsg = "Language successfully updated!";
+    if (lang === "hi") localizedMsg = "भाषा सफलतापूर्वक हिन्दी में बदल दी गई है!";
+    if (lang === "es") localizedMsg = "¡Idioma actualizado con éxito!";
+    if (lang === "fr") localizedMsg = "Langue mise à jour avec succès!";
+
+    setToastMessage({
+      type: "success",
+      text: localizedMsg
+    });
+  };
+
   const triggerTestAlert = async (type: "Slack Webhook" | "Sentry DSN" | "Email Address") => {
     if (type === "Slack Webhook") setTestingSlack(true);
     if (type === "Sentry DSN") setTestingSentry(true);
@@ -99,14 +265,55 @@ export default function SettingsPanel({
       <div className="max-w-6xl mx-auto">
         <BillingSettings tenantId={activeTenant.tenantId} />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto">
+
+      {/* Sub-Tabs Selector */}
+      <div className="max-w-6xl mx-auto bg-white border border-slate-200 rounded-xl p-1.5 flex gap-2 shadow-sm">
+        <button
+          onClick={() => setSubTab("general")}
+          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+            subTab === "general"
+              ? "bg-blue-600 text-white shadow-sm shadow-blue-500/10"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+          }`}
+        >
+          <Settings className="w-4 h-4" />
+          <span>{t("generalTab")}</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab("password")}
+          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+            subTab === "password"
+              ? "bg-blue-600 text-white shadow-sm shadow-blue-500/10"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+          }`}
+        >
+          <Lock className="w-4 h-4" />
+          <span>{t("passwordTab")}</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab("language")}
+          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+            subTab === "language"
+              ? "bg-blue-600 text-white shadow-sm shadow-blue-500/10"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+          }`}
+        >
+          <Globe className="w-4 h-4" />
+          <span>{t("languageTab")}</span>
+        </button>
+      </div>
+
+      {subTab === "general" && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto animate-fadeIn">
         
         <div className="lg:col-span-5 flex flex-col gap-6 w-full">
           {/* Terminal & Operational Rules */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
             <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
               <Settings className="w-5 h-5 text-blue-600" />
-              Terminal & Operational Rules
+              {t("terminalRules")}
             </h2>
 
             <div className="space-y-4 divide-y divide-slate-100 text-slate-700 text-xs">
@@ -188,7 +395,7 @@ export default function SettingsPanel({
             <div>
               <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
                 <Bell className="w-5 h-5 text-indigo-600" />
-                Production Monitoring & Alerting
+                {t("monitoringAlerting")}
               </h2>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
                 Configure direct integrations to forward VeggiePOS application crashes and database errors to Slack channels, Sentry telemetry, or your operations email address.
@@ -303,7 +510,7 @@ export default function SettingsPanel({
             <div>
               <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-pink-600" />
-                GDPR Privacy & Data Portability
+                {t("gdprPrivacy")}
               </h2>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
                 In accordance with the General Data Protection Regulation (GDPR), VeggiePOS empowers you with direct control over your business data assets.
@@ -428,7 +635,7 @@ export default function SettingsPanel({
           <div>
             <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-blue-600" />
-              Staff Credentials & Permissions Control
+              {t("staffCredentials")}
             </h2>
             
             {(!currentStaff || currentStaff.role !== "Owner") ? (
@@ -549,7 +756,157 @@ export default function SettingsPanel({
           </div>
         </div>
 
-      </div>
+        </div>
+      )}
+
+      {subTab === "password" && (
+        <div className="max-w-xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6 animate-fadeIn">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <Lock className="w-5 h-5 text-blue-600" />
+              <span>{t("passwordTab")}</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+              {currentLang === "hi" 
+                ? "सुरक्षा कारणों से, सुनिश्चित करें कि आपका नया पिन मजबूत है और केवल आपके पास ही सुरक्षित है।"
+                : "For security, ensure your terminal pin is confidential and only known to authorized users."}
+            </p>
+          </div>
+
+          {pwError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
+              {pwError}
+            </div>
+          )}
+
+          {pwSuccess && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl font-medium">
+              {pwSuccess}
+            </div>
+          )}
+
+          <form onSubmit={handlePasswordChange} className="space-y-4 text-xs">
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 block">{t("currentPin")}</label>
+              <input
+                type="password"
+                maxLength={4}
+                value={currentPinInput}
+                onChange={(e) => setCurrentPinInput(e.target.value.replace(/\D/g, ""))}
+                placeholder="••••"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-center text-sm focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700 tracking-widest"
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 block">{t("newPin")}</label>
+              <input
+                type="password"
+                maxLength={4}
+                value={newPinInput}
+                onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, ""))}
+                placeholder="••••"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-center text-sm focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700 tracking-widest"
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 block">{t("confirmPin")}</label>
+              <input
+                type="password"
+                maxLength={4}
+                value={confirmPinInput}
+                onChange={(e) => setConfirmPinInput(e.target.value.replace(/\D/g, ""))}
+                placeholder="••••"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-center text-sm focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700 tracking-widest"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-500/10 active:scale-95 transition duration-150 cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Lock className="w-4 h-4" />
+              <span>{t("saveChanges")}</span>
+            </button>
+          </form>
+
+          {/* Hindi description as requested */}
+          <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-[11px] text-blue-800 leading-relaxed space-y-2">
+            <h4 className="font-bold flex items-center gap-1 text-blue-900">
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+              <span>पिन/पासवर्ड बदलने से होने वाले प्रभाव (Effects of changing PIN/Password):</span>
+            </h4>
+            <ul className="list-disc pl-4 space-y-1 text-blue-700">
+              <li><b>तत्काल प्रभाव (Instant Effect):</b> पिन बदलते ही टर्मिनल लॉक स्क्रीन पर लॉग इन करने के लिए नए पिन का उपयोग करना अनिवार्य हो जाएगा। पुराना पिन तुरंत काम करना बंद कर देगा।</li>
+              <li><b>सुरक्षा (Enhanced Security):</b> यदि आपका पिन लीक हो गया था, तो नया पिन सेट करने से अनधिकृत व्यक्ति आपकी बिलिंग या डेटा तक नहीं पहुँच पाएंगे।</li>
+              <li><b>उदाहरण (Example):</b> यदि आपका पुराना पिन <code>1111</code> था और आपने इसे बदलकर <code>5678</code> किया, तो अब लॉक स्क्रीन को केवल <code>5678</code> द्वारा ही खोला जा सकेगा। पुराना पिन अब काम नहीं करेगा।</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {subTab === "language" && (
+        <div className="max-w-xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6 animate-fadeIn">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <Globe className="w-5 h-5 text-blue-600" />
+              <span>{t("selectLanguage")}</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+              {currentLang === "hi"
+                ? "अपनी पसंदीदा भाषा चुनें। यह भाषा इस एडमिनिस्ट्रेशन सेटिंग्स पैनल में तत्परता से लागू होगी।"
+                : "Choose your preferred system language. This will dynamically update the system administration interface."}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[
+              { code: "en", label: "English", native: "English", flag: "🇺🇸" },
+              { code: "hi", label: "Hindi", native: "हिन्दी", flag: "🇮🇳" },
+              { code: "es", label: "Spanish", native: "Español", flag: "🇪🇸" },
+              { code: "fr", label: "French", native: "Français", flag: "🇫🇷" }
+            ].map((lang) => {
+              const isSelected = currentLang === lang.code;
+              return (
+                <button
+                  key={lang.code}
+                  onClick={() => handleLanguageSelect(lang.code)}
+                  className={`p-4 rounded-xl border text-left flex items-center justify-between transition cursor-pointer ${
+                    isSelected
+                      ? "border-blue-600 bg-blue-50/50"
+                      : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl select-none">{lang.flag}</span>
+                    <div>
+                      <h3 className="font-bold text-slate-800 text-xs">{lang.label}</h3>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{lang.native}</p>
+                    </div>
+                  </div>
+                  {isSelected && (
+                    <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl text-slate-500 text-[11px] leading-relaxed">
+            <span className="font-bold text-slate-700">{t("activeLang")}:</span>{" "}
+            <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-800 uppercase font-bold">
+              {currentLang}
+            </span>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

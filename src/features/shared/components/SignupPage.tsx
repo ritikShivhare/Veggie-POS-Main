@@ -49,7 +49,6 @@ export default function SignupPage({ onBack, onSignupSuccess }: SignupPageProps)
   // Verification states
   const [pendingToken, setPendingToken] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
-  const [backendCode, setBackendCode] = useState(""); // Stored for sandbox demo visibility
   const [sentEmail, setSentEmail] = useState("");
   const [generatedTenantId, setGeneratedTenantId] = useState("");
 
@@ -87,9 +86,6 @@ export default function SignupPage({ onBack, onSignupSuccess }: SignupPageProps)
       setPendingToken(data.pendingToken);
       setSentEmail(data.email);
       setGeneratedTenantId(data.tenantId);
-      if (data.verificationCode) {
-        setBackendCode(data.verificationCode);
-      }
       setPhase("verify");
     } catch (err: any) {
       setError(err.message || "Something went wrong. Please check your network and try again.");
@@ -161,9 +157,6 @@ export default function SignupPage({ onBack, onSignupSuccess }: SignupPageProps)
         throw new Error(data.error || "Failed to resend code.");
       }
       setPendingToken(data.pendingToken);
-      if (data.verificationCode) {
-        setBackendCode(data.verificationCode);
-      }
       alert(`A fresh verification code has been dispatched to ${email}!`);
     } catch (err: any) {
       setError(err.message || "Failed to resend verification code.");
@@ -378,22 +371,7 @@ export default function SignupPage({ onBack, onSignupSuccess }: SignupPageProps)
                 </div>
               )}
 
-              {/* Sandbox Mock Helper Box */}
-              {backendCode && (
-                <div className="p-4 bg-emerald-950/30 border border-emerald-500/20 rounded-2xl text-left space-y-1.5 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-2 bg-emerald-500/10 text-emerald-400 rounded-bl-xl text-[9px] font-bold uppercase font-mono">Sandbox Sandbox</div>
-                  <h4 className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
-                    <span>Demo Mode Auto-Dispatched!</span>
-                  </h4>
-                  <p className="text-[10px] text-slate-300">
-                    Your verification code has been logged to the Central Dispatcher. To bypass verification checks instantly, use this code:
-                  </p>
-                  <div className="bg-slate-950 border border-slate-850 px-3 py-1.5 rounded-xl font-mono text-xs font-bold text-emerald-300 inline-block tracking-widest">
-                    {backendCode}
-                  </div>
-                </div>
-              )}
+
 
               <form onSubmit={handleVerifySubmit} className="space-y-4">
                 <div className="space-y-2">

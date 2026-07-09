@@ -21,10 +21,32 @@ export class RedisCacheService {
     if (this.hasInitialized) return;
     this.hasInitialized = true;
 
-    const redisUrl = process.env.REDIS_URL;
+    let redisUrl = process.env.REDIS_URL;
     const redisHost = process.env.REDIS_HOST || "127.0.0.1";
     const redisPort = parseInt(process.env.REDIS_PORT || "6379", 10);
     const redisPassword = process.env.REDIS_PASSWORD;
+
+    // Sanitize REDIS_URL if it is malformed or has missing protocols (e.g., //stunning-wren-130543.upstash.io)
+    if (redisUrl) {
+      redisUrl = redisUrl.trim();
+      if (redisUrl.startsWith("https://")) {
+        redisUrl = redisUrl.replace("https://", "rediss://");
+      } else if (redisUrl.startsWith("http://")) {
+        redisUrl = redisUrl.replace("http://", "redis://");
+      } else if (redisUrl.startsWith("//")) {
+        if (redisUrl.includes("upstash.io")) {
+          redisUrl = "rediss:" + redisUrl;
+        } else {
+          redisUrl = "redis:" + redisUrl;
+        }
+      } else if (!redisUrl.includes("://")) {
+        if (redisUrl.includes("upstash.io")) {
+          redisUrl = "rediss://" + redisUrl;
+        } else {
+          redisUrl = "redis://" + redisUrl;
+        }
+      }
+    }
 
     // Determine if Redis connection parameters are specified
     const hasParams = !!(redisUrl || process.env.REDIS_HOST || process.env.REDIS_PORT || redisPassword);
@@ -33,6 +55,7 @@ export class RedisCacheService {
       if (redisUrl) {
         console.log(`[RedisCacheService] Connecting to Redis via URL: ${redisUrl.replace(/:[^:@]+@/, ":****@")}`);
         this.client = new Redis(redisUrl, {
+          password: redisPassword,
           maxRetriesPerRequest: 1,
           connectTimeout: 3000,
           retryStrategy(times) {
