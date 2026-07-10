@@ -57,9 +57,19 @@ export function useTenantData() {
     localStorage.setItem("veggiepos_tenants", JSON.stringify(tenants));
   }, [tenants]);
 
+  // Use a simple ref-like state or local ref to track first mount to prevent auto-saving default on brand new sessions
+  const [firstMountPassed, setFirstMountPassed] = useState(false);
+
   useEffect(() => {
+    const savedActiveId = localStorage.getItem("veggiepos_active_tenant_id");
+    if (!firstMountPassed) {
+      setFirstMountPassed(true);
+      if (!savedActiveId) {
+        return;
+      }
+    }
     localStorage.setItem("veggiepos_active_tenant_id", activeTenant.tenantId);
-  }, [activeTenant]);
+  }, [activeTenant, firstMountPassed]);
 
   const handleRegisterTenant = (newTenant: RestaurantTenant) => {
     setTenants((prev) => [...prev, newTenant]);

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Building,
   Users,
@@ -26,20 +26,28 @@ interface SignupPageProps {
     staff: StaffMember;
     sessionId: string;
   }) => void;
+  initialData?: {
+    businessName: string;
+    ownerName: string;
+    ownerPhone: string;
+    email: string;
+    region: string;
+    pin: string;
+  } | null;
 }
 
-export default function SignupPage({ onBack, onSignupSuccess }: SignupPageProps) {
+export default function SignupPage({ onBack, onSignupSuccess, initialData }: SignupPageProps) {
   // Phase of Signup: "form" | "verify" | "success"
   const [phase, setPhase] = useState<"form" | "verify" | "success">("form");
 
   // Form Field States
-  const [businessName, setBusinessName] = useState("");
-  const [ownerName, setOwnerName] = useState("");
-  const [ownerPhone, setOwnerPhone] = useState("");
-  const [email, setEmail] = useState("");
+  const [businessName, setBusinessName] = useState(initialData?.businessName || "");
+  const [ownerName, setOwnerName] = useState(initialData?.ownerName || "");
+  const [ownerPhone, setOwnerPhone] = useState(initialData?.ownerPhone || "");
+  const [email, setEmail] = useState(initialData?.email || "");
   const [password, setPassword] = useState("");
-  const [pin, setPin] = useState("");
-  const [region, setRegion] = useState("North India / Delhi");
+  const [pin, setPin] = useState(initialData?.pin || "");
+  const [region, setRegion] = useState(initialData?.region || "North India / Delhi");
   
   // Layout and security UI states
   const [showPassword, setShowPassword] = useState(false);
@@ -51,6 +59,45 @@ export default function SignupPage({ onBack, onSignupSuccess }: SignupPageProps)
   const [verificationCode, setVerificationCode] = useState("");
   const [sentEmail, setSentEmail] = useState("");
   const [generatedTenantId, setGeneratedTenantId] = useState("");
+
+  useEffect(() => {
+    if (initialData) {
+      const autoRegister = async () => {
+        setIsLoading(true);
+        setError("");
+        try {
+          const res = await fetch("/api/auth/signup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              businessName: initialData.businessName,
+              ownerName: initialData.ownerName,
+              ownerPhone: initialData.ownerPhone,
+              email: initialData.email,
+              pin: initialData.pin,
+              region: initialData.region
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || data.message || "Failed to submit registration request.");
+          }
+
+          setPendingToken(data.pendingToken);
+          setSentEmail(data.email);
+          setGeneratedTenantId(data.tenantId);
+          setPhase("verify");
+        } catch (err: any) {
+          setError(err.message || "Something went wrong. Please check your network and try again.");
+          setPhase("form");
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      autoRegister();
+    }
+  }, [initialData]);
 
   // Validation before submitting initial registration details
   const handleRegisterSubmit = async (e: React.FormEvent) => {
@@ -173,10 +220,6 @@ export default function SignupPage({ onBack, onSignupSuccess }: SignupPageProps)
 
       {/* Top logo header */}
       <header className="w-full max-w-md mx-auto text-center flex flex-col items-center">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-pink-500/10 border border-pink-500/20 text-pink-400 text-[10px] font-bold uppercase tracking-wider rounded-full mb-4">
-          <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-          <span>SaaS Owner Console</span>
-        </div>
         <h1 className="text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
           <span>Veggie</span>
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-rose-400 to-amber-400">POS</span>

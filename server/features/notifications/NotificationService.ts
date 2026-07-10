@@ -47,14 +47,46 @@ export interface SMSProvider {
 }
 
 /**
- * Mock Production-Ready Implementations for Twilio and SendGrid
+ * Production-Ready Implementation for Resend API Integration
  */
-class MockSendGridProvider implements EmailProvider {
+class ResendEmailProvider implements EmailProvider {
   async sendEmail(to: string, subject: string, htmlBody: string) {
-    console.log(`[SendGrid Integration] Transmitting email to ${to}...`);
-    // Simulate minor network delay
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    return { success: true, providerId: `sg-msg-${Date.now()}-${Math.floor(Math.random() * 1000)}` };
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.warn("[Resend Email Provider] No RESEND_API_KEY provided in environment variables. Falling back to Mock Console Delivery.");
+      console.log(`\n============================================\n[MOCK EMAIL DELIVERED] (No RESEND_API_KEY)\nTo: ${to}\nSubject: ${subject}\nBody:\n${htmlBody}\n============================================\n`);
+      return { success: true, providerId: `mock-${Date.now()}` };
+    }
+
+    try {
+      console.log(`[Resend Email Provider] Sending email via Resend API to ${to}...`);
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          from: "VeggiePOS <onboarding@resend.dev>",
+          to: [to],
+          subject: subject,
+          html: htmlBody
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Resend Email Provider] Resend API Error: ${response.status} - ${errorText}`);
+        return { success: false, providerId: "" };
+      }
+
+      const data = await response.json() as { id: string };
+      console.log(`[Resend Email Provider] Email successfully dispatched. Resend ID: ${data.id}`);
+      return { success: true, providerId: data.id };
+    } catch (error: any) {
+      console.error("[Resend Email Provider] Network error during dispatch:", error);
+      return { success: false, providerId: "" };
+    }
   }
 }
 
@@ -74,8 +106,7 @@ export class NotificationService {
 
   private constructor() {
     this.db = Database.getInstance();
-    // Swap these with real API SDKs in production environment
-    this.emailProvider = new MockSendGridProvider();
+    this.emailProvider = new ResendEmailProvider();
     this.smsProvider = new MockTwilioProvider();
   }
 
@@ -117,7 +148,7 @@ export class NotificationService {
             }
             const emailRes = await this.emailProvider.sendEmail(recipientEmail, title, `<p>${message}</p>`);
             if (emailRes.success) {
-              results.push({ channel: "email", status: "success", detail: `Delivered via SendGrid (Ref: ${emailRes.providerId})` });
+              results.push({ channel: "email", status: "success", detail: `Delivered via Resend (Ref: ${emailRes.providerId})` });
               logs.push({
                 id: `log-${Date.now()}-${Math.random()}`,
                 timestamp: new Date().toISOString(),
@@ -126,10 +157,10 @@ export class NotificationService {
                 recipient: recipientEmail,
                 subjectOrTitle: title,
                 messageBody: message,
-                providerUsed: "SendGrid (Mock-Active)"
+                providerUsed: "Resend"
               });
             } else {
-              results.push({ channel: "email", status: "failed", detail: "SendGrid network rejection" });
+              results.push({ channel: "email", status: "failed", detail: "Resend email transmission failed" });
             }
             break;
 

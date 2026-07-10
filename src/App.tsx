@@ -92,6 +92,14 @@ function AppContent() {
   // Active view tab state
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  const [initialSignupData, setInitialSignupData] = useState<{
+    businessName: string;
+    ownerName: string;
+    ownerPhone: string;
+    email: string;
+    region: string;
+    pin: string;
+  } | null>(null);
 
   // Active legal page state
   const [activeLegalPage, setActiveLegalPage] = useState<"terms" | "privacy" | "refund-policy" | null>(() => {
@@ -162,9 +170,10 @@ function AppContent() {
 
     setStaffList([data.staff]);
 
-    setCurrentStaff(data.staff);
-    setCurrentSessionId(data.sessionId);
-    setActiveTab("dashboard");
+    // Do not log in automatically after signup. Show the secure keypad terminal instead!
+    setCurrentStaff(null);
+    setCurrentSessionId(null);
+    setShowTerminalLogin(true);
 
     setShowSignup(false);
     window.history.pushState({}, "", "/");
@@ -185,11 +194,16 @@ function AppContent() {
   if (showSignup) {
     return (
       <SignupPage
+        initialData={initialSignupData}
         onBack={() => {
           setShowSignup(false);
+          setInitialSignupData(null);
           window.history.pushState({}, "", "/");
         }}
-        onSignupSuccess={handleSignupSuccess}
+        onSignupSuccess={(data) => {
+          setInitialSignupData(null);
+          handleSignupSuccess(data);
+        }}
       />
     );
   }
@@ -303,8 +317,12 @@ function AppContent() {
           tenants={tenants}
           staffList={staffList}
           activeTenant={activeTenant}
-          onSelectTenant={(t) => setActiveTenant(t)}
-          onRegisterBusiness={() => {
+          onSelectTenant={(t) => {
+            setActiveTenant(t);
+            setShowTerminalLogin(true);
+          }}
+          onRegisterBusiness={(data) => {
+            setInitialSignupData(data);
             setShowSignup(true);
             window.history.pushState({}, "", "/signup");
           }}

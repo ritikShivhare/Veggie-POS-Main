@@ -67,6 +67,34 @@ export class StaffRepository extends BaseRepository<StaffMember> {
       return defaultStaff;
     }
 
+    if (tenantId === "veg-cp-002") {
+      const defaultStaff: StaffMember[] = [
+        {
+          id: "s-amit-cp",
+          name: "Amit Verma",
+          role: "Owner",
+          pin: "22222",
+          permissions: ["billing", "inventory", "reports", "settings"]
+        },
+        {
+          id: "s-amit-kumar-cp",
+          name: "Amit Kumar",
+          role: "Manager",
+          pin: "2222",
+          permissions: ["billing", "inventory", "reports"]
+        },
+        {
+          id: "s-mohan-cp",
+          name: "Mohan Lal",
+          role: "Staff",
+          pin: "3333",
+          permissions: ["billing"]
+        }
+      ];
+      await this.saveAll(tenantId, defaultStaff);
+      return defaultStaff;
+    }
+
     return list;
   }
 }

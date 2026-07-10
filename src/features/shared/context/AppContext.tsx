@@ -85,7 +85,10 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     const saved = localStorage.getItem("veggiepos_current_staff");
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.role === "SaaS Owner") {
+          return parsed;
+        }
       } catch (e) {
         return null;
       }
@@ -94,7 +97,16 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
   });
 
   const [currentSessionId, setCurrentSessionId] = React.useState<string | null>(() => {
-    return localStorage.getItem("veggiepos_current_session_id") || null;
+    const savedStaff = localStorage.getItem("veggiepos_current_staff");
+    if (savedStaff) {
+      try {
+        const parsed = JSON.parse(savedStaff);
+        if (parsed && parsed.role === "SaaS Owner") {
+          return localStorage.getItem("veggiepos_current_session_id") || null;
+        }
+      } catch (e) {}
+    }
+    return null;
   });
 
   // Run Auth hook or Sync hook depending on tenant

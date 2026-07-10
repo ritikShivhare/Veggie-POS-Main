@@ -20,20 +20,23 @@ interface UseSyncStateProps {
 export function useSyncState({ activeTenantId, currentStaff, currentSessionId }: UseSyncStateProps) {
   const isMainTenant = activeTenantId === "veg-main-001";
 
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => isMainTenant ? INITIAL_MENU_ITEMS : []);
-  const [ingredients, setIngredients] = useState<Ingredient[]>(() => isMainTenant ? INITIAL_INGREDIENTS : []);
-  const [recipes, setRecipes] = useState<Recipe[]>(() => isMainTenant ? INITIAL_RECIPES : []);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => INITIAL_MENU_ITEMS);
+  const [ingredients, setIngredients] = useState<Ingredient[]>(() => INITIAL_INGREDIENTS);
+  const [recipes, setRecipes] = useState<Recipe[]>(() => INITIAL_RECIPES);
   const [staffList, setStaffList] = useState<StaffMember[]>(() => {
     if (isMainTenant) return INITIAL_STAFF;
     const isReetesh = activeTenantId === "veg-reetesh-dhaba";
+    const isCP = activeTenantId === "veg-cp-002";
     let list = INITIAL_STAFF.map(s => ({ ...s, id: `${s.id}-${activeTenantId}` }));
     if (isReetesh) {
       list = list.map(s => s.role === "Owner" ? { ...s, name: "Reetesh", pin: "12345" } : s);
+    } else if (isCP) {
+      list = list.map(s => s.role === "Owner" ? { ...s, name: "Amit Verma", pin: "22222" } : s);
     }
     return list;
   });
-  const [orders, setOrders] = useState<Order[]>(() => isMainTenant ? INITIAL_ORDERS : []);
-  const [customers, setCustomers] = useState<Customer[]>(() => isMainTenant ? INITIAL_CUSTOMERS : []);
+  const [orders, setOrders] = useState<Order[]>(() => INITIAL_ORDERS);
+  const [customers, setCustomers] = useState<Customer[]>(() => INITIAL_CUSTOMERS);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [shifts, setShifts] = useState<Shift[]>(() => isMainTenant ? [
     {
@@ -86,19 +89,22 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   // Reset states synchronously when activeTenantId changes to avoid showing stale data from previous tenant
   useEffect(() => {
     const isMain = activeTenantId === "veg-main-001";
-    setMenuItems(isMain ? INITIAL_MENU_ITEMS : []);
-    setIngredients(isMain ? INITIAL_INGREDIENTS : []);
-    setRecipes(isMain ? INITIAL_RECIPES : []);
-    setOrders(isMain ? INITIAL_ORDERS : []);
-    setCustomers(isMain ? INITIAL_CUSTOMERS : []);
+    setMenuItems(INITIAL_MENU_ITEMS);
+    setIngredients(INITIAL_INGREDIENTS);
+    setRecipes(INITIAL_RECIPES);
+    setOrders(INITIAL_ORDERS);
+    setCustomers(INITIAL_CUSTOMERS);
     setPurchases([]);
     
     let list = INITIAL_STAFF;
     if (!isMain) {
       const isReetesh = activeTenantId === "veg-reetesh-dhaba";
+      const isCP = activeTenantId === "veg-cp-002";
       list = INITIAL_STAFF.map(s => ({ ...s, id: `${s.id}-${activeTenantId}` }));
       if (isReetesh) {
         list = list.map(s => s.role === "Owner" ? { ...s, name: "Reetesh", pin: "12345" } : s);
+      } else if (isCP) {
+        list = list.map(s => s.role === "Owner" ? { ...s, name: "Amit Verma", pin: "22222" } : s);
       }
     }
     setStaffList(list);
@@ -256,6 +262,17 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
               }
               return s;
             });
+          } else if (activeTenantId === "veg-cp-002") {
+            initialStaffList = initialStaffList.map(s => {
+              if (s.role === "Owner") {
+                return {
+                  ...s,
+                  name: "Amit Verma",
+                  pin: "22222"
+                };
+              }
+              return s;
+            });
           }
           if (pendingOwnerRef.current) {
             initialStaffList = [pendingOwnerRef.current, ...initialStaffList.filter(s => s.role !== "Owner")];
@@ -263,12 +280,12 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
           }
 
           const initialPayload = {
-            menuItems: isMainTenant ? INITIAL_MENU_ITEMS : [],
-            ingredients: isMainTenant ? INITIAL_INGREDIENTS : [],
-            recipes: isMainTenant ? INITIAL_RECIPES : [],
+            menuItems: INITIAL_MENU_ITEMS,
+            ingredients: INITIAL_INGREDIENTS,
+            recipes: INITIAL_RECIPES,
             staffList: initialStaffList,
-            orders: isMainTenant ? INITIAL_ORDERS : [],
-            customers: isMainTenant ? INITIAL_CUSTOMERS : [],
+            orders: INITIAL_ORDERS,
+            customers: INITIAL_CUSTOMERS,
             purchases: [],
             shifts: isMainTenant ? [
               {
@@ -279,7 +296,16 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
                 startTime: new Date(Date.now() - 3600000 * 4).toISOString(),
                 status: "Active" as const
               }
-            ] : [],
+            ] : [
+              {
+                id: "sh-1",
+                staffId: `s-rahul-${activeTenantId}`,
+                staffName: activeTenantId === "veg-reetesh-dhaba" ? "Reetesh" : "Amit Verma",
+                role: "Owner" as const,
+                startTime: new Date(Date.now() - 3600000 * 4).toISOString(),
+                status: "Active" as const
+              }
+            ],
             settings: {
               autoDeductStock: true,
               blockOrdersIfInsufficient: true,
