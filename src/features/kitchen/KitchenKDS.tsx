@@ -48,7 +48,14 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
 
   const handleActionClick = (order: Order, nextStatus: OrderStatus) => {
     onUpdateOrderStatus(order.id, nextStatus);
-    
+
+    // Automatically switch active tab to match the new order status for seamless UX
+    if (nextStatus === "Preparing") {
+      setKdsTab("preparing");
+    } else if (nextStatus === "Ready") {
+      setKdsTab("ready");
+    }
+
     // Simulating system alert audio if setting enabled
     if (kdsSoundAlerts && "speechSynthesis" in window) {
       const speech = new SpeechSynthesisUtterance();

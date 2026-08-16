@@ -68,7 +68,8 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     sentryDsn: "",
     slackWebhookUrl: "",
     emailAlertAddress: "",
-    enableAlerts: true
+    enableAlerts: true,
+    gstPercentage: 5
   });
 
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -139,7 +140,8 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
       sentryDsn: "",
       slackWebhookUrl: "",
       emailAlertAddress: "",
-      enableAlerts: true
+      enableAlerts: true,
+      gstPercentage: 5
     });
 
     isLoadedRef.current = false;

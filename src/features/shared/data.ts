@@ -174,13 +174,17 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
 ];
 
 export const INITIAL_INGREDIENTS: Ingredient[] = [
-  { id: "i-paneer", name: "Paneer", unit: "g", currentStock: 1200, minStock: 2000, costPerUnit: 0.4 }, // Low Stock
-  { id: "i-butter", name: "Amul Butter", unit: "g", currentStock: 400, minStock: 1000, costPerUnit: 0.6 }, // Low Stock
-  { id: "i-rice", name: "Basmati Rice", unit: "g", currentStock: 8500, minStock: 5000, costPerUnit: 0.1 }, // Healthy
-  { id: "i-tomato", name: "Tomato", unit: "g", currentStock: 850, minStock: 3000, costPerUnit: 0.05 }, // Low Stock
-  { id: "i-onion", name: "Onion", unit: "g", currentStock: 12000, minStock: 8000, costPerUnit: 0.04 }, // Healthy
-  { id: "i-garlic", name: "Garlic", unit: "g", currentStock: 2000, minStock: 1000, costPerUnit: 0.2 }, // Healthy
-  { id: "i-maida", name: "Maida Flour", unit: "g", currentStock: 6000, minStock: 4000, costPerUnit: 0.08 } // Healthy
+  { id: "i-paneer", name: "Paneer", unit: "g", currentStock: 2200, minStock: 2000, costPerUnit: 0.4 },
+  { id: "i-butter", name: "Amul Butter", unit: "g", currentStock: 1400, minStock: 1000, costPerUnit: 0.6 },
+  { id: "i-rice", name: "Basmati Rice", unit: "g", currentStock: 8500, minStock: 5000, costPerUnit: 0.1 },
+  { id: "i-tomato", name: "Tomato", unit: "g", currentStock: 3850, minStock: 3000, costPerUnit: 0.05 },
+  { id: "i-onion", name: "Onion", unit: "g", currentStock: 12000, minStock: 8000, costPerUnit: 0.04 },
+  { id: "i-garlic", name: "Garlic", unit: "g", currentStock: 2000, minStock: 1000, costPerUnit: 0.2 },
+  { id: "i-maida", name: "Maida Flour", unit: "g", currentStock: 6000, minStock: 4000, costPerUnit: 0.08 },
+  { id: "i-milk", name: "Fresh Milk / Cream", unit: "ml", currentStock: 5000, minStock: 2000, costPerUnit: 0.06 },
+  { id: "i-lemon", name: "Fresh Lemon", unit: "pcs", currentStock: 60, minStock: 20, costPerUnit: 5 },
+  { id: "i-sugar", name: "Sugar", unit: "g", currentStock: 4500, minStock: 2000, costPerUnit: 0.04 },
+  { id: "i-tea-coffee", name: "Tea Leaves & Coffee", unit: "g", currentStock: 1200, minStock: 500, costPerUnit: 0.3 }
 ];
 
 export const INITIAL_RECIPES: Recipe[] = [
@@ -212,11 +216,54 @@ export const INITIAL_RECIPES: Recipe[] = [
     ]
   },
   {
+    menuItemId: "m-manchurian",
+    ingredients: [
+      { ingredientId: "i-maida", quantity: 50 },
+      { ingredientId: "i-onion", quantity: 60 },
+      { ingredientId: "i-garlic", quantity: 20 }
+    ]
+  },
+  {
+    menuItemId: "m-crispy-corn",
+    ingredients: [
+      { ingredientId: "i-maida", quantity: 40 },
+      { ingredientId: "i-butter", quantity: 20 },
+      { ingredientId: "i-onion", quantity: 30 }
+    ]
+  },
+  {
+    menuItemId: "m-hara-bhara",
+    ingredients: [
+      { ingredientId: "i-paneer", quantity: 60 },
+      { ingredientId: "i-onion", quantity: 30 },
+      { ingredientId: "i-maida", quantity: 30 }
+    ]
+  },
+  {
     menuItemId: "m-dal-makhani",
     ingredients: [
       { ingredientId: "i-butter", quantity: 40 },
       { ingredientId: "i-tomato", quantity: 50 },
-      { ingredientId: "i-onion", quantity: 30 }
+      { ingredientId: "i-onion", quantity: 30 },
+      { ingredientId: "i-milk", quantity: 30 }
+    ]
+  },
+  {
+    menuItemId: "m-dal-tadka",
+    ingredients: [
+      { ingredientId: "i-butter", quantity: 25 },
+      { ingredientId: "i-tomato", quantity: 40 },
+      { ingredientId: "i-onion", quantity: 30 },
+      { ingredientId: "i-garlic", quantity: 15 }
+    ]
+  },
+  {
+    menuItemId: "m-kadhai-paneer",
+    ingredients: [
+      { ingredientId: "i-paneer", quantity: 180 },
+      { ingredientId: "i-butter", quantity: 35 },
+      { ingredientId: "i-tomato", quantity: 60 },
+      { ingredientId: "i-onion", quantity: 50 }
     ]
   },
   {
@@ -226,6 +273,13 @@ export const INITIAL_RECIPES: Recipe[] = [
       { ingredientId: "i-onion", quantity: 50 },
       { ingredientId: "i-tomato", quantity: 30 },
       { ingredientId: "i-paneer", quantity: 30 }
+    ]
+  },
+  {
+    menuItemId: "m-jeera-rice",
+    ingredients: [
+      { ingredientId: "i-rice", quantity: 160 },
+      { ingredientId: "i-butter", quantity: 20 }
     ]
   },
   {
@@ -240,6 +294,32 @@ export const INITIAL_RECIPES: Recipe[] = [
     ingredients: [
       { ingredientId: "i-maida", quantity: 80 }
     ]
+  },
+  {
+    menuItemId: "m-gulab-jamun",
+    ingredients: [
+      { ingredientId: "i-maida", quantity: 50 },
+      { ingredientId: "i-sugar", quantity: 40 },
+      { ingredientId: "i-butter", quantity: 15 }
+    ]
+  },
+  {
+    menuItemId: "m-vanilla-ice",
+    ingredients: [
+      { ingredientId: "i-milk", quantity: 120 },
+      { ingredientId: "i-sugar", quantity: 25 }
+    ]
+  },
+  {
+    menuItemId: "m-soda",
+    ingredients: [
+      { ingredientId: "i-lemon", quantity: 1 },
+      { ingredientId: "i-sugar", quantity: 30 }
+    ]
+  },
+  {
+    menuItemId: "m-water",
+    ingredients: []
   }
 ];
 

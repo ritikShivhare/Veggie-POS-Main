@@ -122,14 +122,15 @@ export class ApiClient {
   }
 
   private static logApiError(context: string, error: any): void {
-    if (error && error.message && error.message.includes("status 401")) {
-      console.warn(`${context} (Session Expired/Unauthorized):`, error.message);
+    const isNetworkOrAuth = error?.message && (error.message.includes("status 401") || error.message.includes("Failed to fetch") || error.name === "TypeError");
+    if (isNetworkOrAuth) {
+      console.warn(`${context}:`, error.message);
     } else {
       console.error(`${context}:`, error);
     }
 
-    // Dispatch custom event to trigger global visual Toast notifications
-    if (typeof window !== "undefined") {
+    // Dispatch custom event to trigger global visual Toast notifications for actual application errors
+    if (typeof window !== "undefined" && error?.message && !error.message.includes("Failed to fetch")) {
       const errMsg = error?.message || "Unknown communication failure";
       window.dispatchEvent(new CustomEvent("veggiepos_api_error", {
         detail: {

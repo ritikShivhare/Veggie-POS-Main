@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Settings, ShieldCheck, RefreshCw, UserMinus, AlertTriangle, CheckCircle2, Bell, Mail, Activity, Lock, Globe } from "lucide-react";
+import { Settings, ShieldCheck, RefreshCw, UserMinus, AlertTriangle, CheckCircle2, Bell, Mail, Activity, Lock, Globe, Percent, Receipt } from "lucide-react";
 import { BillingSettings } from "./BillingSettings";
 import { RestaurantTenant, InventorySettings, StaffMember, MenuItem, Ingredient, Recipe, Order, Customer, Purchase, Shift } from "../types";
 
@@ -309,6 +309,87 @@ export default function SettingsPanel({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto animate-fadeIn">
         
         <div className="lg:col-span-5 flex flex-col gap-6 w-full">
+          {/* Restaurant GST % Tax Rate Configuration Card */}
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4" id="settings-gst-config-card">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-emerald-600" />
+                  <span>Restaurant GST Tax Rate (%)</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Modify the GST percentage rate applied to customer POS bills, invoices, and online orders.
+                </p>
+              </div>
+              <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono font-bold text-xs rounded-full shrink-0 shadow-xs">
+                Active: {settings.gstPercentage ?? 5}% GST
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider font-mono">
+                Quick Preset Rates
+              </label>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {[
+                  { label: "0% Exempt", val: 0 },
+                  { label: "5% Standard", val: 5 },
+                  { label: "12% AC Rest.", val: 12 },
+                  { label: "18% Bar/Lounge", val: 18 },
+                  { label: "28% Special", val: 28 }
+                ].map((preset) => {
+                  const isActive = (settings.gstPercentage ?? 5) === preset.val;
+                  return (
+                    <button
+                      key={preset.val}
+                      type="button"
+                      onClick={() => setSettings({ ...settings, gstPercentage: preset.val })}
+                      className={`py-2 px-1.5 rounded-xl text-xs font-bold transition border cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                        isActive
+                          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                          : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300"
+                      }`}
+                      id={`gst-preset-btn-${preset.val}`}
+                    >
+                      <span className="text-sm font-mono font-extrabold">{preset.val}%</span>
+                      <span className="text-[9px] opacity-85 font-normal leading-tight text-center">{preset.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div className="w-full sm:w-1/2">
+                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                    Custom GST Percentage (%)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      value={settings.gstPercentage ?? 5}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setSettings({
+                          ...settings,
+                          gstPercentage: isNaN(val) ? 0 : Math.max(0, Math.min(100, val))
+                        });
+                      }}
+                      className="w-full pl-3 pr-8 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-bold text-slate-800 focus:outline-none focus:border-emerald-500 focus:bg-white"
+                      id="settings-custom-gst-input"
+                    />
+                    <span className="absolute right-3 top-2.5 font-mono text-xs font-bold text-slate-400">%</span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500 italic leading-snug w-full sm:w-1/2">
+                  ⚡ Restaurant owners can fix or adjust this tax rate at any time. Changes take effect instantly across all cashier billing terminals.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Terminal & Operational Rules */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
             <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">

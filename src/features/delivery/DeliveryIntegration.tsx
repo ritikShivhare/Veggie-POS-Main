@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { MenuItem, Order } from "../shared/types";
+import { MenuItem, Order, InventorySettings } from "../shared/types";
 import {
   Smartphone,
   ToggleLeft,
@@ -21,6 +21,7 @@ interface DeliveryIntegrationProps {
   onUpdateMenuItems: (updated: MenuItem[]) => void;
   orders: Order[];
   onOrderCreated: (order: Order) => void;
+  settings?: InventorySettings;
 }
 
 interface SimulatedOnlineOrder {
@@ -38,7 +39,8 @@ export default function DeliveryIntegration({
   menuItems,
   onUpdateMenuItems,
   orders,
-  onOrderCreated
+  onOrderCreated,
+  settings
 }: DeliveryIntegrationProps) {
   // Swiggy & Zomato general connection switches
   const [swiggyActive, setSwiggyActive] = useState(true);
@@ -182,8 +184,8 @@ export default function DeliveryIntegration({
         };
       }),
       subtotal: onlineOrd.totalAmount,
-      tax: Number((onlineOrd.totalAmount * 0.05).toFixed(2)),
-      total: Number((onlineOrd.totalAmount * 1.05).toFixed(2)),
+      tax: Number((onlineOrd.totalAmount * ((settings?.gstPercentage ?? 5) / 100)).toFixed(2)),
+      total: Number((onlineOrd.totalAmount * (1 + (settings?.gstPercentage ?? 5) / 100)).toFixed(2)),
       status: "Preparing",
       paymentMethod: "UPI",
       paidAt: new Date().toISOString(),
@@ -495,12 +497,12 @@ export default function DeliveryIntegration({
                 <span className="font-mono">INR {activeOrder.totalAmount}</span>
               </div>
               <div className="flex justify-between text-xs text-slate-500">
-                <span>GST (5% Included):</span>
-                <span className="font-mono">INR {(activeOrder.totalAmount * 0.05).toFixed(2)}</span>
+                <span>GST ({settings?.gstPercentage ?? 5}% Included):</span>
+                <span className="font-mono">INR {(activeOrder.totalAmount * ((settings?.gstPercentage ?? 5) / 100)).toFixed(2)}</span>
               </div>
               <div className="flex justify-between text-sm font-bold text-slate-800">
                 <span>Grand Total:</span>
-                <span className="font-mono text-emerald-600">INR {(activeOrder.totalAmount * 1.05).toFixed(2)}</span>
+                <span className="font-mono text-emerald-600">INR {(activeOrder.totalAmount * (1 + (settings?.gstPercentage ?? 5) / 100)).toFixed(2)}</span>
               </div>
             </div>
 

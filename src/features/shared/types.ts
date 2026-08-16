@@ -131,4 +131,5 @@ export interface InventorySettings {
   slackWebhookUrl?: string;
   emailAlertAddress?: string;
   enableAlerts?: boolean;
+  gstPercentage?: number;
 }

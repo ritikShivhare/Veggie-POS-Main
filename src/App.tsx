@@ -139,6 +139,7 @@ function AppContent() {
   // Poll notifications for real-time badge count
   useEffect(() => {
     const fetchUnreadCount = async () => {
+      if (!currentStaff) return;
       try {
         const res = await fetch("/api/notifications");
         const data = await res.json();
@@ -153,7 +154,7 @@ function AppContent() {
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 10000);
     return () => clearInterval(interval);
-  }, [activeTab]);
+  }, [activeTab, currentStaff]);
 
   const handleSignupSuccess = (data: {
     tenant: RestaurantTenant;
@@ -575,6 +576,7 @@ function AppContent() {
               onUpdateMenuItems={handleUpdateMenuItems}
               orders={orders}
               onOrderCreated={handleOrderCreated}
+              settings={settings}
             />
           )}
 
@@ -715,8 +717,6 @@ function AppContent() {
         </div>
 
       </main>
-
-      <AICopilot activeTenant={activeTenant} currentStaff={currentStaff} />
 
       {showIdleWarning && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">

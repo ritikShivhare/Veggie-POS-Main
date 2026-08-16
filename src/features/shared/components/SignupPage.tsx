@@ -57,8 +57,25 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
   // Verification states
   const [pendingToken, setPendingToken] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
+  const [devOtpCode, setDevOtpCode] = useState("");
   const [sentEmail, setSentEmail] = useState("");
   const [generatedTenantId, setGeneratedTenantId] = useState("");
+
+  const otpInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Auto-focus OTP input on entering verify phase
+  useEffect(() => {
+    if (phase === "verify" && otpInputRef.current) {
+      otpInputRef.current.focus();
+    }
+  }, [phase]);
+
+  // Zero-Tap / Low-Tap Auto Verification when 6 digits entered
+  useEffect(() => {
+    if (phase === "verify" && verificationCode.trim().length === 6 && !isLoading) {
+      handleVerifySubmitWithCode(verificationCode.trim());
+    }
+  }, [verificationCode, phase]);
 
   useEffect(() => {
     if (initialData) {
@@ -87,6 +104,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
           setPendingToken(data.pendingToken);
           setSentEmail(data.email);
           setGeneratedTenantId(data.tenantId);
+          if (data.devOtp) setDevOtpCode(data.devOtp);
           setPhase("verify");
         } catch (err: any) {
           setError(err.message || "Something went wrong. Please check your network and try again.");
@@ -133,6 +151,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
       setPendingToken(data.pendingToken);
       setSentEmail(data.email);
       setGeneratedTenantId(data.tenantId);
+      if (data.devOtp) setDevOtpCode(data.devOtp);
       setPhase("verify");
     } catch (err: any) {
       setError(err.message || "Something went wrong. Please check your network and try again.");
@@ -141,12 +160,11 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
     }
   };
 
-  // Submit and verify code
-  const handleVerifySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Reusable submit and verify code function for low-tap automation
+  const handleVerifySubmitWithCode = async (codeToVerify: string) => {
     setError("");
 
-    if (!verificationCode || verificationCode.trim().length !== 6) {
+    if (!codeToVerify || codeToVerify.trim().length !== 6) {
       return setError("Please enter the 6-digit verification code sent to your email.");
     }
 
@@ -157,7 +175,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           pendingToken,
-          verificationCode: verificationCode.trim()
+          verificationCode: codeToVerify.trim()
         })
       });
 
@@ -174,12 +192,17 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
           staff: data.user,
           sessionId: data.session.sessionId
         });
-      }, 2000);
+      }, 1500);
     } catch (err: any) {
       setError(err.message || "Incorrect verification code. Please check and try again.");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleVerifySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleVerifySubmitWithCode(verificationCode);
   };
 
   // Resend Verification Code handler
@@ -204,6 +227,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
         throw new Error(data.error || "Failed to resend code.");
       }
       setPendingToken(data.pendingToken);
+      if (data.devOtp) setDevOtpCode(data.devOtp);
       alert(`A fresh verification code has been dispatched to ${email}!`);
     } catch (err: any) {
       setError(err.message || "Failed to resend verification code.");
@@ -344,7 +368,16 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono">5-Digit Terminal PIN</label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono">5-Digit Terminal PIN</label>
+                      <button
+                        type="button"
+                        onClick={() => setPin("55555")}
+                        className="text-[9px] text-pink-400 hover:text-pink-300 font-bold bg-pink-500/10 hover:bg-pink-500/20 px-1.5 py-0.5 rounded transition cursor-pointer"
+                      >
+                        ⚡ Use 55555
+                      </button>
+                    </div>
                     <div className="relative">
                       <Key className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
                       <input
@@ -361,7 +394,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
                 </div>
 
                 {/* Region */}
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono">Operating Region</label>
                   <select
                     value={region}
@@ -374,6 +407,28 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
                     <option value="East India / Kolkata">East India / Kolkata</option>
                     <option value="Central India">Central India</option>
                   </select>
+                  {/* Quick Region Pills for 1-Tap Selection */}
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {[
+                      { label: "Delhi NCR", val: "North India / Delhi" },
+                      { label: "Bengaluru", val: "South India / Bengaluru" },
+                      { label: "Mumbai", val: "West India / Mumbai" },
+                      { label: "Kolkata", val: "East India / Kolkata" }
+                    ].map((pill) => (
+                      <button
+                        key={pill.val}
+                        type="button"
+                        onClick={() => setRegion(pill.val)}
+                        className={`text-[9px] font-bold px-2 py-0.5 rounded-full transition border cursor-pointer ${
+                          region === pill.val
+                            ? "bg-pink-500/20 border-pink-500 text-pink-300"
+                            : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                        }`}
+                      >
+                        {pill.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Register submit */}
@@ -414,21 +469,52 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
                 </div>
               )}
 
-
+              {devOtpCode && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-300 text-xs space-y-2">
+                  <div className="flex items-center justify-between font-bold">
+                    <span className="flex items-center gap-1.5 text-amber-400 text-[11px]">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      Zero-Cost Instant OTP Helper:
+                    </span>
+                    <span className="font-mono text-sm font-extrabold tracking-widest text-amber-200 bg-amber-950/90 px-2 py-0.5 rounded-lg border border-amber-500/40">
+                      {devOtpCode}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-amber-400/90 pt-0.5 border-t border-amber-500/20">
+                    <span>Zero-Cost Active</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVerificationCode(devOtpCode);
+                        handleVerifySubmitWithCode(devOtpCode);
+                      }}
+                      className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold rounded-lg text-[10px] uppercase tracking-wider transition cursor-pointer shadow-sm flex items-center gap-1"
+                    >
+                      ⚡ Auto-Fill & Verify Now
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <form onSubmit={handleVerifySubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono text-left block">
-                    6-Digit Verification Code
-                  </label>
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono text-left block">
+                      6-Digit Verification Code
+                    </label>
+                    <span className="text-[9px] text-emerald-400 font-mono font-medium">
+                      ⚡ Auto-submits on 6th digit
+                    </span>
+                  </div>
                   <input
+                    ref={otpInputRef}
                     type="text"
                     maxLength={6}
                     required
-                    placeholder="Enter Code"
+                    placeholder="• • • • • •"
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3.5 px-3 text-center text-lg tracking-widest font-mono font-extrabold focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 text-slate-100 transition"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3.5 px-3 text-center text-xl tracking-widest font-mono font-extrabold focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 text-slate-100 transition placeholder-slate-700"
                   />
                 </div>
 

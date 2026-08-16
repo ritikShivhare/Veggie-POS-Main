@@ -30,8 +30,73 @@ export default function StaffShifts({
   const [activeSubTab, setActiveSubTab] = useState<"duty" | "logs">("duty");
   const [localDeleteId, setLocalDeleteId] = useState<string | null>(null);
 
+  // Blind Shift Close Modal State (Problem 6)
+  const [showBlindModal, setShowBlindModal] = useState(false);
+  const [physicalCashVal, setPhysicalCashVal] = useState("");
+  const [blindStep, setBlindStep] = useState<"count" | "override">("count");
+  const [varianceInfo, setVarianceInfo] = useState<{ expected: number; physical: number; variance: number } | null>(null);
+  const [overridePin, setOverridePin] = useState("");
+  const [blindError, setBlindError] = useState<string | null>(null);
+
   // Filter shift records: standard staff only see their own records, managers see all
   const displayedShifts = shifts.filter((s) => isManagerOrOwner || s.staffId === currentStaff.id);
+
+  // Blind shift submit handler
+  const handleBlindCloseSubmit = async () => {
+    if (!activeShift) return;
+    setBlindError(null);
+
+    const countNum = parseFloat(physicalCashVal);
+    if (isNaN(countNum) || countNum < 0) {
+      setBlindError("Please enter a valid non-negative physical cash count.");
+      return;
+    }
+
+    try {
+      const payload: any = { physicalCashCount: countNum };
+      if (blindStep === "override") {
+        if (!overridePin || overridePin.length !== 4) {
+          setBlindError("Please enter a valid 4-digit Manager/Owner PIN for variance override.");
+          return;
+        }
+        payload.managerPin = overridePin;
+      }
+
+      const res = await fetch(`/api/shifts/${activeShift.id}/close-blind`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setBlindError(data.message || data.error || "Shift closing failed.");
+        return;
+      }
+
+      if (data.requireManagerOverride) {
+        setBlindStep("override");
+        setVarianceInfo({
+          expected: data.expectedCash,
+          physical: data.physicalCashCount,
+          variance: data.variance
+        });
+        setBlindError(data.message);
+        return;
+      }
+
+      alert(`Shift successfully closed! ${data.message || ""}`);
+      setShowBlindModal(false);
+      setPhysicalCashVal("");
+      setBlindStep("count");
+      setVarianceInfo(null);
+      setOverridePin("");
+      setBlindError(null);
+      onShiftAction(); // Update app shift state
+    } catch (err: any) {
+      setBlindError(err.message || "Failed to communicate with server.");
+    }
+  };
 
   const getShiftDurationString = (startTime: string, endTime?: string): string => {
     const end = endTime ? new Date(endTime) : new Date();
@@ -208,7 +273,18 @@ export default function StaffShifts({
                 </div>
 
                 <button
-                  onClick={onShiftAction}
+                  onClick={() => {
+                    if (activeShift) {
+                      setShowBlindModal(true);
+                      setPhysicalCashVal("");
+                      setBlindStep("count");
+                      setVarianceInfo(null);
+                      setOverridePin("");
+                      setBlindError(null);
+                    } else {
+                      onShiftAction();
+                    }
+                  }}
                   className={`w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center space-x-2 shadow-lg transition duration-150 ${
                     activeShift
                       ? "bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/10 hover:shadow-rose-500/20"
@@ -219,7 +295,7 @@ export default function StaffShifts({
                   {activeShift ? (
                     <>
                       <LogOut className="w-4.5 h-4.5" />
-                      <span>Clock Out & End Shift</span>
+                      <span>Clock Out & End Shift (Blind Cash Drop)</span>
                     </>
                   ) : (
                     <>
@@ -517,6 +593,100 @@ export default function StaffShifts({
           </div>
         )}
       </div>
+
+      {/* BLIND SHIFT CLOSE MODAL (Problem 6) */}
+      {showBlindModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl text-slate-200 space-y-4">
+            <div className="flex items-center space-x-3 text-amber-400">
+              <ShieldAlert className="w-6 h-6 shrink-0" />
+              <div>
+                <h3 className="text-base font-display font-bold text-white">Blind Cash Drop Shift Close</h3>
+                <p className="text-xs text-slate-400 font-medium">Prevent cash theft & shift tampering via blind drawer reconciliation.</p>
+              </div>
+            </div>
+
+            {blindStep === "count" ? (
+              <div className="space-y-3 bg-slate-950 p-4 rounded-2xl border border-slate-800 text-xs">
+                <p className="text-slate-400 leading-relaxed">
+                  ⚠️ System expected sales revenue is hidden to enforce honest physical cash counting. Please count all cash notes/coins in the physical drawer.
+                </p>
+                <div>
+                  <label className="block text-[11px] font-bold text-amber-400 mb-1">
+                    Physical Cash Counted in Drawer (INR)*:
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={physicalCashVal}
+                    onChange={(e) => setPhysicalCashVal(e.target.value)}
+                    placeholder="e.g. 5200"
+                    className="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl text-base font-bold font-mono text-white focus:outline-none focus:border-amber-500 shadow-inner"
+                    id="shifts-physical-cash-input"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 bg-slate-950 p-4 rounded-2xl border border-rose-500/30 text-xs">
+                <div className="bg-rose-500/10 border border-rose-500/20 p-3 rounded-xl text-rose-300 font-bold space-y-1">
+                  <p className="text-sm">⚠️ Cash Discrepancy / Variance Detected!</p>
+                  {varianceInfo && (
+                    <div className="font-mono text-xs text-white space-y-0.5 pt-1">
+                      <p>Counted: <span className="text-amber-400">INR {varianceInfo.physical}</span></p>
+                      <p>Expected: <span className="text-blue-400">INR {varianceInfo.expected}</span></p>
+                      <p>Variance: <span className="text-rose-400 font-extrabold">{varianceInfo.variance > 0 ? `+INR ${varianceInfo.variance}` : `-INR ${Math.abs(varianceInfo.variance)}`}</span></p>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-rose-400 mb-1">
+                    Manager / Owner Override 4-Digit PIN*:
+                  </label>
+                  <input
+                    type="password"
+                    maxLength={4}
+                    value={overridePin}
+                    onChange={(e) => setOverridePin(e.target.value)}
+                    placeholder="****"
+                    className="w-full p-3 bg-slate-900 border border-rose-500/50 rounded-xl text-base font-bold font-mono tracking-widest text-white text-center focus:outline-none focus:border-rose-400 shadow-inner"
+                    id="shifts-override-pin-input"
+                  />
+                </div>
+              </div>
+            )}
+
+            {blindError && (
+              <p className="text-xs text-rose-400 font-bold bg-rose-500/10 p-2.5 rounded-xl border border-rose-500/20">
+                ⚠️ {blindError}
+              </p>
+            )}
+
+            <div className="flex space-x-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowBlindModal(false);
+                  setPhysicalCashVal("");
+                  setBlindStep("count");
+                  setVarianceInfo(null);
+                  setOverridePin("");
+                  setBlindError(null);
+                }}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBlindCloseSubmit}
+                className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition shadow-lg shadow-amber-500/10"
+                id="shifts-confirm-blind-close-btn"
+              >
+                {blindStep === "count" ? "Submit Cash Count" : "Authorize Variance & End Shift"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

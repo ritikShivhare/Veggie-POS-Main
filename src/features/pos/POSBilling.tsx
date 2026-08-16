@@ -53,6 +53,152 @@ export default function POSBilling({
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [receivedAmount, setReceivedAmount] = useState<string>("");
 
+  // Order Cancellation Modal State (Problem 1)
+  const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelManagerPin, setCancelManagerPin] = useState("");
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  // Cash Drawer Pop Modal State (Problem 3)
+  const [showDrawerPopModal, setShowDrawerPopModal] = useState(false);
+  const [drawerPopReason, setDrawerPopReason] = useState("");
+  const [drawerPopError, setDrawerPopError] = useState<string | null>(null);
+
+  // Custom Discount Modal State (Problem 2)
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [customDiscountVal, setCustomDiscountVal] = useState<string>("");
+  const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
+  const [discountReason, setDiscountReason] = useState("");
+  const [discountManagerPin, setDiscountManagerPin] = useState("");
+  const [discountError, setDiscountError] = useState<string | null>(null);
+
+  // Handle Order Cancellation with Manager PIN & Reason
+  const handleConfirmCancelOrder = async () => {
+    if (!cancelModalOrder) return;
+    setCancelError(null);
+
+    if (!cancelReason.trim()) {
+      setCancelError("Cancellation reason is mandatory and cannot be left empty.");
+      return;
+    }
+
+    if (!cancelManagerPin || cancelManagerPin.length !== 4) {
+      setCancelError("Please enter a valid 4-digit Manager/Owner PIN.");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/orders/${cancelModalOrder.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          managerPin: cancelManagerPin,
+          reason: cancelReason.trim(),
+          staffName: currentStaff.name
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setCancelError(data.message || data.error || "Failed to cancel order.");
+        return;
+      }
+
+      onUpdateOrderStatus(cancelModalOrder.id, "Cancelled");
+      alert(`Order #${cancelModalOrder.orderNumber} successfully cancelled! Cryptographic audit entry recorded.`);
+      setCancelModalOrder(null);
+      setCancelReason("");
+      setCancelManagerPin("");
+      setCancelError(null);
+    } catch (err: any) {
+      setCancelError(err.message || "Failed to communicate with server.");
+    }
+  };
+
+  // Handle Cash Drawer Manual Pop Audit
+  const handleConfirmCashDrawerPop = async () => {
+    setDrawerPopError(null);
+    if (!drawerPopReason.trim()) {
+      setDrawerPopError("Reason for opening cash drawer without sale is mandatory.");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/pos/open-cash-drawer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          staffName: currentStaff.name,
+          reason: drawerPopReason.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setDrawerPopError(data.message || data.error || "Failed to trigger cash drawer pop.");
+        return;
+      }
+
+      alert(`Cash drawer opened! Audit entry logged for "${drawerPopReason.trim()}" by ${currentStaff.name}.`);
+      setShowDrawerPopModal(false);
+      setDrawerPopReason("");
+      setDrawerPopError(null);
+    } catch (err: any) {
+      setDrawerPopError(err.message || "Failed to communicate with server.");
+    }
+  };
+
+  // Handle Custom Discount Application with Manager PIN
+  const handleApplyDiscountSubmit = async () => {
+    setDiscountError(null);
+    const numVal = parseFloat(customDiscountVal);
+    if (isNaN(numVal) || numVal <= 0) {
+      setDiscountError("Please enter a valid discount amount.");
+      return;
+    }
+
+    if (!discountReason.trim()) {
+      setDiscountError("Discount reason is mandatory for audit logging.");
+      return;
+    }
+
+    if (!discountManagerPin || discountManagerPin.length !== 4) {
+      setDiscountError("Please enter a valid 4-digit Owner/Manager PIN.");
+      return;
+    }
+
+    try {
+      const origTotal = subtotal + tax;
+      const res = await fetch("/api/orders/audit-discount", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          originalAmount: origTotal,
+          discountAmount: numVal,
+          finalAmount: Math.max(0, origTotal - numVal),
+          managerPin: discountManagerPin,
+          reason: discountReason.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setDiscountError(data.message || data.error || "Discount authorization failed.");
+        return;
+      }
+
+      setAppliedDiscount(numVal);
+      alert(`Discount of INR ${numVal.toFixed(2)} authorized by ${data.authorizer}! Audit entry logged.`);
+      setShowDiscountModal(false);
+      setCustomDiscountVal("");
+      setDiscountReason("");
+      setDiscountManagerPin("");
+      setDiscountError(null);
+    } catch (err: any) {
+      setDiscountError(err.message || "Server communication error.");
+    }
+  };
+
   // Categories list
   const categories = ["All", "Recommended", "Starters", "Main Course", "Rice & Biryani", "Breads", "Chinese", "Desserts", "Beverages"];
 
@@ -139,9 +285,10 @@ export default function POSBilling({
     return cart.reduce((sum, item) => sum + item.menuItem.price * item.quantity, 0);
   }, [cart]);
 
+  const gstRate = (settings.gstPercentage !== undefined ? settings.gstPercentage : 5) / 100;
   const tax = useMemo(() => {
-    return Number((subtotal * 0.05).toFixed(2)); // 5% GST
-  }, [subtotal]);
+    return Number((subtotal * gstRate).toFixed(2));
+  }, [subtotal, gstRate]);
 
   const selectedCustomer = useMemo(() => {
     return customers.find((c) => c.id === selectedCustomerId) || null;
@@ -153,8 +300,8 @@ export default function POSBilling({
   }, [selectedCustomer, redeemPoints, subtotal, tax]);
 
   const total = useMemo(() => {
-    return Number((subtotal + tax - loyaltyDiscount).toFixed(2));
-  }, [subtotal, tax, loyaltyDiscount]);
+    return Math.max(0, Number((subtotal + tax - loyaltyDiscount - appliedDiscount).toFixed(2)));
+  }, [subtotal, tax, loyaltyDiscount, appliedDiscount]);
 
   const orderAmount = billingOrder ? billingOrder.total : total;
   const parsedReceived = parseFloat(receivedAmount);
@@ -357,9 +504,25 @@ export default function POSBilling({
                 />
               </div>
               
-              {/* Active User Indicator */}
-              <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 text-xs font-mono text-slate-500 shadow-sm">
-                Cashier: <span className="text-blue-600 font-bold">{currentStaff.name}</span>
+              {/* Active User & Cash Drawer Actions */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setShowDrawerPopModal(true);
+                    setDrawerPopReason("");
+                    setDrawerPopError(null);
+                  }}
+                  className="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                  title="Open Cash Drawer without sale (Logged to Audit Trail)"
+                  id="pos-open-drawer-btn"
+                >
+                  <Coins className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="hidden sm:inline">No-Sale Cash Drawer Pop</span>
+                  <span className="sm:hidden">Pop Drawer</span>
+                </button>
+                <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono text-slate-500 shadow-sm">
+                  Cashier: <span className="text-blue-600 font-bold">{currentStaff.name}</span>
+                </div>
               </div>
             </div>
 
@@ -574,22 +737,38 @@ export default function POSBilling({
                                 INR {order.total.toFixed(2)}
                               </span>
                             </div>
-                            <button
-                              onClick={() => {
-                                setBillingOrder(order);
-                                setReceivedAmount(order.total.toFixed(2));
-                                setShowPaymentModal(true);
-                              }}
-                              className={`w-full py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 select-none ${
-                                isReady
-                                  ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98]"
-                                  : "bg-slate-100 hover:bg-slate-200 text-slate-600 active:scale-[0.98]"
-                              }`}
-                              id={`pos-settle-btn-${order.id}`}
-                            >
-                              <Coins className="w-3.5 h-3.5" />
-                              <span>{isReady ? "Collect & Settle Bill" : "Pre-Settle Payment"}</span>
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  setCancelModalOrder(order);
+                                  setCancelReason("");
+                                  setCancelManagerPin("");
+                                  setCancelError(null);
+                                }}
+                                className="px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition flex items-center justify-center gap-1 shrink-0"
+                                title="Cancel / Void Order (Manager PIN Required)"
+                                id={`pos-cancel-btn-${order.id}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Void</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setBillingOrder(order);
+                                  setReceivedAmount(order.total.toFixed(2));
+                                  setShowPaymentModal(true);
+                                }}
+                                className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 select-none ${
+                                  isReady
+                                    ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98]"
+                                    : "bg-slate-100 hover:bg-slate-200 text-slate-600 active:scale-[0.98]"
+                                }`}
+                                id={`pos-settle-btn-${order.id}`}
+                              >
+                                <Coins className="w-3.5 h-3.5" />
+                                <span>{isReady ? "Collect & Settle Bill" : "Pre-Settle Payment"}</span>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -865,7 +1044,7 @@ export default function POSBilling({
                 <span className="font-mono font-semibold text-slate-700">INR {subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
-                <span>GST (5%):</span>
+                <span>GST ({(settings.gstPercentage !== undefined ? settings.gstPercentage : 5)}%):</span>
                 <span className="font-mono font-semibold text-slate-700">INR {tax.toFixed(2)}</span>
               </div>
               {loyaltyDiscount > 0 && (
@@ -874,10 +1053,26 @@ export default function POSBilling({
                   <span className="font-mono">- INR {loyaltyDiscount.toFixed(2)}</span>
                 </div>
               )}
+              {appliedDiscount > 0 && (
+                <div className="flex justify-between text-purple-600 font-bold">
+                  <span>Custom Discount:</span>
+                  <span className="font-mono">- INR {appliedDiscount.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between border-t border-slate-200 pt-1.5 font-bold text-slate-800 text-sm">
                 <span>Total Bill Value:</span>
                 <span className="font-mono text-emerald-600">INR {total.toFixed(2)}</span>
               </div>
+              <button
+                onClick={() => {
+                  setShowDiscountModal(true);
+                  setDiscountError(null);
+                }}
+                className="w-full mt-1.5 py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1"
+                id="pos-apply-discount-btn"
+              >
+                <span>🏷️ Apply Custom Discount (Manager PIN)</span>
+              </button>
             </div>
 
             <div className="text-[10px] font-semibold text-slate-500 flex items-center gap-1.5 pt-1 border-t border-dashed border-slate-200">
@@ -1033,6 +1228,237 @@ export default function POSBilling({
                 id="pos-confirm-payment-btn"
               >
                 Settle & Complete Bill
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ORDER CANCELLATION MODAL (Problem 1) */}
+      {cancelModalOrder && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl text-slate-800 space-y-4">
+            <div className="flex items-center space-x-3 text-rose-600">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <div>
+                <h3 className="text-base font-display font-bold">Authorize Order Cancellation</h3>
+                <p className="text-xs text-slate-500 font-medium">Order #{cancelModalOrder.orderNumber} • Bill Total: INR {cancelModalOrder.total}</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 bg-rose-50/50 p-4 rounded-xl border border-rose-100 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-rose-900 mb-1">
+                  Cancellation Reason (Mandatory)*:
+                </label>
+                <textarea
+                  rows={2}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="e.g. Customer walked out / Wrong item entered by staff..."
+                  className="w-full p-2.5 bg-white border border-rose-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:border-rose-500 shadow-sm"
+                  id="pos-cancel-reason-input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-rose-900 mb-1">
+                  Manager / Owner 4-Digit PIN*:
+                </label>
+                <input
+                  type="password"
+                  maxLength={4}
+                  value={cancelManagerPin}
+                  onChange={(e) => setCancelManagerPin(e.target.value)}
+                  placeholder="****"
+                  className="w-full p-2.5 bg-white border border-rose-200 rounded-lg text-sm font-bold font-mono tracking-widest text-slate-800 focus:outline-none focus:border-rose-500 text-center shadow-sm"
+                  id="pos-cancel-pin-input"
+                />
+              </div>
+            </div>
+
+            {cancelError && (
+              <p className="text-xs text-rose-600 font-bold bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+                ⚠️ {cancelError}
+              </p>
+            )}
+
+            <div className="flex space-x-3 pt-2">
+              <button
+                onClick={() => {
+                  setCancelModalOrder(null);
+                  setCancelReason("");
+                  setCancelManagerPin("");
+                  setCancelError(null);
+                }}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition"
+              >
+                Back / Dismiss
+              </button>
+              <button
+                onClick={handleConfirmCancelOrder}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-rose-600/20"
+                id="pos-confirm-cancel-btn"
+              >
+                Confirm Cancellation & Audit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CASH DRAWER POP MODAL (Problem 3) */}
+      {showDrawerPopModal && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl text-slate-800 space-y-4">
+            <div className="flex items-center space-x-3 text-amber-600">
+              <Coins className="w-6 h-6 shrink-0" />
+              <div>
+                <h3 className="text-base font-display font-bold">Manual Cash Drawer Pop</h3>
+                <p className="text-xs text-slate-500 font-medium">Open cash drawer without a sale transaction.</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 bg-amber-50/50 p-4 rounded-xl border border-amber-100 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-amber-900 mb-1">
+                  Reason for Opening Cash Drawer*:
+                </label>
+                <select
+                  value={drawerPopReason}
+                  onChange={(e) => setDrawerPopReason(e.target.value)}
+                  className="w-full p-2.5 bg-white border border-amber-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:border-amber-500 shadow-sm mb-2"
+                  id="pos-drawer-reason-select"
+                >
+                  <option value="">-- Select or type custom reason --</option>
+                  <option value="Giving change to customer">Giving change to customer</option>
+                  <option value="Petty cash payout for ingredients">Petty cash payout for ingredients</option>
+                  <option value="Drawer balance check & inspection">Drawer balance check & inspection</option>
+                  <option value="Adding cash float">Adding cash float</option>
+                </select>
+                <input
+                  type="text"
+                  value={drawerPopReason}
+                  onChange={(e) => setDrawerPopReason(e.target.value)}
+                  placeholder="Or enter custom reason..."
+                  className="w-full p-2 bg-white border border-amber-200 rounded-lg text-xs font-medium text-slate-800 focus:outline-none focus:border-amber-500 shadow-sm"
+                  id="pos-drawer-reason-input"
+                />
+              </div>
+            </div>
+
+            {drawerPopError && (
+              <p className="text-xs text-rose-600 font-bold bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+                ⚠️ {drawerPopError}
+              </p>
+            )}
+
+            <div className="flex space-x-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowDrawerPopModal(false);
+                  setDrawerPopReason("");
+                  setDrawerPopError(null);
+                }}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmCashDrawerPop}
+                className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-amber-600/20"
+                id="pos-confirm-drawer-pop-btn"
+              >
+                Pop Drawer & Record Audit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM DISCOUNT MODAL (Problem 2) */}
+      {showDiscountModal && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl text-slate-800 space-y-4">
+            <div className="flex items-center space-x-3 text-purple-600">
+              <span className="text-2xl">🏷️</span>
+              <div>
+                <h3 className="text-base font-display font-bold">Apply Custom Discount</h3>
+                <p className="text-xs text-slate-500 font-medium">Requires Owner/Manager PIN approval.</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 bg-purple-50/50 p-4 rounded-xl border border-purple-100 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-purple-900 mb-1">
+                  Discount Amount (INR)*:
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  value={customDiscountVal}
+                  onChange={(e) => setCustomDiscountVal(e.target.value)}
+                  placeholder="e.g. 50"
+                  className="w-full p-2.5 bg-white border border-purple-200 rounded-lg text-sm font-bold font-mono text-slate-800 focus:outline-none focus:border-purple-500 shadow-sm"
+                  id="pos-discount-amount-input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-purple-900 mb-1">
+                  Discount Reason*:
+                </label>
+                <input
+                  type="text"
+                  value={discountReason}
+                  onChange={(e) => setDiscountReason(e.target.value)}
+                  placeholder="e.g. VIP Customer / Promotional Discount"
+                  className="w-full p-2.5 bg-white border border-purple-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:border-purple-500 shadow-sm"
+                  id="pos-discount-reason-input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-purple-900 mb-1">
+                  Manager/Owner PIN*:
+                </label>
+                <input
+                  type="password"
+                  maxLength={4}
+                  value={discountManagerPin}
+                  onChange={(e) => setDiscountManagerPin(e.target.value)}
+                  placeholder="****"
+                  className="w-full p-2.5 bg-white border border-purple-200 rounded-lg text-sm font-bold font-mono tracking-widest text-slate-800 focus:outline-none focus:border-purple-500 text-center shadow-sm"
+                  id="pos-discount-pin-input"
+                />
+              </div>
+            </div>
+
+            {discountError && (
+              <p className="text-xs text-rose-600 font-bold bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+                ⚠️ {discountError}
+              </p>
+            )}
+
+            <div className="flex space-x-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowDiscountModal(false);
+                  setCustomDiscountVal("");
+                  setDiscountReason("");
+                  setDiscountManagerPin("");
+                  setDiscountError(null);
+                }}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyDiscountSubmit}
+                className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-purple-600/20"
+                id="pos-confirm-discount-btn"
+              >
+                Authorize & Apply
               </button>
             </div>
           </div>

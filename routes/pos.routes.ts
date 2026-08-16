@@ -4,6 +4,7 @@ import {
   orderRepo,
   customerRepo,
   shiftRepo,
+  auditLogService,
   authMiddleware,
   PLAN_LIMITS
 } from "../server/context";
@@ -241,6 +242,317 @@ router.delete("/shifts/:id", authMiddleware, async (req, res) => {
   try {
     await shiftRepo.delete(tenantId, req.params.id);
     res.json({ success: true, message: "Shift log deleted." });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// SECURITY, FRAUD PREVENTION & AUDIT CONTROL ENDPOINTS
+// ============================================================================
+
+// Verify Manager/Owner PIN for Privileged Operations
+router.post("/pos/verify-pin", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  const { pin, requiredPermission } = req.body;
+  if (!pin) {
+    return res.status(400).json({ success: false, error: "PIN is required" });
+  }
+
+  try {
+    const staffList = (await staffRepo.getAll(tenantId)) || [];
+    const matchingStaff = staffList.find((s) => s.pin === pin);
+
+    if (!matchingStaff) {
+      return res.status(401).json({ success: false, error: "INVALID_PIN", message: "Invalid Manager/Owner PIN code entered." });
+    }
+
+    const isOwnerOrManager = matchingStaff.role === "Owner" || matchingStaff.role === "Manager";
+    const hasPermission = requiredPermission ? matchingStaff.permissions?.includes(requiredPermission) : true;
+
+    if (!isOwnerOrManager && !hasPermission) {
+      return res.status(403).json({ success: false, error: "INSUFFICIENT_PERMISSIONS", message: "This PIN does not have authorization for this privilege." });
+    }
+
+    res.json({
+      success: true,
+      staff: {
+        id: matchingStaff.id,
+        name: matchingStaff.name,
+        role: matchingStaff.role,
+        permissions: matchingStaff.permissions
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Problem 1: Order Cancellation with Manager PIN & Required Reason
+router.post("/orders/:id/cancel", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  const orderId = req.params.id;
+  const { managerPin, reason, staffName = "Staff" } = req.body;
+
+  if (!reason || !reason.trim()) {
+    return res.status(400).json({ success: false, error: "REASON_REQUIRED", message: "Cancellation reason is mandatory and cannot be left empty." });
+  }
+
+  if (!managerPin) {
+    return res.status(401).json({ success: false, error: "PIN_REQUIRED", message: "Manager/Owner PIN code is required to authorize order cancellation." });
+  }
+
+  try {
+    const staffList = (await staffRepo.getAll(tenantId)) || [];
+    const manager = staffList.find((s) => s.pin === managerPin && (s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("cancel_order" as any)));
+
+    if (!manager) {
+      return res.status(403).json({ success: false, error: "UNAUTHORIZED_PIN", message: "Invalid Manager PIN or insufficient authorization for order cancellation." });
+    }
+
+    const orders = (await orderRepo.getAll(tenantId)) || [];
+    const targetOrder = orders.find((o) => o.id === orderId);
+
+    if (!targetOrder) {
+      return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Order not found." });
+    }
+
+    targetOrder.status = "Cancelled";
+    (targetOrder as any).cancellationReason = reason.trim();
+    (targetOrder as any).cancelledBy = manager.name;
+    (targetOrder as any).cancelledAt = new Date().toISOString();
+
+    await orderRepo.update(tenantId, targetOrder);
+
+    // Append cryptographic immutable audit log entry
+    await auditLogService.log(
+      tenantId,
+      "ORDER_CANCELLED",
+      manager.name,
+      `Order #${targetOrder.orderNumber} (Value: INR ${targetOrder.total}) cancelled by Manager ${manager.name}. Reason: "${reason.trim()}"`,
+      {
+        orderId: targetOrder.id,
+        orderNumber: targetOrder.orderNumber,
+        totalAmount: targetOrder.total,
+        reason: reason.trim(),
+        authorizerId: manager.id,
+        authorizerName: manager.name,
+        initiatedBy: staffName
+      }
+    );
+
+    res.json({
+      success: true,
+      message: `Order #${targetOrder.orderNumber} successfully cancelled. Audit entry recorded.`,
+      order: targetOrder
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Problem 2: Audit Discount Application & Custom Price Edits
+router.post("/orders/audit-discount", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  const { orderId, originalAmount, discountAmount, finalAmount, managerPin, reason = "Custom Discount" } = req.body;
+
+  if (!managerPin) {
+    return res.status(401).json({ success: false, error: "PIN_REQUIRED", message: "Owner/Manager PIN is required to authorize discounts." });
+  }
+
+  try {
+    const staffList = (await staffRepo.getAll(tenantId)) || [];
+    const manager = staffList.find((s) => s.pin === managerPin && (s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("apply_discount" as any)));
+
+    if (!manager) {
+      return res.status(403).json({ success: false, error: "UNAUTHORIZED_PIN", message: "Invalid Owner/Manager PIN or insufficient privilege to apply discounts." });
+    }
+
+    await auditLogService.log(
+      tenantId,
+      "DISCOUNT_APPLIED",
+      manager.name,
+      `Discount of INR ${discountAmount} applied by ${manager.name} (Original: INR ${originalAmount} -> Final: INR ${finalAmount}). Reason: "${reason}"`,
+      {
+        orderId,
+        originalAmount,
+        discountAmount,
+        finalAmount,
+        reason,
+        authorizer: manager.name
+      }
+    );
+
+    res.json({ success: true, message: "Discount authorization audit recorded successfully.", authorizer: manager.name });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Problem 2: Audit Price Freeze / Menu Price Change
+router.post("/menu/audit-price-change", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  const { itemId, itemName, oldPrice, newPrice, managerPin, reason = "Price Update" } = req.body;
+
+  if (!managerPin) {
+    return res.status(401).json({ success: false, error: "PIN_REQUIRED", message: "Owner PIN is required to change menu prices." });
+  }
+
+  try {
+    const staffList = (await staffRepo.getAll(tenantId)) || [];
+    const owner = staffList.find((s) => s.pin === managerPin && (s.role === "Owner" || s.permissions?.includes("edit_prices" as any)));
+
+    if (!owner) {
+      return res.status(403).json({ success: false, error: "UNAUTHORIZED_PIN", message: "Only Restaurant Owner PIN can modify item prices." });
+    }
+
+    await auditLogService.log(
+      tenantId,
+      "PRICE_CHANGE",
+      owner.name,
+      `Item price modified for "${itemName}" (ID: ${itemId}) from INR ${oldPrice} to INR ${newPrice} by ${owner.name}. Reason: "${reason}"`,
+      { itemId, itemName, oldPrice, newPrice, authorizer: owner.name }
+    );
+
+    res.json({ success: true, message: "Price change authorized and audit entry created.", authorizer: owner.name });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Problem 3 Solution 2: Cash Drawer Open Audit Log & Alert
+router.post("/pos/open-cash-drawer", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  const { staffName = "Cashier", reason } = req.body;
+
+  if (!reason || !reason.trim()) {
+    return res.status(400).json({ success: false, error: "REASON_REQUIRED", message: "Reason for opening cash drawer without sale is mandatory." });
+  }
+
+  try {
+    await auditLogService.log(
+      tenantId,
+      "CASH_DRAWER_OPENED",
+      staffName,
+      `Cash drawer popped manually without sale by ${staffName}. Reason: "${reason.trim()}"`,
+      { staffName, reason: reason.trim(), timestamp: new Date().toISOString() }
+    );
+
+    res.json({ success: true, message: "Cash drawer pop audit logged and alert dispatched." });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Problem 3 Solution 1 & 3: Blind Cash Drop & Manager Override for Cash Variance
+router.post("/shifts/:id/close-blind", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  const shiftId = req.params.id;
+  const { physicalCashCount, managerPin, closingNotes = "" } = req.body;
+
+  if (physicalCashCount === undefined || physicalCashCount === null || isNaN(Number(physicalCashCount))) {
+    return res.status(400).json({ success: false, error: "INVALID_CASH_COUNT", message: "Physical cash count is required for blind shift close." });
+  }
+
+  try {
+    const shifts = (await shiftRepo.getAll(tenantId)) || [];
+    const activeShift = shifts.find((s) => s.id === shiftId || (s.staffId === req.body.staffId && s.status === "Active"));
+
+    if (!activeShift) {
+      return res.status(404).json({ success: false, error: "SHIFT_NOT_FOUND", message: "No active shift found to close." });
+    }
+
+    // Compute expected cash during this shift from orders
+    const orders = (await orderRepo.getAll(tenantId)) || [];
+    const shiftStartTime = new Date(activeShift.startTime).getTime();
+    const shiftCashOrders = orders.filter((o) => {
+      const orderTime = new Date(o.date).getTime();
+      return orderTime >= shiftStartTime && o.paymentMethod === "Cash" && o.status === "Completed";
+    });
+
+    const totalCashCollected = shiftCashOrders.reduce((sum, o) => sum + o.total, 0);
+    const openingCash = (activeShift as any).openingCash || 500; // default initial drawer float
+    const expectedCash = openingCash + totalCashCollected;
+    const physicalCount = Number(physicalCashCount);
+    const variance = Number((physicalCount - expectedCash).toFixed(2));
+
+    // If variance exists (> ±0), require Manager PIN override
+    let managerName = "";
+    if (Math.abs(variance) > 0) {
+      if (!managerPin) {
+        return res.json({
+          success: false,
+          requireManagerOverride: true,
+          variance,
+          expectedCash,
+          physicalCashCount: physicalCount,
+          message: `Discrepancy detected! Blind Cash Count (INR ${physicalCount}) differs from Expected Cash (INR ${expectedCash}) by INR ${variance > 0 ? "+" : ""}${variance}. Manager PIN override required.`
+        });
+      }
+
+      const staffList = (await staffRepo.getAll(tenantId)) || [];
+      const manager = staffList.find((s) => s.pin === managerPin && (s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("close_shift" as any)));
+
+      if (!manager) {
+        return res.status(403).json({
+          success: false,
+          error: "UNAUTHORIZED_PIN",
+          message: "Invalid Manager PIN code. Override failed."
+        });
+      }
+      managerName = manager.name;
+    }
+
+    // Finalize shift closure
+    activeShift.status = "Completed";
+    activeShift.endTime = new Date().toISOString();
+    (activeShift as any).openingCash = openingCash;
+    (activeShift as any).expectedCash = expectedCash;
+    (activeShift as any).physicalCashCount = physicalCount;
+    (activeShift as any).variance = variance;
+    (activeShift as any).closingNotes = closingNotes;
+    if (managerName) {
+      (activeShift as any).managerOverrideBy = managerName;
+    }
+
+    await shiftRepo.update(tenantId, activeShift);
+
+    // Log Audit Trail Entry
+    if (variance !== 0) {
+      await auditLogService.log(
+        tenantId,
+        "SHIFT_VARIANCE_OVERRIDE",
+        managerName || activeShift.staffName,
+        `Shift close completed for ${activeShift.staffName} with Cash Variance of INR ${variance} (Expected: INR ${expectedCash}, Counted: INR ${physicalCount}). Override authorized by: ${managerName || "System"}`,
+        {
+          shiftId: activeShift.id,
+          staffName: activeShift.staffName,
+          openingCash,
+          expectedCash,
+          physicalCashCount: physicalCount,
+          variance,
+          managerOverrideBy: managerName,
+          notes: closingNotes
+        }
+      );
+    } else {
+      await auditLogService.log(
+        tenantId,
+        "SHIFT_CLOSED",
+        activeShift.staffName,
+        `Shift close completed cleanly for ${activeShift.staffName}. Cash matched perfectly (INR ${physicalCount}).`,
+        { shiftId: activeShift.id, expectedCash, physicalCashCount: physicalCount }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Shift closed successfully! ${variance !== 0 ? `Cash Variance (INR ${variance}) override recorded.` : "Drawer cash balanced perfectly."}`,
+      shift: activeShift,
+      expectedCash,
+      physicalCashCount: physicalCount,
+      variance
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

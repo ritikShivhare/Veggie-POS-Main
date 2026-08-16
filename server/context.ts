@@ -139,6 +139,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
                       req.path.startsWith("/api/auth/verify") ||
                       req.path.startsWith("/api/saas-admin/login") ||
                       req.path.startsWith("/api/health") ||
+                      req.path.startsWith("/api/copilot-chat") ||
                       req.path.startsWith("/api/webhooks");
 
   if (isAuthRoute) {

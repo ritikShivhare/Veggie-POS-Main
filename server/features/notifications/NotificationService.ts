@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { Database } from "../shared/database";
 
 export type NotificationChannel = "in-app" | "email" | "sms";
@@ -36,7 +37,7 @@ export interface DispatchLog {
 
 /**
  * Extensible Provider Interfaces for Production Integrations
- * (e.g. Twilio, SendGrid, Amazon SES)
+ * (e.g. Gmail SMTP, Twilio, Resend, Amazon SES)
  */
 export interface EmailProvider {
   sendEmail(to: string, subject: string, htmlBody: string): Promise<{ success: boolean; providerId: string }>;
@@ -44,6 +45,55 @@ export interface EmailProvider {
 
 export interface SMSProvider {
   sendSMS(to: string, message: string): Promise<{ success: boolean; providerId: string }>;
+}
+
+/**
+ * Option 1: Free Nodemailer SMTP Email Provider (Gmail App Password / Free SMTP)
+ */
+class SmtpEmailProvider implements EmailProvider {
+  private transporter: nodemailer.Transporter | null = null;
+
+  constructor() {
+    const user = process.env.SMTP_USER || process.env.GMAIL_USER;
+    const pass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
+    const host = process.env.SMTP_HOST || "smtp.gmail.com";
+    const port = parseInt(process.env.SMTP_PORT || "465", 10);
+
+    if (user && pass) {
+      try {
+        this.transporter = nodemailer.createTransport({
+          host,
+          port,
+          secure: port === 465,
+          auth: { user, pass }
+        });
+        console.log(`[SMTP Email Provider] Initialized Nodemailer SMTP via ${host}:${port} for ${user}`);
+      } catch (err) {
+        console.error("[SMTP Email Provider] Transport setup error:", err);
+      }
+    }
+  }
+
+  async sendEmail(to: string, subject: string, htmlBody: string) {
+    if (!this.transporter) {
+      return { success: false, providerId: "" };
+    }
+
+    try {
+      const fromEmail = process.env.SMTP_USER || process.env.GMAIL_USER;
+      const info = await this.transporter.sendMail({
+        from: `"VeggiePOS" <${fromEmail}>`,
+        to,
+        subject,
+        html: htmlBody
+      });
+      console.log(`[SMTP Email Provider] Free Gmail/SMTP Email sent to ${to}. ID: ${info.messageId}`);
+      return { success: true, providerId: info.messageId };
+    } catch (error: any) {
+      console.error("[SMTP Email Provider] Error dispatching email via SMTP:", error);
+      return { success: false, providerId: "" };
+    }
+  }
 }
 
 /**
@@ -90,6 +140,27 @@ class ResendEmailProvider implements EmailProvider {
   }
 }
 
+/**
+ * Composite Email Provider combining free Nodemailer SMTP (Option 1) and Resend API
+ */
+class CompositeEmailProvider implements EmailProvider {
+  private smtpProvider: SmtpEmailProvider;
+  private resendProvider: ResendEmailProvider;
+
+  constructor() {
+    this.smtpProvider = new SmtpEmailProvider();
+    this.resendProvider = new ResendEmailProvider();
+  }
+
+  async sendEmail(to: string, subject: string, htmlBody: string) {
+    const smtpRes = await this.smtpProvider.sendEmail(to, subject, htmlBody);
+    if (smtpRes.success) {
+      return smtpRes;
+    }
+    return await this.resendProvider.sendEmail(to, subject, htmlBody);
+  }
+}
+
 class MockTwilioProvider implements SMSProvider {
   async sendSMS(to: string, message: string) {
     console.log(`[Twilio Integration] Dispatching SMS to ${to}...`);
@@ -106,7 +177,7 @@ export class NotificationService {
 
   private constructor() {
     this.db = Database.getInstance();
-    this.emailProvider = new ResendEmailProvider();
+    this.emailProvider = new CompositeEmailProvider();
     this.smsProvider = new MockTwilioProvider();
   }
 

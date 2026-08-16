@@ -904,6 +904,49 @@ export default function InventoryManagement({
                   className="w-4 h-4 accent-emerald-500"
                 />
               </div>
+
+              <div className="py-3 pt-4 border-t border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold text-white">Restaurant GST % Tax Rate</h3>
+                  <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                    {settings.gstPercentage ?? 5}% Active
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mb-3">Adjust the tax percentage rate applied to POS bills and receipts.</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={settings.gstPercentage ?? 5}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      onUpdateSettings({
+                        ...settings,
+                        gstPercentage: isNaN(val) ? 0 : Math.max(0, Math.min(100, val))
+                      });
+                    }}
+                    className="w-28 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl font-mono text-sm font-bold text-white focus:outline-none focus:border-emerald-500"
+                  />
+                  <div className="flex gap-1.5">
+                    {[0, 5, 12, 18, 28].map((rate) => (
+                      <button
+                        key={rate}
+                        type="button"
+                        onClick={() => onUpdateSettings({ ...settings, gstPercentage: rate })}
+                        className={`px-2 py-1 rounded-lg text-xs font-bold font-mono transition border cursor-pointer ${
+                          (settings.gstPercentage ?? 5) === rate
+                            ? "bg-emerald-500 text-slate-950 border-emerald-500"
+                            : "bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600"
+                        }`}
+                      >
+                        {rate}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
