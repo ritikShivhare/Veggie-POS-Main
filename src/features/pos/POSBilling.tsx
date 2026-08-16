@@ -82,19 +82,27 @@ export default function POSBilling({
       return;
     }
 
-    if (!cancelManagerPin || cancelManagerPin.length !== 4) {
-      setCancelError("Please enter a valid 4-digit Manager/Owner PIN.");
+    if (!cancelManagerPin || cancelManagerPin.length < 4 || cancelManagerPin.length > 6) {
+      setCancelError("Please enter a valid 4 to 6-digit Manager/Owner PIN.");
       return;
     }
 
     try {
+      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || "";
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sessId) headers["x-session-id"] = sessId;
+      if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
+
       const res = await fetch(`/api/orders/${cancelModalOrder.id}/cancel`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           managerPin: cancelManagerPin,
           reason: cancelReason.trim(),
-          staffName: currentStaff.name
+          staffName: currentStaff?.name || "Staff",
+          sessionId: sessId,
+          tenantId: currentTenantId
         })
       });
 
@@ -124,12 +132,20 @@ export default function POSBilling({
     }
 
     try {
+      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || "";
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sessId) headers["x-session-id"] = sessId;
+      if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
+
       const res = await fetch("/api/pos/open-cash-drawer", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
-          staffName: currentStaff.name,
-          reason: drawerPopReason.trim()
+          staffName: currentStaff?.name || "Cashier",
+          reason: drawerPopReason.trim(),
+          sessionId: sessId,
+          tenantId: currentTenantId
         })
       });
 
@@ -139,7 +155,7 @@ export default function POSBilling({
         return;
       }
 
-      alert(`Cash drawer opened! Audit entry logged for "${drawerPopReason.trim()}" by ${currentStaff.name}.`);
+      alert(`Cash drawer opened! Audit entry logged for "${drawerPopReason.trim()}" by ${currentStaff?.name || "Cashier"}.`);
       setShowDrawerPopModal(false);
       setDrawerPopReason("");
       setDrawerPopError(null);
@@ -162,22 +178,30 @@ export default function POSBilling({
       return;
     }
 
-    if (!discountManagerPin || discountManagerPin.length !== 4) {
-      setDiscountError("Please enter a valid 4-digit Owner/Manager PIN.");
+    if (!discountManagerPin || discountManagerPin.length < 4 || discountManagerPin.length > 6) {
+      setDiscountError("Please enter a valid 4 to 6-digit Owner/Manager PIN.");
       return;
     }
 
     try {
       const origTotal = subtotal + tax;
+      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || "";
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sessId) headers["x-session-id"] = sessId;
+      if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
+
       const res = await fetch("/api/orders/audit-discount", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           originalAmount: origTotal,
           discountAmount: numVal,
           finalAmount: Math.max(0, origTotal - numVal),
           managerPin: discountManagerPin,
-          reason: discountReason.trim()
+          reason: discountReason.trim(),
+          sessionId: sessId,
+          tenantId: currentTenantId
         })
       });
 
@@ -1263,14 +1287,14 @@ export default function POSBilling({
 
               <div>
                 <label className="block text-[11px] font-bold text-rose-900 mb-1">
-                  Manager / Owner 4-Digit PIN*:
+                  Manager / Owner PIN (4-6 Digits)*:
                 </label>
                 <input
                   type="password"
-                  maxLength={4}
+                  maxLength={6}
                   value={cancelManagerPin}
                   onChange={(e) => setCancelManagerPin(e.target.value)}
-                  placeholder="****"
+                  placeholder="PIN Code"
                   className="w-full p-2.5 bg-white border border-rose-200 rounded-lg text-sm font-bold font-mono tracking-widest text-slate-800 focus:outline-none focus:border-rose-500 text-center shadow-sm"
                   id="pos-cancel-pin-input"
                 />
@@ -1420,14 +1444,14 @@ export default function POSBilling({
 
               <div>
                 <label className="block text-[11px] font-bold text-purple-900 mb-1">
-                  Manager/Owner PIN*:
+                  Manager/Owner PIN (4-6 Digits)*:
                 </label>
                 <input
                   type="password"
-                  maxLength={4}
+                  maxLength={6}
                   value={discountManagerPin}
                   onChange={(e) => setDiscountManagerPin(e.target.value)}
-                  placeholder="****"
+                  placeholder="PIN Code"
                   className="w-full p-2.5 bg-white border border-purple-200 rounded-lg text-sm font-bold font-mono tracking-widest text-slate-800 focus:outline-none focus:border-purple-500 text-center shadow-sm"
                   id="pos-discount-pin-input"
                 />

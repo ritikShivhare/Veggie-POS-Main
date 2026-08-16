@@ -86,7 +86,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.role === "SaaS Owner") {
+        if (parsed && parsed.name) {
           return parsed;
         }
       } catch (e) {
@@ -101,7 +101,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     if (savedStaff) {
       try {
         const parsed = JSON.parse(savedStaff);
-        if (parsed && parsed.role === "SaaS Owner") {
+        if (parsed && parsed.name) {
           return localStorage.getItem("veggiepos_current_session_id") || null;
         }
       } catch (e) {}
