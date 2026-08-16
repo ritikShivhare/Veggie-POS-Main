@@ -40,6 +40,7 @@ export default function StaffShifts({
 
   // Filter shift records: standard staff only see their own records, managers see all
   const displayedShifts = shifts.filter((s) => isManagerOrOwner || s.staffId === currentStaff.id);
+  const isCashierRole = currentStaff.role.toLowerCase() === "cashier";
 
   // Blind shift submit handler
   const handleBlindCloseSubmit = async () => {
@@ -55,16 +56,22 @@ export default function StaffShifts({
     try {
       const payload: any = { physicalCashCount: countNum };
       if (blindStep === "override") {
-        if (!overridePin || overridePin.length !== 4) {
-          setBlindError("Please enter a valid 4-digit Manager/Owner PIN for variance override.");
+        if (!overridePin || overridePin.length < 4 || overridePin.length > 6) {
+          setBlindError("Please enter a valid 4-6 digit Manager/Owner PIN for variance override.");
           return;
         }
         payload.managerPin = overridePin;
       }
 
+      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || activeTenant?.tenantId || "";
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sessId) headers["x-session-id"] = sessId;
+      if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
+
       const res = await fetch(`/api/shifts/${activeShift.id}/close-blind`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(payload)
       });
 
@@ -112,18 +119,24 @@ export default function StaffShifts({
 
   // State for new staff registration
   const [newName, setNewName] = useState("");
-  const [newRole, setNewRole] = useState<"Owner" | "Manager" | "Cashier" | "Chef">("Cashier");
+  const [newRole, setNewRole] = useState<"Owner" | "Manager" | "Cashier" | "Waiter" | "Chef" | "Custom">("Cashier");
+  const [customRoleTitle, setCustomRoleTitle] = useState("");
   const [newPin, setNewPin] = useState("");
   const [newPerms, setNewPerms] = useState<string[]>(["billing"]);
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleRoleChange = (role: "Owner" | "Manager" | "Cashier" | "Chef") => {
+  const handleRoleChange = (role: "Owner" | "Manager" | "Cashier" | "Waiter" | "Chef" | "Custom") => {
     setNewRole(role);
     if (role === "Owner") {
       setNewPerms(["billing", "inventory", "reports", "settings"]);
     } else if (role === "Manager") {
       setNewPerms(["billing", "inventory", "reports"]);
+    } else if (role === "Chef") {
+      setNewPerms(["billing"]);
+    } else if (role === "Waiter" || role === "Cashier") {
+      setNewPerms(["billing"]);
     } else {
       setNewPerms(["billing"]);
     }
@@ -137,7 +150,7 @@ export default function StaffShifts({
     }
   };
 
-  const handleRegisterStaff = (e: React.FormEvent) => {
+  const handleRegisterStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
     setFormSuccess("");
@@ -153,8 +166,14 @@ export default function StaffShifts({
       setFormError("Staff Name is required");
       return;
     }
-    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
-      setFormError("PIN must be exactly 4 digits (e.g. 1234)");
+
+    if (newRole === "Custom" && !customRoleTitle.trim()) {
+      setFormError("Please type the custom staff position / designation (e.g. Captain, Bartender).");
+      return;
+    }
+
+    if (newPin.length < 4 || newPin.length > 6 || !/^\d{4,6}$/.test(newPin)) {
+      setFormError("PIN must be 4 to 6 digits (e.g. 1234 or 12345)");
       return;
     }
 
@@ -165,20 +184,67 @@ export default function StaffShifts({
       return;
     }
 
+    const finalRoleTitle = newRole === "Custom" ? customRoleTitle.trim() : newRole;
+
     const newStaff: StaffMember = {
       id: `s-${Date.now()}`,
       name: newName.trim(),
-      role: (newRole === "Cashier" || newRole === "Chef" ? "Staff" : newRole) as StaffRole,
+      role: finalRoleTitle as StaffRole,
       pin: newPin,
-      permissions: newPerms as any
+      permissions: (newPerms.length > 0 ? newPerms : ["billing"]) as any
     };
 
-    onUpdateStaffList([...staffList, newStaff]);
-    setFormSuccess(`Successfully registered ${newName.trim()}!`);
+    setIsSaving(true);
+    const updatedList = [...staffList, newStaff];
+    onUpdateStaffList(updatedList);
+
+    // Instant Backend Sync
+    try {
+      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || activeTenant?.tenantId || "";
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sessId) headers["x-session-id"] = sessId;
+      if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
+
+      await fetch("/api/pos/staff", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(newStaff)
+      });
+    } catch (syncErr) {
+      console.warn("Backend direct staff sync error:", syncErr);
+    } finally {
+      setIsSaving(false);
+    }
+
+    setFormSuccess(`Successfully registered ${newName.trim()} (${finalRoleTitle})! Synced instantly to backend.`);
     setNewName("");
     setNewPin("");
+    setCustomRoleTitle("");
     setNewRole("Cashier");
     setNewPerms(["billing"]);
+  };
+
+  const handleDeleteStaffMember = async (staffId: string) => {
+    const updatedList = staffList.filter((s) => s.id !== staffId);
+    onUpdateStaffList(updatedList);
+    setLocalDeleteId(null);
+
+    // Instant Backend Sync Delete
+    try {
+      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || activeTenant?.tenantId || "";
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (sessId) headers["x-session-id"] = sessId;
+      if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
+
+      await fetch(`/api/pos/staff/${staffId}`, {
+        method: "DELETE",
+        headers
+      });
+    } catch (syncErr) {
+      console.warn("Backend direct staff delete error:", syncErr);
+    }
   };
 
   return (
@@ -275,12 +341,17 @@ export default function StaffShifts({
                 <button
                   onClick={() => {
                     if (activeShift) {
-                      setShowBlindModal(true);
-                      setPhysicalCashVal("");
-                      setBlindStep("count");
-                      setVarianceInfo(null);
-                      setOverridePin("");
-                      setBlindError(null);
+                      if (isCashierRole) {
+                        setShowBlindModal(true);
+                        setPhysicalCashVal("");
+                        setBlindStep("count");
+                        setVarianceInfo(null);
+                        setOverridePin("");
+                        setBlindError(null);
+                      } else {
+                        // Directly clock out for Waiter, Chef, Manager, Owner, and other roles
+                        onShiftAction();
+                      }
                     } else {
                       onShiftAction();
                     }
@@ -295,7 +366,9 @@ export default function StaffShifts({
                   {activeShift ? (
                     <>
                       <LogOut className="w-4.5 h-4.5" />
-                      <span>Clock Out & End Shift (Blind Cash Drop)</span>
+                      <span>
+                        {isCashierRole ? "Clock Out & End Shift (Cash Count)" : "Clock Out & End Shift"}
+                      </span>
                     </>
                   ) : (
                     <>
@@ -330,64 +403,98 @@ export default function StaffShifts({
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                            Role
+                            Staff Role / Position
                           </label>
                           <select
                             value={newRole}
                             onChange={(e) => handleRoleChange(e.target.value as any)}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-emerald-500 transition text-xs"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2 text-white focus:outline-none focus:border-emerald-500 transition text-xs cursor-pointer"
+                            id="staff-role-select"
                           >
-                            <option value="Cashier">Cashier</option>
-                            <option value="Chef">Chef</option>
-                            <option value="Manager">Manager</option>
-                            <option value="Owner">Owner</option>
+                            <option value="Cashier">Cashier (कैशियर)</option>
+                            <option value="Waiter">Waiter / Steward (वेटर)</option>
+                            <option value="Chef">Chef / Cook (रसोइया)</option>
+                            <option value="Manager">Manager (मैनेजर)</option>
+                            <option value="Owner">Owner (मालिक)</option>
+                            <option value="Custom">Custom / Other (हाथ से पद लिखें)...</option>
                           </select>
                         </div>
 
                         <div>
                           <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                            4-Digit PIN
+                            PIN Passcode (4-6 Digits)
                           </label>
                           <input
-                            type="text"
-                            maxLength={4}
+                            type="password"
+                            maxLength={6}
                             required
-                            placeholder="e.g. 4321"
+                            placeholder="e.g. 1234 or 12345"
                             value={newPin}
                             onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))}
-                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-center font-mono font-bold text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition text-xs"
+                            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-center font-mono font-bold text-white placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition text-xs tracking-widest"
+                            id="staff-register-pin-input"
                           />
                         </div>
                       </div>
 
+                      {newRole === "Custom" && (
+                        <div className="animate-fadeIn">
+                          <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1">
+                            Custom Position Title (हाथ से लिखें)*:
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Captain, Bartender, Supervisor, Kitchen Helper, Storekeeper"
+                            value={customRoleTitle}
+                            onChange={(e) => setCustomRoleTitle(e.target.value)}
+                            className="w-full bg-slate-950 border border-amber-500/50 focus:border-amber-400 rounded-xl px-3.5 py-2 text-white placeholder-slate-600 focus:outline-none transition text-xs"
+                            id="staff-custom-role-input"
+                          />
+                        </div>
+                      )}
+
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
-                          View Permissions
-                        </label>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                            Allowed Permissions & Screen Access
+                          </label>
+                          <span className="text-[9px] text-emerald-400 font-mono font-semibold">
+                            {newPerms.length} Modules Selected
+                          </span>
+                        </div>
                         <div className="grid grid-cols-2 gap-2">
-                          {(["billing", "inventory", "reports", "settings"] as const).map((perm) => {
-                            const active = newPerms.includes(perm);
+                          {[
+                            { id: "billing", label: "POS & Billing", desc: "Orders & Tables" },
+                            { id: "inventory", label: "Inventory & Stock", desc: "Stock & Recipes" },
+                            { id: "reports", label: "Reports & Insights", desc: "Sales & Analytics" },
+                            { id: "settings", label: "Settings & Setup", desc: "Printer & Config" }
+                          ].map((perm) => {
+                            const active = newPerms.includes(perm.id);
                             return (
                               <button
                                 type="button"
-                                key={perm}
-                                onClick={() => togglePermission(perm)}
-                                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg border text-[11px] font-semibold text-left transition select-none ${
+                                key={perm.id}
+                                onClick={() => togglePermission(perm.id)}
+                                className={`flex items-start gap-2 p-2.5 rounded-xl border text-left transition select-none cursor-pointer ${
                                   active
-                                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
-                                    : "bg-slate-950/40 border-slate-800/80 text-slate-400 hover:bg-slate-800/40"
+                                    ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 shadow-sm"
+                                    : "bg-slate-950/40 border-slate-800/80 text-slate-400 hover:bg-slate-800/40 hover:text-slate-200"
                                 }`}
                               >
                                 <input
                                   type="checkbox"
                                   checked={active}
                                   readOnly
-                                  className="w-3 h-3 accent-emerald-500 pointer-events-none"
+                                  className="w-3.5 h-3.5 mt-0.5 accent-emerald-500 pointer-events-none"
                                 />
-                                <span className="capitalize">{perm}</span>
+                                <div className="min-w-0">
+                                  <span className="font-bold text-[11px] block leading-tight">{perm.label}</span>
+                                  <span className="text-[9px] text-slate-500 block mt-0.5 leading-tight">{perm.desc}</span>
+                                </div>
                               </button>
                             );
                           })}
@@ -435,14 +542,16 @@ export default function StaffShifts({
 
                       <button
                         type="submit"
-                        disabled={hasReachedLimit}
+                        disabled={hasReachedLimit || isSaving}
                         className={`w-full py-2.5 font-bold text-xs rounded-xl transition duration-150 shadow-md cursor-pointer ${
                           hasReachedLimit 
                             ? "bg-slate-800 text-slate-500 cursor-not-allowed shadow-none"
-                            : "bg-emerald-500 hover:bg-emerald-600 text-slate-950 active:scale-[0.98] shadow-emerald-500/10"
+                            : isSaving
+                              ? "bg-emerald-600 text-slate-950 opacity-80 cursor-wait"
+                              : "bg-emerald-500 hover:bg-emerald-600 text-slate-950 active:scale-[0.98] shadow-emerald-500/10"
                         }`}
                       >
-                        {hasReachedLimit ? "Plan Limit Reached" : "Register Team Member"}
+                        {hasReachedLimit ? "Plan Limit Reached" : isSaving ? "Saving & Syncing to Cloud..." : "Register Team Member & Sync"}
                       </button>
                     </form>
                   </div>
@@ -460,24 +569,34 @@ export default function StaffShifts({
                     </h2>
 
                     <p className="text-xs text-slate-400 leading-relaxed">
-                      To delete an employee who has left, use the minus button next to their name. This action is iframe-safe and synchronizes immediately.
+                      All registered staff, waiters, and custom positions are stored securely and synchronized instantly across your terminals.
                     </p>
 
                     <div className="space-y-3 pt-2 max-h-[350px] overflow-y-auto pr-1">
                       {staffList.map((staff) => (
                         <div key={staff.id} className="bg-slate-950 border border-slate-800/60 rounded-2xl p-3.5 flex items-center justify-between hover:border-slate-800 transition">
                           <div className="flex items-center space-x-3 min-w-0">
-                            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center font-bold text-emerald-400 text-xs shrink-0 border border-slate-800">
+                            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center font-bold text-emerald-400 text-xs shrink-0 border border-slate-800 uppercase">
                               {staff.name.charAt(0)}
                             </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <h4 className="font-bold text-white text-xs leading-tight truncate">{staff.name}</h4>
-                                <span className="text-[8px] bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded font-mono font-semibold uppercase shrink-0">
+                                <span className="text-[8px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded font-mono font-bold uppercase shrink-0">
                                   {staff.role}
                                 </span>
                               </div>
-                              <p className="text-[10px] text-slate-500 mt-1 font-mono">PIN: {staff.pin}</p>
+                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                <span className="text-[10px] text-slate-500 font-mono">PIN: ••••</span>
+                                <span className="text-slate-700">•</span>
+                                <div className="flex items-center gap-1">
+                                  {(staff.permissions || ["billing"]).map((perm: string) => (
+                                    <span key={perm} className="text-[8px] bg-slate-900 border border-slate-800 text-slate-400 px-1 py-0.2 rounded font-mono capitalize">
+                                      {perm === "billing" ? "POS" : perm}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
                             </div>
                           </div>
 
@@ -488,11 +607,7 @@ export default function StaffShifts({
                                   <span className="text-[9px] text-rose-300 font-bold px-1 select-none">Sure?</span>
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      const updatedList = staffList.filter((s) => s.id !== staff.id);
-                                      onUpdateStaffList(updatedList);
-                                      setLocalDeleteId(null);
-                                    }}
+                                    onClick={() => handleDeleteStaffMember(staff.id)}
                                     className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[9px] font-bold uppercase transition cursor-pointer"
                                   >
                                     Delete

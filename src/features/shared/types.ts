@@ -37,14 +37,14 @@ export interface Purchase {
   invoiceNumber?: string;
 }
 
-export type StaffRole = 'Owner' | 'Manager' | 'Staff';
+export type StaffRole = 'Owner' | 'Manager' | 'Cashier' | 'Waiter' | 'Chef' | 'Staff' | string;
 
 export interface StaffMember {
   id: string;
   name: string;
   role: StaffRole;
-  pin: string; // 4-digit PIN
-  permissions: ('billing' | 'inventory' | 'reports' | 'settings')[];
+  pin: string; // 4 to 6 digit PIN
+  permissions: ('billing' | 'inventory' | 'reports' | 'settings' | string)[];
 }
 
 export interface Shift {

@@ -98,12 +98,12 @@ export default function PinLogin({ staffList, onLoginSuccess, restaurantName, te
 
   const handleKeyPress = (num: string) => {
     setError("");
-    if (pin.length < 5) {
+    if (pin.length < 6) {
       const newPin = pin + num;
       setPin(newPin);
       
-      // Auto-validate for 5 digits (Owner PIN length)
-      if (newPin.length === 5) {
+      // Auto-validate for 5 or 6 digits if matched or user presses OK
+      if (newPin.length === 5 && tenantId === "veg-reetesh-dhaba") {
         triggerLogin(newPin);
       }
     }
@@ -131,22 +131,21 @@ export default function PinLogin({ staffList, onLoginSuccess, restaurantName, te
 
         <div className="flex flex-col items-center">
           <h2 className="text-center text-slate-400 font-bold mb-4 text-[10px] uppercase tracking-widest">
-            Enter PIN
+            Enter 4-6 Digit Staff PIN
           </h2>
 
-          {/* Password Dot Indicators */}
-          <div className="flex space-x-4 mb-5">
-            {[0, 1, 2, 3, 4].map((index) => (
+          {/* Password Dot Indicators (up to 6 digits) */}
+          <div className="flex space-x-3 mb-5">
+            {[0, 1, 2, 3, 4, 5].map((index) => (
               <div
                 key={index}
                 className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-150 ${
                   pin.length > index
                     ? "bg-blue-600 border-blue-600 scale-110 shadow-sm"
-                    : index === 4
-                      ? "border-amber-300 border-dashed bg-amber-50/10"
+                    : index >= 4
+                      ? "border-slate-300 border-dashed bg-slate-50"
                       : "border-slate-300 bg-white"
                 }`}
-                title={index === 4 ? "Owner PIN 5th digit" : undefined}
               />
             ))}
           </div>
