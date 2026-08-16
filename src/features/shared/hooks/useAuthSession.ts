@@ -60,7 +60,7 @@ export function useAuthSession({
 
   // Production-level Secure Session Idle Timeout and Keep-Alive Engine
   const lastActivityRef = useRef<number>(Date.now());
-  const idleTimeoutMinutesRef = useRef<number>(15);
+  const idleTimeoutMinutesRef = useRef<number>(60);
 
   useEffect(() => {
     if (!currentStaff || !currentSessionId) {
@@ -184,7 +184,7 @@ export function useAuthSession({
   }, []);
 
   // Handle Employee Login
-  const handleLoginSuccess = (staff: StaffMember, sessionId?: string) => {
+  const handleLoginSuccess = (staff: StaffMember, sessionId?: string, _loggedInTenant?: any) => {
     setCurrentStaff(staff);
     if (sessionId) {
       setCurrentSessionId(sessionId);

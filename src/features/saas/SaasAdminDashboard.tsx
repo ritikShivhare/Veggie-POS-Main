@@ -28,14 +28,17 @@ interface SaasAdminDashboardProps {
   tenants: RestaurantTenant[];
   activeTenant: RestaurantTenant;
   onSelectTenant: (tenant: RestaurantTenant) => void;
-  onRegisterBusiness: (data: {
-    businessName: string;
-    ownerName: string;
-    ownerPhone: string;
-    email: string;
-    region: string;
-    pin: string;
-  }) => void;
+  onRegisterBusiness: (
+    data: {
+      businessName: string;
+      ownerName: string;
+      ownerPhone: string;
+      email: string;
+      region: string;
+      pin: string;
+    },
+    serverTenant?: RestaurantTenant
+  ) => void;
   orders: Order[];
   currentSessionId?: string | null;
 }
@@ -302,7 +305,7 @@ export default function SaasAdminDashboard({
             email,
             region,
             pin
-          });
+          }, data.tenant);
           
           // Reset fields
           setBusinessName("");

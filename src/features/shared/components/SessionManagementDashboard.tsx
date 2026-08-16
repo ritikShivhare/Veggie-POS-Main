@@ -79,8 +79,8 @@ export default function SessionManagementDashboard({
   const [activeSessions, setActiveSessions] = useState<UserSession[]>([]);
   const [loginHistory, setLoginHistory] = useState<LoginHistoryEntry[]>([]);
   const [settings, setSettings] = useState<SecuritySettings>({
-    sessionTimeoutMinutes: 15,
-    maxFailedAttempts: 3,
+    sessionTimeoutMinutes: 60,
+    maxFailedAttempts: 5,
     lockoutDurationSeconds: 60,
     enableBruteForceProtection: true
   });
@@ -92,7 +92,7 @@ export default function SessionManagementDashboard({
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed">("all");
   
   // Settings Form state
-  const [formTimeout, setFormTimeout] = useState(15);
+  const [formTimeout, setFormTimeout] = useState(60);
   const [formMaxAttempts, setFormMaxAttempts] = useState(3);
   const [formLockoutDuration, setFormLockoutDuration] = useState(60);
   const [formBruteForce, setFormBruteForce] = useState(true);

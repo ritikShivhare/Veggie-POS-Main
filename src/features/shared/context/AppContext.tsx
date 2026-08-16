@@ -71,7 +71,7 @@ export interface AppContextType {
   setShowIdleWarning: React.Dispatch<React.SetStateAction<boolean>>;
   idleCountdown: number;
   activeShift: Shift | null;
-  handleLoginSuccess: (staff: StaffMember, sessionId?: string) => void;
+  handleLoginSuccess: (staff: StaffMember, sessionId?: string, loggedInTenant?: any) => void;
   handleLogout: () => void;
   handleShiftAction: () => void;
 }
@@ -127,10 +127,19 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     setCurrentSessionId
   });
 
+  const handleLoginSuccess = (staff: StaffMember, sessionId?: string, loggedInTenant?: any) => {
+    if (loggedInTenant && loggedInTenant.tenantId) {
+      tenant.handleRegisterTenant(loggedInTenant);
+      tenant.setActiveTenant(loggedInTenant);
+    }
+    auth.handleLoginSuccess(staff, sessionId);
+  };
+
   const value: AppContextType = {
     ...tenant,
     ...sync,
     ...auth,
+    handleLoginSuccess,
     currentStaff,
     setCurrentStaff,
     currentSessionId,

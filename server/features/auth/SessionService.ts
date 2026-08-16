@@ -146,12 +146,18 @@ export class SessionService {
    */
   public async getSecuritySettings(tenantId: string): Promise<SecuritySettings> {
     const defaults: SecuritySettings = {
-      sessionTimeoutMinutes: 15,
-      maxFailedAttempts: 3,
+      sessionTimeoutMinutes: 60,
+      maxFailedAttempts: 5,
       lockoutDurationSeconds: 60,
       enableBruteForceProtection: true
     };
-    return (await this.db.getObject<SecuritySettings>(tenantId, "system_security_settings")) || defaults;
+    const settings = await this.db.getObject<SecuritySettings>(tenantId, "system_security_settings");
+    if (!settings) return defaults;
+    if (settings.sessionTimeoutMinutes < 60) {
+      settings.sessionTimeoutMinutes = 60;
+      await this.db.saveObject(tenantId, "system_security_settings", settings);
+    }
+    return settings;
   }
 
   /**

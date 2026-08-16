@@ -24,40 +24,88 @@ export function useTenantData() {
     const saved = localStorage.getItem("veggiepos_tenants");
     if (saved) {
       try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return INITIAL_TENANTS;
-      }
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
     }
     return INITIAL_TENANTS;
   });
 
   const [activeTenant, setActiveTenant] = useState<RestaurantTenant>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const urlTenantQuery = searchParams.get("tenant") || searchParams.get("outlet") || searchParams.get("tenantId") || searchParams.get("business");
+
     const savedActiveId = localStorage.getItem("veggiepos_active_tenant_id");
     const savedTenantsStr = localStorage.getItem("veggiepos_tenants");
     let currentTenants = INITIAL_TENANTS;
     if (savedTenantsStr) {
       try {
-        currentTenants = JSON.parse(savedTenantsStr);
+        const parsed = JSON.parse(savedTenantsStr);
+        if (Array.isArray(parsed) && parsed.length > 0) currentTenants = parsed;
       } catch (e) {}
     }
+
+    if (urlTenantQuery) {
+      const q = urlTenantQuery.toLowerCase().trim();
+      const match = currentTenants.find(
+        (t) =>
+          t.tenantId.toLowerCase() === q ||
+          t.id.toLowerCase() === q ||
+          t.name.toLowerCase() === q ||
+          t.name.toLowerCase().includes(q)
+      );
+      if (match) return match;
+    }
+
     if (savedActiveId) {
-      const found = currentTenants.find(t => t.tenantId === savedActiveId);
+      const found = currentTenants.find(t => t.tenantId === savedActiveId || t.id === savedActiveId);
       if (found) return found;
     }
     return currentTenants[0];
   });
 
   const [showTerminalLogin, setShowTerminalLogin] = useState<boolean>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const urlTenantQuery = searchParams.get("tenant") || searchParams.get("outlet") || searchParams.get("tenantId") || searchParams.get("business");
     const savedActiveId = localStorage.getItem("veggiepos_active_tenant_id");
-    return savedActiveId ? true : false;
+    return Boolean(urlTenantQuery || savedActiveId);
   });
+
+  // Synchronize specific active tenant from server if URL query is present
+  useEffect(() => {
+    const syncSpecificTenant = async () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      const urlTenantQuery = searchParams.get("tenant") || searchParams.get("outlet") || searchParams.get("tenantId") || searchParams.get("business");
+      
+      if (!urlTenantQuery) return;
+
+      try {
+        const res = await fetch(`/api/auth/tenant-info?q=${encodeURIComponent(urlTenantQuery.trim())}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.success && data.tenant) {
+          setActiveTenant(data.tenant);
+          setShowTerminalLogin(true);
+          setTenants((prev) => {
+            const exists = prev.some(t => t.tenantId === data.tenant.tenantId);
+            const updated = exists ? prev.map(t => t.tenantId === data.tenant.tenantId ? data.tenant : t) : [...prev, data.tenant];
+            localStorage.setItem("veggiepos_tenants", JSON.stringify(updated));
+            return updated;
+          });
+          localStorage.setItem("veggiepos_active_tenant_id", data.tenant.tenantId);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch tenant info:", err);
+      }
+    };
+
+    syncSpecificTenant();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("veggiepos_tenants", JSON.stringify(tenants));
   }, [tenants]);
 
-  // Use a simple ref-like state or local ref to track first mount to prevent auto-saving default on brand new sessions
   const [firstMountPassed, setFirstMountPassed] = useState(false);
 
   useEffect(() => {
@@ -72,7 +120,14 @@ export function useTenantData() {
   }, [activeTenant, firstMountPassed]);
 
   const handleRegisterTenant = (newTenant: RestaurantTenant) => {
-    setTenants((prev) => [...prev, newTenant]);
+    setTenants((prev) => {
+      const exists = prev.some(t => t.tenantId === newTenant.tenantId);
+      const updated = exists ? prev.map(t => t.tenantId === newTenant.tenantId ? newTenant : t) : [...prev, newTenant];
+      localStorage.setItem("veggiepos_tenants", JSON.stringify(updated));
+      return updated;
+    });
+    setActiveTenant(newTenant);
+    localStorage.setItem("veggiepos_active_tenant_id", newTenant.tenantId);
   };
 
   return {

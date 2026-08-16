@@ -389,37 +389,54 @@ router.post("/auth/verify", async (req, res) => {
   }
 });
 
-router.get("/auth/tenants-list", async (req, res) => {
+router.get("/auth/tenant-info", async (req, res) => {
   try {
+    const query = (req.query.q as string || req.query.tenantId as string || req.query.tenant as string || "").trim().toLowerCase();
+    if (!query) {
+      return res.status(400).json({ success: false, error: "Tenant identifier required" });
+    }
     const list = await getGlobalTenantsList();
-    const activeOutlets = list
-      .filter((t) => t.status !== "suspended")
-      .map((t) => ({
-        id: t.id,
-        name: t.name,
-        tenantId: t.tenantId,
-        region: t.region,
-        ownerName: t.ownerName,
-        ownerPhone: t.ownerPhone || ""
-      }));
-    res.json({ success: true, tenants: activeOutlets });
+    const match = list.find(
+      (t) =>
+        t.tenantId.toLowerCase() === query ||
+        t.id.toLowerCase() === query ||
+        t.name.toLowerCase() === query ||
+        t.name.toLowerCase().replace(/[^a-z0-9]/g, "") === query.replace(/[^a-z0-9]/g, "")
+    );
+    if (!match || match.status === "suspended") {
+      return res.status(404).json({ success: false, error: "Restaurant outlet not found" });
+    }
+    // Return only the single restaurant's basic info
+    res.json({
+      success: true,
+      tenant: {
+        id: match.id,
+        name: match.name,
+        tenantId: match.tenantId,
+        region: match.region,
+        status: match.status
+      }
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 router.post("/auth/login", async (req, res) => {
-  let { pin, email, phone, outletCode, tenantId } = req.body;
+  let { pin, email, phone, outletCode, tenantId, restaurantName } = req.body;
   const userAgent = req.headers["user-agent"] || "Unknown User Agent";
   const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
   const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
 
   try {
     const globalTenants = await getGlobalTenantsList();
+    
+    // 1. First attempt to match target tenant by ID, Name, Outlet Code, Email, or Phone
     let targetTenant = globalTenants.find(
       (t) =>
-        (tenantId && t.tenantId.toLowerCase() === tenantId.toLowerCase()) ||
-        (outletCode && (t.tenantId.toLowerCase() === outletCode.toLowerCase() || t.id.toLowerCase() === outletCode.toLowerCase())) ||
+        (tenantId && (t.tenantId.toLowerCase() === tenantId.toLowerCase() || t.id.toLowerCase() === tenantId.toLowerCase() || t.name.toLowerCase() === tenantId.toLowerCase())) ||
+        (restaurantName && (t.name.toLowerCase() === restaurantName.toLowerCase() || t.tenantId.toLowerCase() === restaurantName.toLowerCase())) ||
+        (outletCode && (t.tenantId.toLowerCase() === outletCode.toLowerCase() || t.id.toLowerCase() === outletCode.toLowerCase() || t.name.toLowerCase() === outletCode.toLowerCase())) ||
         (phone && t.ownerPhone && t.ownerPhone.replace(/\D/g, "") === phone.replace(/\D/g, "")) ||
         (email && t.email && t.email.toLowerCase() === email.toLowerCase())
     );
@@ -434,8 +451,26 @@ router.post("/auth/login", async (req, res) => {
       });
     }
 
-    const staff = (await staffRepo.getAll(effectiveTenantId)) || [];
+    let staff = (await staffRepo.getAll(effectiveTenantId)) || [];
     let matchingUser = staff.find((s) => s.pin === pin);
+
+    // 2. UNIVERSAL AUTO-DETECT: If not found in effective tenant, search across all registered tenants
+    if (!matchingUser && pin) {
+      for (const tenant of globalTenants) {
+        if (tenant.tenantId === effectiveTenantId) continue;
+        if (tenant.status === "suspended") continue;
+        
+        const tenantStaff = (await staffRepo.getAll(tenant.tenantId)) || [];
+        const found = tenantStaff.find((s) => s.pin === pin);
+        if (found) {
+          effectiveTenantId = tenant.tenantId;
+          targetTenant = tenant;
+          matchingUser = found;
+          staff = tenantStaff;
+          break;
+        }
+      }
+    }
     
     const userId = matchingUser ? matchingUser.id : "unknown";
     const userName = matchingUser ? matchingUser.name : (email ? email.split('@')[0] : "Unknown User");
@@ -509,6 +544,12 @@ router.post("/auth/validate", async (req, res) => {
     if (!session && tenantId !== "saas-admin") {
       // Fallback check in case SaaS Owner validates session with business tenant ID context
       session = await sessionService.validateAndTouchSession("saas-admin", sessionId);
+    }
+    if (!session && sessionId) {
+      const resolvedTid = await sessionService.resolveTenantId(sessionId, getGlobalTenantsList);
+      if (resolvedTid && resolvedTid !== tenantId) {
+        session = await sessionService.validateAndTouchSession(resolvedTid, sessionId);
+      }
     }
     if (!session) {
       return res.json({ success: false, error: "SESSION_EXPIRED", message: "Session is inactive or has expired due to idle timeout." });
@@ -608,8 +649,8 @@ router.post("/auth/settings/update", authMiddleware, async (req, res) => {
   const { tenantId = DEFAULT_TENANT_ID, sessionTimeoutMinutes, maxFailedAttempts, lockoutDurationSeconds, enableBruteForceProtection } = req.body;
   try {
     const settings = {
-      sessionTimeoutMinutes: Number(sessionTimeoutMinutes) || 15,
-      maxFailedAttempts: Number(maxFailedAttempts) || 3,
+      sessionTimeoutMinutes: Number(sessionTimeoutMinutes) || 60,
+      maxFailedAttempts: Number(maxFailedAttempts) || 5,
       lockoutDurationSeconds: Number(lockoutDurationSeconds) || 60,
       enableBruteForceProtection: enableBruteForceProtection !== undefined ? Boolean(enableBruteForceProtection) : true
     };

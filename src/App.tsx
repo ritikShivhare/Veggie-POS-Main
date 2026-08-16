@@ -256,7 +256,17 @@ function AppContent() {
             tenants={tenants}
             activeTenant={activeTenant}
             onSelectTenant={(t) => setActiveTenant(t)}
-            onRegisterBusiness={(data) => {
+            onRegisterBusiness={(data: any, serverTenant?: any) => {
+              if (serverTenant && serverTenant.tenantId) {
+                setTenants((prev) => {
+                  const exists = prev.some(t => t.tenantId === serverTenant.tenantId);
+                  const updated = exists ? prev.map(t => t.tenantId === serverTenant.tenantId ? serverTenant : t) : [...prev, serverTenant];
+                  localStorage.setItem("veggiepos_tenants", JSON.stringify(updated));
+                  return updated;
+                });
+                return;
+              }
+
               const cleanedName = data.businessName.toLowerCase().replace(/[^a-z0-9]/g, "");
               const randomSuffix = Math.floor(100 + Math.random() * 900);
               const newTenantId = `veg-${cleanedName}-${randomSuffix}`;
@@ -300,8 +310,8 @@ function AppContent() {
         <>
           <PinLogin
             staffList={staffList}
-            onLoginSuccess={(staff, sessId) => {
-              handleLoginSuccess(staff, sessId);
+            onLoginSuccess={(staff, sessId, loggedInTenant) => {
+              handleLoginSuccess(staff, sessId, loggedInTenant);
               setActiveTab(staff.permissions.includes("reports") ? "dashboard" : "billing");
             }}
             restaurantName={activeTenant.name}
@@ -338,7 +348,8 @@ function AppContent() {
                 body: JSON.stringify({
                   pin: data.pin,
                   email: data.email,
-                  tenantId: matchingTenant ? matchingTenant.tenantId : undefined
+                  tenantId: matchingTenant ? matchingTenant.tenantId : undefined,
+                  restaurantName: data.businessName
                 })
               });
 
@@ -360,39 +371,19 @@ function AppContent() {
 
               const result = await res.json();
               if (result.success) {
-                const existingTenant = tenants.find(
+                const loginTenant = result.tenant || tenants.find(
                   (t) => t.name.toLowerCase() === data.businessName.toLowerCase()
                 );
 
-                if (existingTenant) {
-                  setActiveTenant(existingTenant);
-                } else {
-                  const cleanedName = data.businessName.toLowerCase().replace(/[^a-z0-9]/g, "");
-                  const randomSuffix = Math.floor(100 + Math.random() * 900);
-                  const newTenantId = `veg-${cleanedName}-${randomSuffix}`;
-                  const newTenant: RestaurantTenant = {
-                    id: `t-${Date.now()}`,
-                    name: data.businessName,
-                    tenantId: newTenantId,
-                    status: "active",
-                    created: new Date().toISOString().slice(0, 10)
-                  };
-
-                  const defaultOwner: StaffMember = {
-                    id: result.user.id,
-                    name: result.user.name,
-                    role: "Owner",
-                    pin: data.pin || "1111",
-                    permissions: ["billing", "inventory", "reports", "settings"]
-                  };
-                  pendingOwnerRef.current = defaultOwner;
-
-                  setTenants((prev) => [...prev, newTenant]);
-                  setActiveTenant(newTenant);
+                if (loginTenant) {
+                  setActiveTenant(loginTenant);
+                  setTenants((prev) => {
+                    const exists = prev.some(t => t.tenantId === loginTenant.tenantId);
+                    return exists ? prev : [...prev, loginTenant];
+                  });
                 }
 
-                setCurrentStaff(result.user);
-                setCurrentSessionId(result.session.sessionId);
+                handleLoginSuccess(result.user, result.session.sessionId, result.tenant);
                 setActiveTab(result.user.permissions.includes("reports") ? "dashboard" : "billing");
                 alert(`Welcome back, ${result.user.name}!`);
               }

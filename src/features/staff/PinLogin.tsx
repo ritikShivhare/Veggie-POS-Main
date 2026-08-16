@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { StaffMember } from "../shared/types";
+import { StaffMember, RestaurantTenant } from "../shared/types";
 import { Lock, User, Check, AlertCircle } from "lucide-react";
 import { ApiClient } from "../shared/services/api";
 
 interface PinLoginProps {
   staffList?: StaffMember[];
-  onLoginSuccess: (staff: StaffMember, sessionId: string) => void;
+  onLoginSuccess: (staff: StaffMember, sessionId: string, loggedInTenant?: RestaurantTenant) => void;
   restaurantName: string;
   tenantId: string;
   onBackToLanding?: () => void;
@@ -37,7 +37,7 @@ export default function PinLogin({ staffList, onLoginSuccess, restaurantName, te
     fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: enteredPin, tenantId })
+      body: JSON.stringify({ pin: enteredPin, tenantId, restaurantName })
     })
     .then(async (res) => {
       if (res.status === 423) {
@@ -51,14 +51,14 @@ export default function PinLogin({ staffList, onLoginSuccess, restaurantName, te
         if (data.locked) {
           setError(`Too many failures. Account locked!`);
         } else {
-          setError(`Incorrect passcode. ${data.remainingAttempts} attempts remaining.`);
+          setError(data.message || `Incorrect passcode. ${data.remainingAttempts ? `${data.remainingAttempts} attempts remaining.` : ""}`);
         }
         setPin("");
         return;
       }
       const result = await res.json();
       if (result.success) {
-        onLoginSuccess(result.user, result.session.sessionId);
+        onLoginSuccess(result.user, result.session.sessionId, result.tenant);
         setPin("");
       }
     })
@@ -119,7 +119,7 @@ export default function PinLogin({ staffList, onLoginSuccess, restaurantName, te
     <div className="min-h-screen bg-[#f8fafc] flex flex-col justify-center items-center p-4 font-sans text-slate-800 relative overflow-hidden">
       {/* Main Login Card */}
       <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-6 shadow-lg z-10 animate-fade-in">
-        <div className="text-center mb-6">
+        <div className="text-center mb-5">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-xl shadow-md mb-3 text-white font-extrabold text-xl">
             🥗
           </div>
@@ -165,7 +165,7 @@ export default function PinLogin({ staffList, onLoginSuccess, restaurantName, te
               <button
                 key={num}
                 onClick={() => handleKeyPress(num)}
-                className="h-12 bg-white hover:bg-slate-50 border border-slate-200 active:scale-95 rounded-xl flex items-center justify-center text-lg font-bold text-slate-800 transition shadow-sm"
+                className="h-12 bg-white hover:bg-slate-50 border border-slate-200 active:scale-95 rounded-xl flex items-center justify-center text-lg font-bold text-slate-800 transition shadow-sm cursor-pointer"
                 id={`keypad-${num}`}
               >
                 {num}
@@ -174,9 +174,9 @@ export default function PinLogin({ staffList, onLoginSuccess, restaurantName, te
             
             <button
               onClick={pin.length >= 4 ? () => triggerLogin(pin) : () => setPin("")}
-              className={`h-12 text-xs font-bold rounded-xl flex items-center justify-center transition border ${
+              className={`h-12 text-xs font-bold rounded-xl flex items-center justify-center transition border cursor-pointer ${
                 pin.length >= 4
-                  ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-md shadow-emerald-500/15 cursor-pointer"
+                  ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-md shadow-emerald-500/15"
                   : "bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 border-slate-200/40"
               }`}
               id="keypad-ok-clear"
@@ -186,7 +186,7 @@ export default function PinLogin({ staffList, onLoginSuccess, restaurantName, te
             
             <button
               onClick={() => handleKeyPress("0")}
-              className="h-12 bg-white hover:bg-slate-50 border border-slate-200 active:scale-95 rounded-xl flex items-center justify-center text-lg font-bold text-slate-800 transition shadow-sm"
+              className="h-12 bg-white hover:bg-slate-50 border border-slate-200 active:scale-95 rounded-xl flex items-center justify-center text-lg font-bold text-slate-800 transition shadow-sm cursor-pointer"
               id={`keypad-0`}
             >
               0
@@ -194,7 +194,7 @@ export default function PinLogin({ staffList, onLoginSuccess, restaurantName, te
             
             <button
               onClick={handleBackspace}
-              className="h-12 bg-slate-100 hover:bg-slate-200 text-rose-600 hover:text-rose-700 rounded-xl flex items-center justify-center transition border border-slate-200/40"
+              className="h-12 bg-slate-100 hover:bg-slate-200 text-rose-600 hover:text-rose-700 rounded-xl flex items-center justify-center transition border border-slate-200/40 cursor-pointer"
               id="keypad-backspace"
             >
               ⌫
