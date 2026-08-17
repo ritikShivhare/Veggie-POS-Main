@@ -143,8 +143,16 @@ export default function LandingPage({
 
         <div className="flex items-center gap-3">
           <button
+            onClick={onOpenStaffTerminal}
+            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition duration-150 cursor-pointer flex items-center gap-1.5"
+            id="landing-staff-terminal-btn"
+          >
+            <span>Staff PIN / QR</span>
+          </button>
+          <button
             onClick={() => setShowConsoleModal(true)}
             className="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold shadow-md shadow-pink-500/10 transition duration-150 cursor-pointer"
+            id="landing-owner-panel-btn"
           >
             Owner Panel
           </button>
@@ -188,13 +196,21 @@ export default function LandingPage({
           </div>
 
           {/* Call to Action */}
-          <div className="pt-8 flex flex-col items-center justify-center w-full">
+          <div className="pt-8 flex flex-wrap items-center justify-center gap-3 w-full">
             <button
               onClick={() => setShowConsoleModal(true)}
               className="px-6 py-3.5 bg-pink-600 hover:bg-pink-700 text-white rounded-xl text-xs font-bold shadow-lg shadow-pink-500/20 hover:shadow-pink-500/30 transition duration-150 cursor-pointer flex items-center gap-2"
+              id="landing-hero-owner-btn"
             >
               <span>Open Owner Panel</span>
               <ArrowRight className="w-4 h-4" />
+            </button>
+            <button
+              onClick={onOpenStaffTerminal}
+              className="px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold shadow-sm transition duration-150 cursor-pointer flex items-center gap-2"
+              id="landing-hero-staff-btn"
+            >
+              <span>Staff PIN & QR Login</span>
             </button>
           </div>
         </div>

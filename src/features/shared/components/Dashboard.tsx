@@ -13,7 +13,18 @@ import {
   Layers,
   ShoppingBag,
   CircleDollarSign,
-  Briefcase
+  Briefcase,
+  Eye,
+  X,
+  Printer,
+  ChevronRight,
+  CreditCard,
+  User,
+  Receipt,
+  Search,
+  FileText,
+  CheckCircle2,
+  Share2
 } from "lucide-react";
 import { Ingredient, Order, Shift } from "../types";
 
@@ -60,6 +71,23 @@ export default function Dashboard({
   const [customEndDate, setCustomEndDate] = useState<string>(() => {
     return new Date().toISOString().split("T")[0];
   });
+
+  // Drilldown selection state (Option 1)
+  const [selectedDrilldownDay, setSelectedDrilldownDay] = useState<{
+    dateLabel: string;
+    sales: number;
+    profit: number;
+    cost: number;
+    orders: number;
+    upi: number;
+    cash: number;
+    ordersList: Order[];
+  } | null>(null);
+
+  // Selected single order for printable Tax Invoice modal
+  const [selectedOrderReceipt, setSelectedOrderReceipt] = useState<Order | null>(null);
+  const [drilldownSearch, setDrilldownSearch] = useState<string>("");
+  const [drilldownPaymentFilter, setDrilldownPaymentFilter] = useState<"All" | "Cash" | "UPI">("All");
 
   // Deterministically generate beautiful historic orders if the database has low history.
   // This guarantees that the graphs, tables, and comparison trends are completely functional and realistic.
@@ -296,8 +324,8 @@ export default function Dashboard({
     const ordersTrend = calculateTrend(orderCount, compOrderCount);
     const ticketTrend = calculateTrend(avgTicket, compAvgTicket);
 
-    // Calculate daily data breakdown for charts (Option 3)
-    const dailyMap: { [dateKey: string]: { dateLabel: string; sales: number; profit: number; cost: number; orders: number; upi: number; cash: number } } = {};
+    // Calculate daily data breakdown for charts and drilldown (Option 1 & 3)
+    const dailyMap: { [dateKey: string]: { dateLabel: string; sales: number; profit: number; cost: number; orders: number; upi: number; cash: number; ordersList: Order[] } } = {};
     
     // Initialize day slots for the selected period
     const durationDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
@@ -317,7 +345,8 @@ export default function Dashboard({
           cost: 0,
           orders: 0,
           upi: 0,
-          cash: 0
+          cash: 0,
+          ordersList: []
         };
       }
 
@@ -333,6 +362,7 @@ export default function Dashboard({
           dailyMap[slotKey].cost += cost;
           dailyMap[slotKey].profit += (o.total || 0) - cost;
           dailyMap[slotKey].orders += 1;
+          dailyMap[slotKey].ordersList.push(o);
           if (o.paymentMethod === "UPI") dailyMap[slotKey].upi += o.total || 0;
           if (o.paymentMethod === "Cash") dailyMap[slotKey].cash += o.total || 0;
         }
@@ -349,7 +379,8 @@ export default function Dashboard({
           cost: 0,
           orders: 0,
           upi: 0,
-          cash: 0
+          cash: 0,
+          ordersList: []
         };
       }
 
@@ -361,11 +392,17 @@ export default function Dashboard({
           dailyMap[key].cost += cost;
           dailyMap[key].profit += (o.total || 0) - cost;
           dailyMap[key].orders += 1;
+          dailyMap[key].ordersList.push(o);
           if (o.paymentMethod === "UPI") dailyMap[key].upi += o.total || 0;
           if (o.paymentMethod === "Cash") dailyMap[key].cash += o.total || 0;
         }
       });
     }
+
+    // Sort orders in each day by time descending (newest first)
+    Object.values(dailyMap).forEach(d => {
+      d.ordersList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    });
 
     const chartData = Object.values(dailyMap);
 
@@ -998,16 +1035,23 @@ export default function Dashboard({
                             </div>
 
                             {/* Bar segment Stack */}
-                            <div className="w-full flex items-end justify-center gap-0.5 max-w-[45px] h-full">
+                            <div 
+                              onClick={() => {
+                                setSelectedDrilldownDay(d);
+                                setDrilldownSearch("");
+                                setDrilldownPaymentFilter("All");
+                              }}
+                              className="w-full flex items-end justify-center gap-0.5 max-w-[45px] h-full cursor-pointer hover:opacity-85 transition-opacity"
+                            >
                               {/* Sales Bar */}
                               <div 
                                 style={{ height: `${Math.max(3, salesHeightPct)}%` }}
-                                className="w-1/2 bg-indigo-600/95 hover:bg-indigo-700 transition-all rounded-t-sm relative cursor-pointer"
+                                className="w-1/2 bg-indigo-600/95 hover:bg-indigo-700 transition-all rounded-t-sm relative"
                               />
                               {/* Profit Bar */}
                               <div 
                                 style={{ height: `${Math.max(3, profitHeightPct)}%` }}
-                                className="w-1/2 bg-emerald-500 hover:bg-emerald-600 transition-all rounded-t-sm relative cursor-pointer"
+                                className="w-1/2 bg-emerald-500 hover:bg-emerald-600 transition-all rounded-t-sm relative"
                               />
                             </div>
 
@@ -1065,12 +1109,17 @@ export default function Dashboard({
 
           </div>
 
-          {/* DYNAMIC BREAKDOWN TABLE */}
+          {/* DYNAMIC BREAKDOWN TABLE WITH INTERACTIVE ROW DRILLDOWN (OPTION 1) */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="p-4 border-b border-slate-150 bg-slate-50/50 flex justify-between items-center">
+            <div className="p-4 border-b border-slate-150 bg-slate-50/50 flex flex-wrap justify-between items-center gap-2">
               <div>
-                <h3 className="font-bold text-sm text-slate-900 font-display">Daily Performance Breakdowns (दैनिक रिपोर्ट)</h3>
-                <p className="text-[10px] text-slate-400 mt-0.5">Calculated financial breakdown matrices per calendar day.</p>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm text-slate-900 font-display">Daily Performance Breakdowns (दैनिक रिपोर्ट)</h3>
+                  <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full border border-indigo-100 hidden sm:inline-flex items-center gap-1">
+                    <Eye className="w-3 h-3" /> Click any row to view full order bills
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-0.5">Calculated financial breakdown matrices per calendar day. Click on any date row to see individual customer order receipts.</p>
               </div>
               <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-bold rounded-md font-mono">
                 {periodAnalytics.chartData.length} records calculated
@@ -1088,17 +1137,29 @@ export default function Dashboard({
                     <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Net Sales</th>
                     <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Est. Food Cost</th>
                     <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Est. Profit Margin</th>
+                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500 text-right">Orders Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-600">
                   {periodAnalytics.chartData.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="p-12 text-center text-slate-400 italic">No checkout data found in range.</td>
+                      <td colSpan={8} className="p-12 text-center text-slate-400 italic">No checkout data found in range.</td>
                     </tr>
                   ) : (
                     periodAnalytics.chartData.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="p-3.5 font-bold text-slate-800">{row.dateLabel}</td>
+                      <tr 
+                        key={idx} 
+                        onClick={() => {
+                          setSelectedDrilldownDay(row);
+                          setDrilldownSearch("");
+                          setDrilldownPaymentFilter("All");
+                        }}
+                        className="hover:bg-indigo-50/50 cursor-pointer transition-colors group"
+                      >
+                        <td className="p-3.5 font-bold text-slate-800 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <span>{row.dateLabel}</span>
+                        </td>
                         <td className="p-3.5 font-semibold text-slate-600 font-mono">{row.orders} orders</td>
                         <td className="p-3.5 text-indigo-700 font-bold font-mono">INR {row.upi.toLocaleString()}</td>
                         <td className="p-3.5 text-slate-700 font-bold font-mono">INR {row.cash.toLocaleString()}</td>
@@ -1109,6 +1170,14 @@ export default function Dashboard({
                             INR {row.profit.toLocaleString()}
                           </span>
                         </td>
+                        <td className="p-3.5 text-right font-mono">
+                          <button 
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg border border-indigo-200/80 transition-all shadow-xs"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>View {row.orders} Bills ➜</span>
+                          </button>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -1117,6 +1186,343 @@ export default function Dashboard({
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* OPTION 1 DRILLDOWN MODAL: VIEW ALL ORDERS FOR SELECTED DAY */}
+      {selectedDrilldownDay && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-scale-up">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-base text-slate-900 font-display">
+                      Order Details for {selectedDrilldownDay.dateLabel}
+                    </h3>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-mono">
+                      {selectedDrilldownDay.orders} Total Checkouts
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Click any order to inspect or print its full Tax Invoice Bill.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedDrilldownDay(null)}
+                className="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Quick Metrics Bar for the Selected Day */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-100/60 border-b border-slate-200/70 font-mono text-xs">
+              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Total Net Sales</span>
+                <span className="text-sm font-black text-slate-900">INR {selectedDrilldownDay.sales.toLocaleString()}</span>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">UPI Collections</span>
+                <span className="text-sm font-black text-indigo-700">INR {selectedDrilldownDay.upi.toLocaleString()}</span>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Cash Collections</span>
+                <span className="text-sm font-black text-emerald-700">INR {selectedDrilldownDay.cash.toLocaleString()}</span>
+              </div>
+              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-bold uppercase block">Est. Day Profit</span>
+                <span className="text-sm font-black text-emerald-800">INR {selectedDrilldownDay.profit.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Search and Filters Bar */}
+            <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-white">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by Order ID, Customer, Table or Item..."
+                  value={drilldownSearch}
+                  onChange={(e) => setDrilldownSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white text-slate-800 font-medium"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-[11px] text-slate-400 font-bold uppercase">Payment:</span>
+                {(["All", "UPI", "Cash"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setDrilldownPaymentFilter(mode)}
+                    className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer border ${
+                      drilldownPaymentFilter === mode
+                        ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                        : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Orders List / Table */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {(() => {
+                const filteredOrders = selectedDrilldownDay.ordersList.filter((order) => {
+                  if (drilldownPaymentFilter !== "All" && order.paymentMethod !== drilldownPaymentFilter) {
+                    return false;
+                  }
+                  if (drilldownSearch.trim()) {
+                    const q = drilldownSearch.toLowerCase();
+                    const matchId = (order.orderNumber || order.id || "").toLowerCase().includes(q);
+                    const matchCust = (order.customerName || "").toLowerCase().includes(q);
+                    const matchTable = (order.tableNo || "").toLowerCase().includes(q);
+                    const matchItems = order.items?.some(i => i.menuItem?.name?.toLowerCase().includes(q));
+                    return matchId || matchCust || matchTable || matchItems;
+                  }
+                  return true;
+                });
+
+                if (filteredOrders.length === 0) {
+                  return (
+                    <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs">
+                      No matching order details found for this date.
+                    </div>
+                  );
+                }
+
+                return filteredOrders.map((order, oIdx) => {
+                  const orderTimeStr = new Date(order.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <div
+                      key={order.id || oIdx}
+                      onClick={() => setSelectedOrderReceipt(order)}
+                      className="bg-white border border-slate-200 hover:border-indigo-300 hover:shadow-md transition-all rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer group"
+                    >
+                      <div className="flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono font-black text-sm text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                            #{order.orderNumber || order.id.slice(-4)}
+                          </span>
+                          <span className="text-xs font-semibold text-slate-500 font-mono flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-400" />
+                            {orderTimeStr}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border font-mono ${
+                            order.paymentMethod === "UPI" 
+                              ? "bg-indigo-50 text-indigo-700 border-indigo-200" 
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          }`}>
+                            {order.paymentMethod || "Cash"}
+                          </span>
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                            {order.type || "Dine-In"} {order.tableNo ? `(${order.tableNo})` : ""}
+                          </span>
+                          {order.customerName && (
+                            <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
+                              <User className="w-3 h-3 text-slate-400" /> {order.customerName}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Item portions breakdown */}
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-600">
+                          {order.items?.map((item, iIdx) => (
+                            <span key={iIdx} className="bg-slate-50 border border-slate-200/80 px-2 py-0.5 rounded text-[11px] font-medium text-slate-700">
+                              <b className="text-indigo-600 font-bold">{item.quantity}x</b> {item.menuItem?.name || "Item"}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Total Amount & Action */}
+                      <div className="flex items-center justify-between sm:justify-end gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                        <div className="text-left sm:text-right font-mono">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Bill Amount</span>
+                          <span className="text-base font-black text-slate-900">
+                            INR {(order.total || 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedOrderReceipt(order);
+                          }}
+                          className="px-3 py-1.5 bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-all flex items-center gap-1.5 shadow-2xs"
+                        >
+                          <Receipt className="w-3.5 h-3.5" />
+                          <span>View Invoice</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center text-xs text-slate-500">
+              <span>Showing historical transactions recorded in selected interval</span>
+              <button
+                onClick={() => setSelectedDrilldownDay(null)}
+                className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Close (बंद करें)
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* DETAILED TAX INVOICE RECEIPT MODAL */}
+      {selectedOrderReceipt && (
+        <div className="fixed inset-0 z-60 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full max-h-[92vh] flex flex-col overflow-hidden animate-scale-up">
+            
+            {/* Invoice Top Bar */}
+            <div className="p-4 border-b border-slate-100 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-400" />
+                <span className="font-bold text-xs tracking-wider uppercase font-mono">Tax Invoice Receipt</span>
+              </div>
+              <button
+                onClick={() => setSelectedOrderReceipt(null)}
+                className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Printable Receipt Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 font-mono text-xs text-slate-800 bg-white">
+              <div className="text-center border-b border-dashed border-slate-300 pb-4">
+                <h2 className="text-lg font-black text-slate-900 uppercase font-sans">VeggiePOS Restaurant</h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">Authentic Dining & Quick Billing Hub</p>
+                <p className="text-[10px] text-slate-400 mt-1">GSTIN: 07AAACG1234F1Z8 • FSSAI: 10020011000123</p>
+              </div>
+
+              {/* Order Meta Info */}
+              <div className="grid grid-cols-2 gap-2 text-[11px] border-b border-dashed border-slate-300 pb-3">
+                <div>
+                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Order ID</span>
+                  <span className="font-bold text-slate-900">#{selectedOrderReceipt.orderNumber || selectedOrderReceipt.id.slice(-4)}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Date & Time</span>
+                  <span className="font-semibold text-slate-800">
+                    {new Date(selectedOrderReceipt.date).toLocaleDateString()} {new Date(selectedOrderReceipt.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Order Type / Table</span>
+                  <span className="font-semibold text-slate-800">
+                    {selectedOrderReceipt.type || "Dine-In"} {selectedOrderReceipt.tableNo ? `(${selectedOrderReceipt.tableNo})` : ""}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Cashier / Server</span>
+                  <span className="font-semibold text-slate-800">{selectedOrderReceipt.cashierName || "Rahul Sharma"}</span>
+                </div>
+                {selectedOrderReceipt.customerName && (
+                  <div className="col-span-2">
+                    <span className="text-slate-400 block text-[9px] uppercase font-bold">Customer</span>
+                    <span className="font-semibold text-slate-800">{selectedOrderReceipt.customerName}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Items Breakdown Table */}
+              <div>
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-400 text-[9px] uppercase">
+                      <th className="text-left py-1 font-bold">Item Description</th>
+                      <th className="text-center py-1 font-bold">Qty</th>
+                      <th className="text-right py-1 font-bold">Rate</th>
+                      <th className="text-right py-1 font-bold">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {selectedOrderReceipt.items?.map((item, idx) => {
+                      const rate = item.menuItem?.price || 0;
+                      const lineTotal = rate * (item.quantity || 1);
+                      return (
+                        <tr key={idx} className="py-1.5">
+                          <td className="py-1.5 font-medium text-slate-800">{item.menuItem?.name || "Item"}</td>
+                          <td className="py-1.5 text-center font-bold text-slate-700">{item.quantity}</td>
+                          <td className="py-1.5 text-right text-slate-500">₹{rate}</td>
+                          <td className="py-1.5 text-right font-bold text-slate-900">₹{lineTotal}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Bill Financial Totals */}
+              <div className="border-t border-dashed border-slate-300 pt-3 space-y-1 text-[11px]">
+                <div className="flex justify-between text-slate-600">
+                  <span>Subtotal</span>
+                  <span className="font-bold font-mono">₹{selectedOrderReceipt.subtotal || (selectedOrderReceipt.total - (selectedOrderReceipt.tax || 0))}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>GST (5%)</span>
+                  <span className="font-bold font-mono">₹{selectedOrderReceipt.tax || Math.round((selectedOrderReceipt.total || 0) * 0.05)}</span>
+                </div>
+                <div className="flex justify-between text-sm font-black text-slate-900 border-t border-slate-200 pt-1.5 mt-1.5">
+                  <span>Grand Total</span>
+                  <span className="font-mono text-indigo-700">₹{selectedOrderReceipt.total}</span>
+                </div>
+              </div>
+
+              {/* Payment Method Details */}
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-1.5">
+                  <CreditCard className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-slate-600 font-semibold">Payment Mode:</span>
+                </div>
+                <span className="font-bold font-mono text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  {selectedOrderReceipt.paymentMethod || "Cash"}
+                </span>
+              </div>
+
+              <div className="text-center pt-2 text-[10px] text-slate-400">
+                <p>Thank you for dining with us!</p>
+                <p className="mt-0.5">Please visit again.</p>
+              </div>
+            </div>
+
+            {/* Invoice Action Buttons */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
+              <button
+                onClick={() => {
+                  window.print();
+                }}
+                className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print Bill (प्रिंट बिल)</span>
+              </button>
+              
+              <button
+                onClick={() => setSelectedOrderReceipt(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+
+          </div>
         </div>
       )}
 

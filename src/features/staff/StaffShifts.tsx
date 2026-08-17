@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Shift, StaffMember, StaffRole, RestaurantTenant } from "../shared/types";
-import { Clock, Play, LogOut, CheckCircle2, UserCheck, Eye, UserPlus, AlertCircle, ShieldAlert, Trash2, UserMinus, Zap } from "lucide-react";
+import { Clock, Play, LogOut, CheckCircle2, UserCheck, Eye, UserPlus, AlertCircle, ShieldAlert, Trash2, UserMinus, Zap, QrCode, Smartphone, Share2 } from "lucide-react";
+import StaffQrModal from "./components/StaffQrModal";
 
 interface StaffShiftsProps {
   shifts: Shift[];
@@ -29,6 +30,7 @@ export default function StaffShifts({
   const hasReachedLimit = staffList.length >= planCapacity;
   const [activeSubTab, setActiveSubTab] = useState<"duty" | "logs">("duty");
   const [localDeleteId, setLocalDeleteId] = useState<string | null>(null);
+  const [showStaffQrModal, setShowStaffQrModal] = useState<boolean>(false);
 
   // Blind Shift Close Modal State (Problem 6)
   const [showBlindModal, setShowBlindModal] = useState(false);
@@ -382,6 +384,37 @@ export default function StaffShifts({
               {/* Add Staff Member (Owner / Manager only) */}
               {isManagerOrOwner && (
                 <div className="space-y-6">
+                  {/* Staff Login QR Code Banner for Owner/Manager */}
+                  {activeTenant && (
+                    <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900 to-indigo-950/40 border border-emerald-500/30 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-start gap-3.5">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 shadow-lg">
+                          <QrCode className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-sm font-bold text-white">Staff Login QR Code (कर्मचारी QR)</h3>
+                            <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold uppercase">
+                              PIN Ready
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                            कर्मचारियों को अपने फोन से 4-अंकों के PIN द्वारा लॉगिन कराने के लिए QR कोड दिखाएं या स्टैंडी प्रिंट करें।
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowStaffQrModal(true)}
+                        className="w-full sm:w-auto px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/20 transition flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+                        id="open-staff-qr-modal-btn"
+                      >
+                        <QrCode className="w-4 h-4" />
+                        <span>View / Change QR</span>
+                      </button>
+                    </div>
+                  )}
+
                   <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
                     <h2 className="text-base font-display font-bold text-white flex items-center gap-2">
                       <UserPlus className="w-5 h-5 text-emerald-400" />
@@ -801,6 +834,15 @@ export default function StaffShifts({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Staff Login QR Modal */}
+      {activeTenant && (
+        <StaffQrModal
+          isOpen={showStaffQrModal}
+          onClose={() => setShowStaffQrModal(false)}
+          tenant={activeTenant}
+        />
       )}
     </div>
   );

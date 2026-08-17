@@ -1,7 +1,9 @@
 {
   "name": "VeggiePOS",
   "description": "SaaS POS and Inventory Management system for restaurant owners, featuring real-time analytics, kitchen display system, automated reports, shift tracking, and smart recipes.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "camera"
+  ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

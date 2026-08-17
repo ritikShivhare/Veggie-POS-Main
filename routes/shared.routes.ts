@@ -83,9 +83,9 @@ router.get("/supabase-config", authMiddleware, (req, res) => {
 
 // Report generation endpoint
 router.post("/reports/generate", authMiddleware, async (req, res) => {
-  const { salesData, inventoryData, shiftsData } = req.body;
+  const { salesData, inventoryData, shiftsData, language } = req.body;
   try {
-    const result = await reportService.generateReport(salesData, inventoryData, shiftsData);
+    const result = await reportService.generateReport(salesData, inventoryData, shiftsData, language || "hindi");
     res.json({
       success: true,
       ...result

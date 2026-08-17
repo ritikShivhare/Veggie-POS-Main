@@ -118,6 +118,9 @@ export interface RestaurantTenant {
     monthlyOrders: number;
   };
   ownerPin?: string;
+  storeCode?: string;
+  staffQrSecret?: string;
+  staffQrUpdatedAt?: string;
 }
 
 export interface InventorySettings {

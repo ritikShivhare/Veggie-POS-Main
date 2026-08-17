@@ -1,21 +1,33 @@
 import React, { useState, useEffect } from "react";
 import { StaffMember, RestaurantTenant } from "../shared/types";
-import { Lock, User, Check, AlertCircle } from "lucide-react";
+import { Lock, User, Check, AlertCircle, QrCode, Camera, Store, Sparkles } from "lucide-react";
 import { ApiClient } from "../shared/services/api";
+import QrScannerModal from "./components/QrScannerModal";
 
 interface PinLoginProps {
   staffList?: StaffMember[];
   onLoginSuccess: (staff: StaffMember, sessionId: string, loggedInTenant?: RestaurantTenant) => void;
   restaurantName: string;
   tenantId: string;
+  qrToken?: string;
+  onSwitchTenant?: (tenant: RestaurantTenant, qrToken?: string) => void;
   onBackToLanding?: () => void;
 }
 
-export default function PinLogin({ staffList, onLoginSuccess, restaurantName, tenantId, onBackToLanding }: PinLoginProps) {
+export default function PinLogin({
+  staffList,
+  onLoginSuccess,
+  restaurantName,
+  tenantId,
+  qrToken,
+  onSwitchTenant,
+  onBackToLanding
+}: PinLoginProps) {
   const [pin, setPin] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [activeProfiles, setActiveProfiles] = useState<any[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState<boolean>(true);
+  const [showScannerModal, setShowScannerModal] = useState<boolean>(false);
 
   useEffect(() => {
     setLoadingProfiles(true);
@@ -37,7 +49,7 @@ export default function PinLogin({ staffList, onLoginSuccess, restaurantName, te
     fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: enteredPin, tenantId, restaurantName })
+      body: JSON.stringify({ pin: enteredPin, tenantId, restaurantName, qrToken })
     })
     .then(async (res) => {
       if (res.status === 423) {
@@ -119,14 +131,29 @@ export default function PinLogin({ staffList, onLoginSuccess, restaurantName, te
     <div className="min-h-screen bg-[#f8fafc] flex flex-col justify-center items-center p-4 font-sans text-slate-800 relative overflow-hidden">
       {/* Main Login Card */}
       <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-6 shadow-lg z-10 animate-fade-in">
-        <div className="text-center mb-5">
+        <div className="text-center mb-4">
           <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-xl shadow-md mb-3 text-white font-extrabold text-xl">
             🥗
           </div>
           <h1 className="text-xl font-display font-extrabold tracking-tight text-slate-800">
             {restaurantName}
           </h1>
-          <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-1">VeggiePOS Terminal Suite</p>
+          <div className="flex items-center justify-center gap-1 mt-1">
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest">
+              VeggiePOS Terminal Suite
+            </span>
+          </div>
+
+          {/* QR Scan or Switch Restaurant trigger */}
+          <button
+            type="button"
+            onClick={() => setShowScannerModal(true)}
+            className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
+            id="pin-login-open-qr-scanner-btn"
+          >
+            <Camera className="w-3.5 h-3.5" />
+            <span>Scan QR / Switch Outlet</span>
+          </button>
         </div>
 
         <div className="flex flex-col items-center">
@@ -271,6 +298,16 @@ export default function PinLogin({ staffList, onLoginSuccess, restaurantName, te
           </button>
         </p>
       </div>
+
+      {/* QR Scanner Modal */}
+      <QrScannerModal
+        isOpen={showScannerModal}
+        onClose={() => setShowScannerModal(false)}
+        onRestaurantSelected={(newTenant, token) => {
+          onSwitchTenant?.(newTenant, token);
+          setShowScannerModal(false);
+        }}
+      />
     </div>
   );
 }

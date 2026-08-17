@@ -406,7 +406,7 @@ router.get("/auth/tenant-info", async (req, res) => {
     if (!match || match.status === "suspended") {
       return res.status(404).json({ success: false, error: "Restaurant outlet not found" });
     }
-    // Return only the single restaurant's basic info
+    // Return the restaurant's public & QR info
     res.json({
       success: true,
       tenant: {
@@ -414,8 +414,42 @@ router.get("/auth/tenant-info", async (req, res) => {
         name: match.name,
         tenantId: match.tenantId,
         region: match.region,
-        status: match.status
+        status: match.status,
+        ownerName: match.ownerName,
+        storeCode: match.tenantId,
+        staffQrSecret: match.staffQrSecret || `qr-init-${match.tenantId}`,
+        staffQrUpdatedAt: match.staffQrUpdatedAt || match.created
       }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Rotate / Change QR Code for restaurant staff access
+router.post("/auth/tenant/regenerate-qr", async (req, res) => {
+  const tenantId = (req.headers["x-tenant-id"] as string) || req.body.tenantId;
+  if (!tenantId) {
+    return res.status(400).json({ success: false, error: "Tenant identifier is required" });
+  }
+  try {
+    const list = await getGlobalTenantsList();
+    const match = list.find((t) => t.tenantId === tenantId || t.id === tenantId);
+    if (!match) {
+      return res.status(404).json({ success: false, error: "Restaurant not found" });
+    }
+    const newSecret = `qr-${Math.random().toString(36).substring(2, 9)}-${Date.now().toString(36)}`;
+    const nowIso = new Date().toISOString();
+    match.staffQrSecret = newSecret;
+    match.staffQrUpdatedAt = nowIso;
+    await saveGlobalTenantsList(list);
+
+    res.json({
+      success: true,
+      staffQrSecret: newSecret,
+      staffQrUpdatedAt: nowIso,
+      tenantId: match.tenantId,
+      message: "Staff Login QR Code rotated successfully. All previous QR scans are now revoked."
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });

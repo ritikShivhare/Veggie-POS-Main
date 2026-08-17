@@ -14,9 +14,12 @@ export interface AppContextType {
   setTenants: React.Dispatch<React.SetStateAction<RestaurantTenant[]>>;
   activeTenant: RestaurantTenant;
   setActiveTenant: React.Dispatch<React.SetStateAction<RestaurantTenant>>;
+  activeQrToken: string;
+  setActiveQrToken: React.Dispatch<React.SetStateAction<string>>;
   showTerminalLogin: boolean;
   setShowTerminalLogin: React.Dispatch<React.SetStateAction<boolean>>;
   handleRegisterTenant: (newTenant: RestaurantTenant) => void;
+  handleSwitchTenant: (tenant: RestaurantTenant, qrToken?: string) => void;
 
   // Sync state & data lists
   menuItems: MenuItem[];
@@ -35,6 +38,7 @@ export interface AppContextType {
   setPurchases: React.Dispatch<React.SetStateAction<Purchase[]>>;
   shifts: Shift[];
   setShifts: (shifts: Shift[]) => void;
+  isInitialSyncLoading: boolean;
   settings: InventorySettings;
   setSettings: React.Dispatch<React.SetStateAction<InventorySettings>>;
   toastMessage: { type: "success" | "error"; text: string } | null;

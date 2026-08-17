@@ -45,6 +45,8 @@ function AppContent() {
     setTenants,
     activeTenant,
     setActiveTenant,
+    activeQrToken,
+    handleSwitchTenant,
     showTerminalLogin,
     setShowTerminalLogin,
     menuItems,
@@ -60,6 +62,7 @@ function AppContent() {
     setCustomers,
     purchases,
     shifts,
+    isInitialSyncLoading,
     settings,
     setSettings,
     toastMessage,
@@ -316,6 +319,8 @@ function AppContent() {
             }}
             restaurantName={activeTenant.name}
             tenantId={activeTenant.tenantId}
+            qrToken={activeQrToken}
+            onSwitchTenant={(newTenant, token) => handleSwitchTenant(newTenant, token)}
             onBackToLanding={() => setShowTerminalLogin(false)}
           />
           <AICopilot activeTenant={activeTenant} currentStaff={currentStaff} />
@@ -510,7 +515,20 @@ function AppContent() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden relative">
+          {isInitialSyncLoading && (
+            <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px] z-50 flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-2xl rounded-2xl p-6 flex flex-col items-center gap-3 text-center max-w-xs w-full animate-scale-up">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-inner">
+                  <RefreshCw className="w-6 h-6 animate-spin" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-slate-800 tracking-tight">Synchronizing POS Terminal...</p>
+                  <p className="text-xs text-slate-500 font-medium">Fetching real-time menu, orders & shifts</p>
+                </div>
+              </div>
+            </div>
+          )}
           
           {activeTab === "dashboard" && (
             <Dashboard
@@ -612,6 +630,11 @@ function AppContent() {
                 isGeneratingReport={isGeneratingReport}
                 reportError={reportError}
                 aiReport={aiReport}
+                dashboardStats={dashboardStats}
+                ingredients={ingredients}
+                shifts={shifts}
+                orders={orders}
+                setActiveTab={setActiveTab}
               />
             </React.Suspense>
           )}

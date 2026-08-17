@@ -40,6 +40,7 @@ export interface SyncResponse {
 }
 
 export interface ReportPayload {
+  language?: "hindi" | "hinglish" | "english";
   salesData: {
     totalRevenue: number;
     totalOrders: number;

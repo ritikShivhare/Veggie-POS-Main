@@ -17,13 +17,28 @@ interface UseSyncStateProps {
   currentSessionId: string | null;
 }
 
+// Helper to safely retrieve cached tenant state
+function getCachedTenantData(tenantId: string) {
+  try {
+    const raw = localStorage.getItem(`veggiepos_sync_cache_${tenantId}`);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn("Failed to read local sync cache:", e);
+  }
+  return null;
+}
+
 export function useSyncState({ activeTenantId, currentStaff, currentSessionId }: UseSyncStateProps) {
   const isMainTenant = activeTenantId === "veg-main-001";
+  const initialCache = getCachedTenantData(activeTenantId);
 
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => INITIAL_MENU_ITEMS);
-  const [ingredients, setIngredients] = useState<Ingredient[]>(() => INITIAL_INGREDIENTS);
-  const [recipes, setRecipes] = useState<Recipe[]>(() => INITIAL_RECIPES);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => initialCache?.menuItems || INITIAL_MENU_ITEMS);
+  const [ingredients, setIngredients] = useState<Ingredient[]>(() => initialCache?.ingredients || INITIAL_INGREDIENTS);
+  const [recipes, setRecipes] = useState<Recipe[]>(() => initialCache?.recipes || INITIAL_RECIPES);
   const [staffList, setStaffList] = useState<StaffMember[]>(() => {
+    if (initialCache?.staffList && initialCache.staffList.length > 0) return initialCache.staffList;
     if (isMainTenant) return INITIAL_STAFF;
     const isReetesh = activeTenantId === "veg-reetesh-dhaba";
     const isCP = activeTenantId === "veg-cp-002";
@@ -35,82 +50,12 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     }
     return list;
   });
-  const [orders, setOrders] = useState<Order[]>(() => INITIAL_ORDERS);
-  const [customers, setCustomers] = useState<Customer[]>(() => INITIAL_CUSTOMERS);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [shifts, setShifts] = useState<Shift[]>(() => isMainTenant ? [
-    {
-      id: "sh-1",
-      staffId: "s-rahul",
-      staffName: "Rahul Sharma",
-      role: "Owner",
-      startTime: new Date(Date.now() - 3600000 * 4).toISOString(),
-      status: "Active"
-    },
-    {
-      id: "sh-2",
-      staffId: "s-mohan",
-      staffName: "Mohan Lal",
-      role: "Staff",
-      startTime: new Date(Date.now() - 3600000 * 5).toISOString(),
-      endTime: new Date(Date.now() - 3600000 * 1).toISOString(),
-      status: "Completed"
-    }
-  ] : []);
-
-  const [settings, setSettings] = useState<InventorySettings>({
-    autoDeductStock: true,
-    blockOrdersIfInsufficient: true,
-    managerCanAddPurchases: true,
-    managerCanEditRecipes: true,
-    kdsSoundAlerts: false,
-    quickPinRequired: false,
-    sentryDsn: "",
-    slackWebhookUrl: "",
-    emailAlertAddress: "",
-    enableAlerts: true,
-    gstPercentage: 5
-  });
-
-  const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  // Gemini AI Report State
-  const [aiReport, setAiReport] = useState<string>("");
-  const [isGeneratingReport, setIsGeneratingReport] = useState<boolean>(false);
-  const [reportError, setReportError] = useState<string>("");
-
-  // Sync state refs
-  const isLoadedRef = useRef(false);
-  const loadedTenantIdRef = useRef<string>("");
-  const pendingOwnerRef = useRef<StaffMember | null>(null);
-  const hasPendingChangesRef = useRef(false);
-  const lastSaveTimeRef = useRef(0);
-  const lastFetchedStateRef = useRef<string>("");
-
-  // Reset states synchronously when activeTenantId changes to avoid showing stale data from previous tenant
-  useEffect(() => {
-    const isMain = activeTenantId === "veg-main-001";
-    setMenuItems(INITIAL_MENU_ITEMS);
-    setIngredients(INITIAL_INGREDIENTS);
-    setRecipes(INITIAL_RECIPES);
-    setOrders(INITIAL_ORDERS);
-    setCustomers(INITIAL_CUSTOMERS);
-    setPurchases([]);
-    
-    let list = INITIAL_STAFF;
-    if (!isMain) {
-      const isReetesh = activeTenantId === "veg-reetesh-dhaba";
-      const isCP = activeTenantId === "veg-cp-002";
-      list = INITIAL_STAFF.map(s => ({ ...s, id: `${s.id}-${activeTenantId}` }));
-      if (isReetesh) {
-        list = list.map(s => s.role === "Owner" ? { ...s, name: "Reetesh", pin: "12345" } : s);
-      } else if (isCP) {
-        list = list.map(s => s.role === "Owner" ? { ...s, name: "Amit Verma", pin: "22222" } : s);
-      }
-    }
-    setStaffList(list);
-
-    setShifts(isMain ? [
+  const [orders, setOrders] = useState<Order[]>(() => initialCache?.orders || INITIAL_ORDERS);
+  const [customers, setCustomers] = useState<Customer[]>(() => initialCache?.customers || INITIAL_CUSTOMERS);
+  const [purchases, setPurchases] = useState<Purchase[]>(() => initialCache?.purchases || []);
+  const [shifts, setShifts] = useState<Shift[]>(() => {
+    if (initialCache?.shifts) return initialCache.shifts;
+    return isMainTenant ? [
       {
         id: "sh-1",
         staffId: "s-rahul",
@@ -128,21 +73,110 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
         endTime: new Date(Date.now() - 3600000 * 1).toISOString(),
         status: "Completed"
       }
-    ] : []);
-    
-    setSettings({
-      autoDeductStock: true,
-      blockOrdersIfInsufficient: true,
-      managerCanAddPurchases: true,
-      managerCanEditRecipes: true,
-      kdsSoundAlerts: false,
-      quickPinRequired: false,
-      sentryDsn: "",
-      slackWebhookUrl: "",
-      emailAlertAddress: "",
-      enableAlerts: true,
-      gstPercentage: 5
-    });
+    ] : [];
+  });
+
+  const [settings, setSettings] = useState<InventorySettings>(() => initialCache?.settings || {
+    autoDeductStock: true,
+    blockOrdersIfInsufficient: true,
+    managerCanAddPurchases: true,
+    managerCanEditRecipes: true,
+    kdsSoundAlerts: false,
+    quickPinRequired: false,
+    sentryDsn: "",
+    slackWebhookUrl: "",
+    emailAlertAddress: "",
+    enableAlerts: true,
+    gstPercentage: 5
+  });
+
+  const [isInitialSyncLoading, setIsInitialSyncLoading] = useState<boolean>(!initialCache);
+  const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Gemini AI Report State
+  const [aiReport, setAiReport] = useState<string>("");
+  const [isGeneratingReport, setIsGeneratingReport] = useState<boolean>(false);
+  const [reportError, setReportError] = useState<string>("");
+
+  // Sync state refs
+  const isLoadedRef = useRef(false);
+  const loadedTenantIdRef = useRef<string>("");
+  const pendingOwnerRef = useRef<StaffMember | null>(null);
+  const hasPendingChangesRef = useRef(false);
+  const lastSaveTimeRef = useRef(0);
+  const lastFetchedStateRef = useRef<string>("");
+
+  // Reset or load cached states synchronously when activeTenantId changes
+  useEffect(() => {
+    const cached = getCachedTenantData(activeTenantId);
+    if (cached) {
+      if (cached.menuItems) setMenuItems(cached.menuItems);
+      if (cached.ingredients) setIngredients(cached.ingredients);
+      if (cached.recipes) setRecipes(cached.recipes);
+      if (cached.staffList && cached.staffList.length > 0) setStaffList(cached.staffList);
+      if (cached.orders) setOrders(cached.orders);
+      if (cached.customers) setCustomers(cached.customers);
+      if (cached.purchases) setPurchases(cached.purchases);
+      if (cached.shifts) setShifts(cached.shifts);
+      if (cached.settings) setSettings(cached.settings);
+      setIsInitialSyncLoading(false);
+    } else {
+      setIsInitialSyncLoading(true);
+      const isMain = activeTenantId === "veg-main-001";
+      setMenuItems(INITIAL_MENU_ITEMS);
+      setIngredients(INITIAL_INGREDIENTS);
+      setRecipes(INITIAL_RECIPES);
+      setOrders(INITIAL_ORDERS);
+      setCustomers(INITIAL_CUSTOMERS);
+      setPurchases([]);
+      
+      let list = INITIAL_STAFF;
+      if (!isMain) {
+        const isReetesh = activeTenantId === "veg-reetesh-dhaba";
+        const isCP = activeTenantId === "veg-cp-002";
+        list = INITIAL_STAFF.map(s => ({ ...s, id: `${s.id}-${activeTenantId}` }));
+        if (isReetesh) {
+          list = list.map(s => s.role === "Owner" ? { ...s, name: "Reetesh", pin: "12345" } : s);
+        } else if (isCP) {
+          list = list.map(s => s.role === "Owner" ? { ...s, name: "Amit Verma", pin: "22222" } : s);
+        }
+      }
+      setStaffList(list);
+
+      setShifts(isMain ? [
+        {
+          id: "sh-1",
+          staffId: "s-rahul",
+          staffName: "Rahul Sharma",
+          role: "Owner",
+          startTime: new Date(Date.now() - 3600000 * 4).toISOString(),
+          status: "Active"
+        },
+        {
+          id: "sh-2",
+          staffId: "s-mohan",
+          staffName: "Mohan Lal",
+          role: "Staff",
+          startTime: new Date(Date.now() - 3600000 * 5).toISOString(),
+          endTime: new Date(Date.now() - 3600000 * 1).toISOString(),
+          status: "Completed"
+        }
+      ] : []);
+      
+      setSettings({
+        autoDeductStock: true,
+        blockOrdersIfInsufficient: true,
+        managerCanAddPurchases: true,
+        managerCanEditRecipes: true,
+        kdsSoundAlerts: false,
+        quickPinRequired: false,
+        sentryDsn: "",
+        slackWebhookUrl: "",
+        emailAlertAddress: "",
+        enableAlerts: true,
+        gstPercentage: 5
+      });
+    }
 
     isLoadedRef.current = false;
     loadedTenantIdRef.current = "";
@@ -209,6 +243,10 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
             if (d.purchases) setPurchases(d.purchases);
             if (d.shifts) setShifts(d.shifts);
             if (d.settings) setSettings(d.settings);
+
+            try {
+              localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}`, JSON.stringify(d));
+            } catch (e) {}
           }
         }
       } catch (err) {
@@ -247,8 +285,13 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
           if (d.shifts) setShifts(d.shifts);
           if (d.settings) setSettings(d.settings);
           
+          try {
+            localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}`, JSON.stringify(d));
+          } catch (e) {}
+
           loadedTenantIdRef.current = activeTenantId;
           isLoadedRef.current = true;
+          setIsInitialSyncLoading(false);
         } else if (json.success && !json.initialized) {
           const isMainTenant = activeTenantId === "veg-main-001";
           
@@ -344,14 +387,20 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
             setShifts(initialPayload.shifts);
             setSettings(initialPayload.settings);
             
+            try {
+              localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}`, JSON.stringify(initialPayload));
+            } catch (e) {}
+
             loadedTenantIdRef.current = activeTenantId;
             isLoadedRef.current = true;
+            setIsInitialSyncLoading(false);
           }
         } else if (json.error) {
           throw new Error(json.error);
         }
       } catch (err) {
         console.warn("Failed to perform initial database synchronization for tenant:", activeTenantId, err);
+        setIsInitialSyncLoading(false);
       }
     };
 
@@ -465,6 +514,9 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
           hasPendingChangesRef.current = false;
           lastSaveTimeRef.current = Date.now();
           lastFetchedStateRef.current = currentStateStr;
+          try {
+            localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}`, currentStateStr);
+          } catch (e) {}
         } else {
           console.warn("Server ignored state synchronization update:", res.error);
           setToastMessage({
@@ -585,13 +637,14 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   }, [orders, shifts, ingredients]);
 
   // Request executive business report using Gemini API route proxy
-  const handleGenerateAIReport = async () => {
+  const handleGenerateAIReport = async (language: "hindi" | "hinglish" | "english" = "hindi") => {
     setIsGeneratingReport(true);
     setReportError("");
     setAiReport("");
 
     try {
       const data = await ApiClient.generateReport({
+        language,
         salesData: {
           totalRevenue: dashboardStats.totalRevenue,
           totalOrders: dashboardStats.totalOrders,
@@ -640,6 +693,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     setPurchases,
     shifts,
     setShifts,
+    isInitialSyncLoading,
     settings,
     setSettings,
     toastMessage,

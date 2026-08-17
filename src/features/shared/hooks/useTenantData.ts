@@ -64,6 +64,11 @@ export function useTenantData() {
     return currentTenants[0];
   });
 
+  const [activeQrToken, setActiveQrToken] = useState<string>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    return searchParams.get("token") || "";
+  });
+
   const [showTerminalLogin, setShowTerminalLogin] = useState<boolean>(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const urlTenantQuery = searchParams.get("tenant") || searchParams.get("outlet") || searchParams.get("tenantId") || searchParams.get("business");
@@ -76,8 +81,10 @@ export function useTenantData() {
     const syncSpecificTenant = async () => {
       const searchParams = new URLSearchParams(window.location.search);
       const urlTenantQuery = searchParams.get("tenant") || searchParams.get("outlet") || searchParams.get("tenantId") || searchParams.get("business");
+      const token = searchParams.get("token") || "";
       
       if (!urlTenantQuery) return;
+      if (token) setActiveQrToken(token);
 
       try {
         const res = await fetch(`/api/auth/tenant-info?q=${encodeURIComponent(urlTenantQuery.trim())}`);
@@ -130,6 +137,19 @@ export function useTenantData() {
     localStorage.setItem("veggiepos_active_tenant_id", newTenant.tenantId);
   };
 
+  const handleSwitchTenant = (tenant: RestaurantTenant, qrToken?: string) => {
+    setActiveTenant(tenant);
+    if (qrToken) setActiveQrToken(qrToken);
+    setShowTerminalLogin(true);
+    setTenants((prev) => {
+      const exists = prev.some(t => t.tenantId === tenant.tenantId);
+      const updated = exists ? prev.map(t => t.tenantId === tenant.tenantId ? tenant : t) : [...prev, tenant];
+      localStorage.setItem("veggiepos_tenants", JSON.stringify(updated));
+      return updated;
+    });
+    localStorage.setItem("veggiepos_active_tenant_id", tenant.tenantId);
+  };
+
   return {
     showSignup,
     setShowSignup,
@@ -139,8 +159,11 @@ export function useTenantData() {
     setTenants,
     activeTenant,
     setActiveTenant,
+    activeQrToken,
+    setActiveQrToken,
     showTerminalLogin,
     setShowTerminalLogin,
-    handleRegisterTenant
+    handleRegisterTenant,
+    handleSwitchTenant
   };
 }
