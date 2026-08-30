@@ -96,14 +96,14 @@ router.post("/reports/generate", authMiddleware, async (req, res) => {
   }
 });
 
-// Interactive AI Copilot Chat endpoint
-router.post("/copilot-chat", authMiddleware, async (req, res) => {
+// Interactive AI Copilot Chat endpoint (Accessible to authenticated app staff & public website visitors)
+router.post("/copilot-chat", async (req, res) => {
   const { prompt, history, tenantId, tenantName, staffName, staffRole } = req.body;
   try {
     const result = await copilotService.handleChat(
       prompt,
       history,
-      tenantId || (req as any).tenantId || "veg-main-001",
+      tenantId || (req as any).tenantId || DEFAULT_TENANT_ID,
       tenantName || "VeggiePOS Website Visitor",
       staffName || "Guest User",
       staffRole || "Visitor"

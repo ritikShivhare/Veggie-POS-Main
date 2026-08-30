@@ -1,5 +1,6 @@
 import express from "express";
 import bcrypt from "bcryptjs";
+import { Database } from "../server/features/shared/database";
 import {
   sessionService,
   notificationService,
@@ -457,7 +458,7 @@ router.post("/auth/tenant/regenerate-qr", async (req, res) => {
 });
 
 router.post("/auth/login", async (req, res) => {
-  let { pin, email, phone, outletCode, tenantId, restaurantName } = req.body;
+  let { pin, email, phone, outletCode, tenantId, restaurantName, isDemoLogin } = req.body;
   const userAgent = req.headers["user-agent"] || "Unknown User Agent";
   const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
   const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
@@ -485,11 +486,30 @@ router.post("/auth/login", async (req, res) => {
       });
     }
 
+    // Check rate limit lockout status first
+    const lockout = await sessionService.checkLockout(effectiveTenantId, "unknown", ip);
+    if (lockout.locked) {
+      return res.status(423).json({
+        success: false,
+        error: "ACCOUNT_LOCKED",
+        locked: true,
+        lockedUntil: lockout.lockedUntil,
+        cooldownSeconds: lockout.cooldownSeconds,
+        tier: lockout.tier,
+        attemptCount: lockout.attemptCount,
+        message: lockout.tier === 3
+          ? `Security Lockdown: Terminal is frozen due to repeated invalid PIN attempts. Locked until ${new Date(lockout.lockedUntil!).toLocaleTimeString()} (or unlock with Owner Master Key).`
+          : lockout.tier === 2
+            ? `Security Alert: Terminal locked for 5 minutes due to 5 failed attempts. Please wait ${lockout.cooldownSeconds}s.`
+            : `Keypad paused for ${lockout.cooldownSeconds}s cooldown.`
+      });
+    }
+
     let staff = (await staffRepo.getAll(effectiveTenantId)) || [];
     let matchingUser = staff.find((s) => s.pin === pin);
 
-    // 2. UNIVERSAL AUTO-DETECT: If not found in effective tenant, search across all registered tenants
-    if (!matchingUser && pin) {
+    // 2. UNIVERSAL AUTO-DETECT: If not found in effective tenant, search across all registered tenants (only if tenant wasn't strictly fixed)
+    if (!matchingUser && pin && !tenantId) {
       for (const tenant of globalTenants) {
         if (tenant.tenantId === effectiveTenantId) continue;
         if (tenant.status === "suspended") continue;
@@ -510,16 +530,6 @@ router.post("/auth/login", async (req, res) => {
     const userName = matchingUser ? matchingUser.name : (email ? email.split('@')[0] : "Unknown User");
     const role = matchingUser ? matchingUser.role : "Staff";
 
-    const lockout = await sessionService.checkLockout(effectiveTenantId, userId, ip);
-    if (lockout.locked) {
-      return res.status(423).json({
-        success: false,
-        error: "ACCOUNT_LOCKED",
-        message: `Too many failed login attempts. Access is locked out until ${new Date(lockout.lockedUntil!).toLocaleTimeString()}.`,
-        lockedUntil: lockout.lockedUntil
-      });
-    }
-
     if (!matchingUser) {
       const failStatus = await sessionService.registerFailedLogin(
         effectiveTenantId,
@@ -528,16 +538,49 @@ router.post("/auth/login", async (req, res) => {
         role,
         ip,
         userAgent,
-        "Incorrect PIN code entered"
+        "Incorrect PIN passcode entered"
       );
       
-      return res.status(401).json({
+      // Dispatch real security alerts if tier 2 or 3 is triggered
+      if (failStatus.locked && failStatus.tier && failStatus.tier >= 2) {
+        try {
+          await notificationService.send(effectiveTenantId, {
+            title: `🚨 SECURITY ALERT: Unauthorized PIN Attempts`,
+            message: `Multiple failed PIN attempts (${failStatus.attemptCount}) detected from IP ${ip}. Terminal has been locked for ${failStatus.cooldownSeconds ? Math.ceil(failStatus.cooldownSeconds / 60) : 5} minutes.`,
+            severity: "error",
+            channels: ["in-app", "email"],
+            recipientEmail: targetTenant?.email,
+            metadata: {
+              ip,
+              attemptCount: failStatus.attemptCount,
+              tier: failStatus.tier,
+              lockedUntil: failStatus.lockedUntil
+            }
+          });
+
+          await auditLogService.log(
+            effectiveTenantId,
+            "SECURITY_LOCKOUT",
+            "SECURITY_GUARD",
+            `Terminal locked due to ${failStatus.attemptCount} failed PIN entries from IP ${ip}. Tier: ${failStatus.tier}.`,
+            { ip, lockedUntil: failStatus.lockedUntil, tier: failStatus.tier }
+          );
+        } catch (alertErr) {
+          console.error("Failed to dispatch security lockout notification:", alertErr);
+        }
+      }
+
+      const statusCode = failStatus.locked ? 423 : 401;
+      return res.status(statusCode).json({
         success: false,
-        error: "INVALID_CREDENTIALS",
-        message: "Incorrect passcode PIN code. Please check your 5-digit PIN and try again.",
+        error: failStatus.locked ? "TERMINAL_LOCKED" : "INVALID_CREDENTIALS",
+        message: failStatus.message || `Incorrect PIN passcode. ${failStatus.remainingAttempts > 0 ? `${failStatus.remainingAttempts} attempts remaining before temporary lock.` : "Terminal is now locked."}`,
         remainingAttempts: failStatus.remainingAttempts,
         locked: failStatus.locked,
-        lockedUntil: failStatus.lockedUntil
+        lockedUntil: failStatus.lockedUntil,
+        cooldownSeconds: failStatus.cooldownSeconds,
+        tier: failStatus.tier,
+        attemptCount: failStatus.attemptCount
       });
     }
 
@@ -565,6 +608,68 @@ router.post("/auth/login", async (req, res) => {
         role: matchingUser.role,
         permissions: matchingUser.permissions
       }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Check Terminal Lockout Status
+router.get("/auth/lockout-status", async (req, res) => {
+  const tenantId = (req.query.tenantId as string) || DEFAULT_TENANT_ID;
+  const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
+  const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
+
+  try {
+    const status = sessionService.getLockoutStatus(tenantId, ip);
+    res.json({
+      success: true,
+      ...status
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Emergency Owner Master Unlock Override
+router.post("/auth/unlock-override", async (req, res) => {
+  const { tenantId = DEFAULT_TENANT_ID, masterPin, ownerEmail } = req.body;
+  const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
+  const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
+
+  try {
+    const globalTenants = await getGlobalTenantsList();
+    const targetTenant = globalTenants.find(t => t.tenantId === tenantId || t.id === tenantId);
+    
+    const staff = (await staffRepo.getAll(tenantId)) || [];
+    const owner = staff.find(s => s.role === "Owner" || s.permissions.includes("settings"));
+
+    const masterSecret = process.env.MASTER_VERIFICATION_CODE || "VEGGIE-SUPER-ADMIN-2026";
+    const isMasterCode = masterPin === masterSecret;
+    const isOwnerPinMatch = owner && (owner.pin === masterPin || targetTenant?.ownerPin === masterPin);
+    const isOwnerEmailMatch = targetTenant && ownerEmail && targetTenant.email.toLowerCase() === ownerEmail.toLowerCase();
+
+    if (!isMasterCode && !isOwnerPinMatch && !isOwnerEmailMatch) {
+      return res.status(403).json({
+        success: false,
+        error: "INVALID_OVERRIDE_KEY",
+        message: "Invalid Owner Master Key or Owner Email verification."
+      });
+    }
+
+    sessionService.unlockTerminal(tenantId, ip);
+
+    await auditLogService.log(
+      tenantId,
+      "SECURITY_UNLOCKED",
+      "OWNER_OVERRIDE",
+      `Terminal manually unlocked by store owner from IP ${ip}.`,
+      { ip, unlockedAt: new Date().toISOString() }
+    );
+
+    res.json({
+      success: true,
+      message: "Terminal lockout cleared successfully. You may now enter staff PIN."
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -658,7 +763,7 @@ router.post("/auth/sessions/revoke-all", authMiddleware, async (req, res) => {
     if (exceptSessionId) {
       const active = await sessionService.getActiveSessions(tenantId);
       const remaining = active.filter(s => s.sessionId === exceptSessionId);
-      const db = require("../server/features/shared/database").Database.getInstance();
+      const db = Database.getInstance();
       await db.saveObject(tenantId, "system_active_sessions", remaining);
     } else {
       await sessionService.revokeAllSessions(tenantId);

@@ -42,12 +42,20 @@ export interface SecuritySettings {
   enableBruteForceProtection: boolean;
 }
 
+export interface FailedAttemptRecord {
+  count: number;
+  firstAttemptAt: number;
+  lastAttemptAt: number;
+  lockedUntil: string;
+  tier: number;
+}
+
 export class SessionService {
   private static instance: SessionService;
   private db: Database;
   
-  // Track failed attempts in memory for transient brute-force protection
-  private failedAttempts: Record<string, { count: number; lockedUntil: string }> = {};
+  // Track failed attempts in memory for strict multi-tier brute-force protection
+  private failedAttempts: Record<string, FailedAttemptRecord> = {};
 
   // Direct sessionId-to-tenantId index for O(1) lookups
   private sessionTenantIndex = new Map<string, string>();
@@ -270,7 +278,10 @@ export class SessionService {
   }
 
   /**
-   * Record login failure with lockout check
+   * Record login failure with strict progressive multi-tier lockout check
+   * - Tier 1: 3 failed attempts -> 30-second lockout cooldown
+   * - Tier 2: 5 failed attempts -> 5-minute (300-second) freeze + Security Notification Alert + Audit Log
+   * - Tier 3: 8+ failed attempts -> 15-minute (900-second) lockdown + Emergency Master Unlock required
    */
   public async registerFailedLogin(
     tenantId: string,
@@ -280,81 +291,186 @@ export class SessionService {
     ipAddress: string,
     userAgent: string,
     reason: string
-  ): Promise<{ locked: boolean; remainingAttempts: number; lockedUntil?: string }> {
+  ): Promise<{
+    locked: boolean;
+    remainingAttempts: number;
+    lockedUntil?: string;
+    cooldownSeconds?: number;
+    tier?: number;
+    attemptCount: number;
+    message?: string;
+  }> {
     const settings = await this.getSecuritySettings(tenantId);
     const deviceDetails = this.parseUserAgent(userAgent);
+    const safeIp = ipAddress || "127.0.0.1";
+    const now = Date.now();
 
-    // Record failure history
+    // Record failure history in DB
     await this.recordLoginHistory(tenantId, {
       userId,
       userName,
       role,
-      ipAddress: ipAddress || "127.0.0.1",
+      ipAddress: safeIp,
       device: deviceDetails,
       status: "failed",
       failureReason: reason
     });
 
     if (!settings.enableBruteForceProtection) {
-      return { locked: false, remainingAttempts: 99 };
+      return { locked: false, remainingAttempts: 99, attemptCount: 1 };
     }
 
-    const failedKey = userId ? `${tenantId}:${userId}` : `${tenantId}:${ipAddress}`;
-    const current = this.failedAttempts[failedKey] || { count: 0, lockedUntil: "" };
-    
-    current.count += 1;
+    // Keyed both by tenant:user and by tenant:ip and globally by ip to prevent distributed attempts
+    const failedKey = `${tenantId}:${safeIp}`;
+    let record = this.failedAttempts[failedKey];
+
+    // Reset counter if previous attempt was more than 15 minutes ago and not locked
+    if (!record || (now - record.lastAttemptAt > 15 * 60 * 1000 && !record.lockedUntil)) {
+      record = {
+        count: 0,
+        firstAttemptAt: now,
+        lastAttemptAt: now,
+        lockedUntil: "",
+        tier: 0
+      };
+    }
+
+    record.count += 1;
+    record.lastAttemptAt = now;
+
     let locked = false;
-    let lockedUntilStr = "";
+    let lockoutDuration = 0;
+    let tier = 0;
+    let message = "";
 
-    if (current.count >= settings.maxFailedAttempts) {
+    // Calculate Strict Multi-Tier Lockout
+    if (record.count >= 8) {
+      tier = 3;
       locked = true;
-      const unlockTime = new Date(Date.now() + settings.lockoutDurationSeconds * 1000);
-      current.lockedUntil = unlockTime.toISOString();
-      lockedUntilStr = current.lockedUntil;
+      lockoutDuration = 900; // 15 minutes
+      message = "Security Lockdown: Terminal frozen for 15 minutes due to repeated unauthorized PIN attempts. Enter Owner Master Key to unlock.";
+    } else if (record.count >= 5) {
+      tier = 2;
+      locked = true;
+      lockoutDuration = 300; // 5 minutes
+      message = "Security Alert: Too many invalid PIN attempts. Terminal is locked for 5 minutes.";
+    } else if (record.count >= 3) {
+      tier = 1;
+      locked = true;
+      lockoutDuration = 30; // 30 seconds
+      message = "Temporary Cooldown: 3 invalid attempts. Keypad paused for 30 seconds.";
     }
 
-    this.failedAttempts[failedKey] = current;
-    
+    if (locked) {
+      const unlockTime = new Date(now + lockoutDuration * 1000);
+      record.lockedUntil = unlockTime.toISOString();
+      record.tier = tier;
+    }
+
+    this.failedAttempts[failedKey] = record;
+    if (userId && userId !== "unknown") {
+      this.failedAttempts[`${tenantId}:${userId}`] = { ...record };
+    }
+
+    // Calculate remaining attempts before the NEXT threshold
+    let remaining = 3 - record.count;
+    if (record.count >= 3 && record.count < 5) {
+      remaining = 5 - record.count;
+    } else if (record.count >= 5 && record.count < 8) {
+      remaining = 8 - record.count;
+    } else if (record.count >= 8) {
+      remaining = 0;
+    }
+
     return {
       locked,
-      remainingAttempts: Math.max(0, settings.maxFailedAttempts - current.count),
-      lockedUntil: lockedUntilStr || undefined
+      remainingAttempts: Math.max(0, remaining),
+      lockedUntil: record.lockedUntil || undefined,
+      cooldownSeconds: lockoutDuration || undefined,
+      tier: tier || undefined,
+      attemptCount: record.count,
+      message: message || undefined
     };
   }
 
   /**
    * Check if a specific user / IP is locked out
    */
-  public async checkLockout(tenantId: string, userId: string, ipAddress: string): Promise<{ locked: boolean; lockedUntil?: string }> {
-    const now = new Date();
-    
-    // Check key for user
-    const userKey = `${tenantId}:${userId}`;
-    const userLock = this.failedAttempts[userKey];
-    if (userLock && userLock.lockedUntil) {
-      const lockedTime = new Date(userLock.lockedUntil);
-      if (now < lockedTime) {
-        return { locked: true, lockedUntil: userLock.lockedUntil };
-      } else {
-        // Lock has expired, clean it up
-        delete this.failedAttempts[userKey];
-      }
-    }
+  public async checkLockout(
+    tenantId: string,
+    userId: string,
+    ipAddress: string
+  ): Promise<{
+    locked: boolean;
+    lockedUntil?: string;
+    cooldownSeconds?: number;
+    tier?: number;
+    attemptCount?: number;
+  }> {
+    const now = Date.now();
+    const safeIp = ipAddress || "127.0.0.1";
 
-    // Check key for IP
-    const ipKey = `${tenantId}:${ipAddress}`;
-    const ipLock = this.failedAttempts[ipKey];
-    if (ipLock && ipLock.lockedUntil) {
-      const lockedTime = new Date(ipLock.lockedUntil);
-      if (now < lockedTime) {
-        return { locked: true, lockedUntil: ipLock.lockedUntil };
-      } else {
-        // Lock has expired, clean it up
-        delete this.failedAttempts[ipKey];
+    const keysToCheck = [
+      `${tenantId}:${safeIp}`,
+      userId && userId !== "unknown" ? `${tenantId}:${userId}` : null
+    ].filter(Boolean) as string[];
+
+    for (const key of keysToCheck) {
+      const record = this.failedAttempts[key];
+      if (record && record.lockedUntil) {
+        const lockedTime = new Date(record.lockedUntil).getTime();
+        if (now < lockedTime) {
+          const remainingSecs = Math.max(1, Math.ceil((lockedTime - now) / 1000));
+          return {
+            locked: true,
+            lockedUntil: record.lockedUntil,
+            cooldownSeconds: remainingSecs,
+            tier: record.tier,
+            attemptCount: record.count
+          };
+        } else {
+          // Lock duration expired; reset lockedUntil but retain attempt count for escalation
+          record.lockedUntil = "";
+        }
       }
     }
 
     return { locked: false };
+  }
+
+  /**
+   * Get active lockout status for a tenant & IP
+   */
+  public getLockoutStatus(tenantId: string, ipAddress: string) {
+    const safeIp = ipAddress || "127.0.0.1";
+    const key = `${tenantId}:${safeIp}`;
+    const record = this.failedAttempts[key];
+    if (!record) return { locked: false, attemptCount: 0 };
+
+    const now = Date.now();
+    if (record.lockedUntil) {
+      const lockedTime = new Date(record.lockedUntil).getTime();
+      if (now < lockedTime) {
+        return {
+          locked: true,
+          lockedUntil: record.lockedUntil,
+          cooldownSeconds: Math.ceil((lockedTime - now) / 1000),
+          tier: record.tier,
+          attemptCount: record.count
+        };
+      }
+    }
+    return { locked: false, attemptCount: record.count };
+  }
+
+  /**
+   * Reset / Unlock terminal failed attempts (Owner or Master Override)
+   */
+  public unlockTerminal(tenantId: string, ipAddress: string): boolean {
+    const safeIp = ipAddress || "127.0.0.1";
+    const ipKey = `${tenantId}:${safeIp}`;
+    delete this.failedAttempts[ipKey];
+    return true;
   }
 
   /**

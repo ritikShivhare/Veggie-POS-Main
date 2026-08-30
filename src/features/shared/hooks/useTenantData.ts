@@ -1,6 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { RestaurantTenant } from "../types";
 import { INITIAL_TENANTS } from "../data";
+
+export const STORE_CODE_STORAGE_KEY = "veggiepos_saved_store_code";
+export const ACTIVE_TENANT_ID_STORAGE_KEY = "veggiepos_active_tenant_id";
+export const TENANTS_LIST_STORAGE_KEY = "veggiepos_tenants";
 
 export function useTenantData() {
   const [showSignup, setShowSignup] = useState<boolean>(() => {
@@ -21,7 +25,7 @@ export function useTenantData() {
   });
 
   const [tenants, setTenants] = useState<RestaurantTenant[]>(() => {
-    const saved = localStorage.getItem("veggiepos_tenants");
+    const saved = localStorage.getItem(TENANTS_LIST_STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -35,8 +39,8 @@ export function useTenantData() {
     const searchParams = new URLSearchParams(window.location.search);
     const urlTenantQuery = searchParams.get("tenant") || searchParams.get("outlet") || searchParams.get("tenantId") || searchParams.get("business");
 
-    const savedActiveId = localStorage.getItem("veggiepos_active_tenant_id");
-    const savedTenantsStr = localStorage.getItem("veggiepos_tenants");
+    const savedStoreCode = localStorage.getItem(STORE_CODE_STORAGE_KEY) || localStorage.getItem(ACTIVE_TENANT_ID_STORAGE_KEY);
+    const savedTenantsStr = localStorage.getItem(TENANTS_LIST_STORAGE_KEY);
     let currentTenants = INITIAL_TENANTS;
     if (savedTenantsStr) {
       try {
@@ -57,8 +61,14 @@ export function useTenantData() {
       if (match) return match;
     }
 
-    if (savedActiveId) {
-      const found = currentTenants.find(t => t.tenantId === savedActiveId || t.id === savedActiveId);
+    if (savedStoreCode) {
+      const q = savedStoreCode.toLowerCase().trim();
+      const found = currentTenants.find(t => 
+        t.tenantId.toLowerCase() === q || 
+        t.id.toLowerCase() === q ||
+        t.name.toLowerCase() === q ||
+        t.name.toLowerCase().replace(/[^a-z0-9]/g, "") === q.replace(/[^a-z0-9]/g, "")
+      );
       if (found) return found;
     }
     return currentTenants[0];
@@ -69,12 +79,29 @@ export function useTenantData() {
     return searchParams.get("token") || "";
   });
 
+  // Open terminal only if explicitly navigating to /terminal or /login, or URL tenant query is supplied
   const [showTerminalLogin, setShowTerminalLogin] = useState<boolean>(() => {
+    const path = window.location.pathname;
     const searchParams = new URLSearchParams(window.location.search);
+    const isTerminalPath = path === "/terminal" || path === "/login";
     const urlTenantQuery = searchParams.get("tenant") || searchParams.get("outlet") || searchParams.get("tenantId") || searchParams.get("business");
-    const savedActiveId = localStorage.getItem("veggiepos_active_tenant_id");
-    return Boolean(urlTenantQuery || savedActiveId);
+    return Boolean(isTerminalPath || urlTenantQuery);
   });
+
+  // Keep path in sync with browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      const searchParams = new URLSearchParams(window.location.search);
+      const isTerminalPath = path === "/terminal" || path === "/login";
+      const urlTenantQuery = searchParams.get("tenant") || searchParams.get("outlet") || searchParams.get("tenantId") || searchParams.get("business");
+      setShowTerminalLogin(Boolean(isTerminalPath || urlTenantQuery));
+      setShowSignup(path === "/signup");
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   // Synchronize specific active tenant from server if URL query is present
   useEffect(() => {
@@ -96,10 +123,11 @@ export function useTenantData() {
           setTenants((prev) => {
             const exists = prev.some(t => t.tenantId === data.tenant.tenantId);
             const updated = exists ? prev.map(t => t.tenantId === data.tenant.tenantId ? data.tenant : t) : [...prev, data.tenant];
-            localStorage.setItem("veggiepos_tenants", JSON.stringify(updated));
+            localStorage.setItem(TENANTS_LIST_STORAGE_KEY, JSON.stringify(updated));
             return updated;
           });
-          localStorage.setItem("veggiepos_active_tenant_id", data.tenant.tenantId);
+          localStorage.setItem(STORE_CODE_STORAGE_KEY, data.tenant.tenantId);
+          localStorage.setItem(ACTIVE_TENANT_ID_STORAGE_KEY, data.tenant.tenantId);
         }
       } catch (err) {
         console.warn("Failed to fetch tenant info:", err);
@@ -110,45 +138,91 @@ export function useTenantData() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("veggiepos_tenants", JSON.stringify(tenants));
+    localStorage.setItem(TENANTS_LIST_STORAGE_KEY, JSON.stringify(tenants));
   }, [tenants]);
 
-  const [firstMountPassed, setFirstMountPassed] = useState(false);
+  // Connect and persist a store code once to local storage
+  const handleConnectStoreCode = useCallback(async (codeOrName: string, qrToken?: string): Promise<{ success: boolean; tenant?: RestaurantTenant; error?: string }> => {
+    const query = codeOrName.trim();
+    if (!query) return { success: false, error: "Please enter a valid store code or restaurant name." };
 
-  useEffect(() => {
-    const savedActiveId = localStorage.getItem("veggiepos_active_tenant_id");
-    if (!firstMountPassed) {
-      setFirstMountPassed(true);
-      if (!savedActiveId) {
-        return;
-      }
+    // 1. Check in local tenants cache first for instantaneous response
+    const localMatch = tenants.find(
+      (t) =>
+        t.tenantId.toLowerCase() === query.toLowerCase() ||
+        t.id.toLowerCase() === query.toLowerCase() ||
+        t.name.toLowerCase() === query.toLowerCase() ||
+        t.name.toLowerCase().replace(/[^a-z0-9]/g, "") === query.toLowerCase().replace(/[^a-z0-9]/g, "")
+    );
+
+    if (localMatch) {
+      setActiveTenant(localMatch);
+      if (qrToken) setActiveQrToken(qrToken);
+      localStorage.setItem(STORE_CODE_STORAGE_KEY, localMatch.tenantId);
+      localStorage.setItem(ACTIVE_TENANT_ID_STORAGE_KEY, localMatch.tenantId);
+      setShowTerminalLogin(true);
+      return { success: true, tenant: localMatch };
     }
-    localStorage.setItem("veggiepos_active_tenant_id", activeTenant.tenantId);
-  }, [activeTenant, firstMountPassed]);
 
-  const handleRegisterTenant = (newTenant: RestaurantTenant) => {
+    // 2. Query the server directory
+    try {
+      const res = await fetch(`/api/auth/tenant-info?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.tenant) {
+        return { success: false, error: data.error || `Restaurant outlet "${query}" not found.` };
+      }
+
+      const fetchedTenant: RestaurantTenant = data.tenant;
+      setActiveTenant(fetchedTenant);
+      if (qrToken) setActiveQrToken(qrToken);
+      setTenants((prev) => {
+        const exists = prev.some(t => t.tenantId === fetchedTenant.tenantId);
+        const updated = exists ? prev.map(t => t.tenantId === fetchedTenant.tenantId ? fetchedTenant : t) : [...prev, fetchedTenant];
+        localStorage.setItem(TENANTS_LIST_STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+      localStorage.setItem(STORE_CODE_STORAGE_KEY, fetchedTenant.tenantId);
+      localStorage.setItem(ACTIVE_TENANT_ID_STORAGE_KEY, fetchedTenant.tenantId);
+      setShowTerminalLogin(true);
+      return { success: true, tenant: fetchedTenant };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Failed to reach server. Please check internet connection." };
+    }
+  }, [tenants]);
+
+  // Clear saved store code from local storage and return to landing page
+  const handleClearSavedStore = useCallback(() => {
+    localStorage.removeItem(STORE_CODE_STORAGE_KEY);
+    localStorage.removeItem(ACTIVE_TENANT_ID_STORAGE_KEY);
+    setShowTerminalLogin(false);
+  }, []);
+
+  const handleRegisterTenant = useCallback((newTenant: RestaurantTenant) => {
     setTenants((prev) => {
       const exists = prev.some(t => t.tenantId === newTenant.tenantId);
       const updated = exists ? prev.map(t => t.tenantId === newTenant.tenantId ? newTenant : t) : [...prev, newTenant];
-      localStorage.setItem("veggiepos_tenants", JSON.stringify(updated));
+      localStorage.setItem(TENANTS_LIST_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
     setActiveTenant(newTenant);
-    localStorage.setItem("veggiepos_active_tenant_id", newTenant.tenantId);
-  };
+    localStorage.setItem(STORE_CODE_STORAGE_KEY, newTenant.tenantId);
+    localStorage.setItem(ACTIVE_TENANT_ID_STORAGE_KEY, newTenant.tenantId);
+    setShowTerminalLogin(true);
+  }, []);
 
-  const handleSwitchTenant = (tenant: RestaurantTenant, qrToken?: string) => {
+  const handleSwitchTenant = useCallback((tenant: RestaurantTenant, qrToken?: string) => {
     setActiveTenant(tenant);
     if (qrToken) setActiveQrToken(qrToken);
     setShowTerminalLogin(true);
     setTenants((prev) => {
       const exists = prev.some(t => t.tenantId === tenant.tenantId);
       const updated = exists ? prev.map(t => t.tenantId === tenant.tenantId ? tenant : t) : [...prev, tenant];
-      localStorage.setItem("veggiepos_tenants", JSON.stringify(updated));
+      localStorage.setItem(TENANTS_LIST_STORAGE_KEY, JSON.stringify(updated));
       return updated;
     });
-    localStorage.setItem("veggiepos_active_tenant_id", tenant.tenantId);
-  };
+    localStorage.setItem(STORE_CODE_STORAGE_KEY, tenant.tenantId);
+    localStorage.setItem(ACTIVE_TENANT_ID_STORAGE_KEY, tenant.tenantId);
+  }, []);
 
   return {
     showSignup,
@@ -164,6 +238,8 @@ export function useTenantData() {
     showTerminalLogin,
     setShowTerminalLogin,
     handleRegisterTenant,
-    handleSwitchTenant
+    handleSwitchTenant,
+    handleConnectStoreCode,
+    handleClearSavedStore
   };
 }

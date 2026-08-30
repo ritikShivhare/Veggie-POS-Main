@@ -39,9 +39,11 @@ export default function AICopilot({ activeTenant, currentStaff }: AICopilotProps
         {
           id: "msg-welcome",
           sender: "ai",
-          text: `Hello! I am your VeggiePOS AI Operations Copilot. I can assist you with store configurations, inventory updates, recipe settings, and sales diagnostics.
+          text: `Namaste & Welcome to Veggie POS! I am your AI Product & Operations Advisor.
 
-How can I help you optimize your restaurant today?`,
+I have full information about our Touch POS Billing, Kitchen KOT/KDS, Recipe Bill of Materials (BOM), Table Floor Management, Pricing Plans, and ROI Leakage Protections.
+
+How can I help you or your restaurant today? (Feel free to ask in English or Hindi!)`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
@@ -78,8 +80,8 @@ How can I help you optimize your restaurant today?`,
         history: messages.map(m => ({ sender: m.sender, text: m.text })),
         tenantId: activeTenant.tenantId,
         tenantName: activeTenant.name,
-        staffName: currentStaff?.name || "Restaurant Owner",
-        staffRole: currentStaff?.role || "Owner"
+        staffName: currentStaff?.name || "Restaurant Operator",
+        staffRole: currentStaff?.role || "Operator"
       });
 
       setIsTyping(false);
@@ -103,15 +105,27 @@ How can I help you optimize your restaurant today?`,
       
       // Smart offline fallback
       setTimeout(() => {
-        let reply = "I am processing your request. Please note that as the Restaurant Owner, you can view inventory tracking, recipe mapping, and sales reports in the main menu tabs.";
+        let reply = "Veggie POS is the calm command center for restaurants, cafés, QSRs, and cloud kitchens. It combines ultra-fast touch billing, multi-course KOTs, recipe-level inventory deduction, and real-time owner analytics.";
         
         const lowercaseText = text.toLowerCase();
-        if (lowercaseText.includes("recipe") || lowercaseText.includes("ingredient") || lowercaseText.includes("stock")) {
-          reply = `In VeggiePOS, you map recipe weights in the 'Inventory & Recipes' tab. If 'Auto-Deduct Stock' is enabled in Settings, ingredients are automatically subtracted when checked out at the POS Billing terminal.`;
-        } else if (lowercaseText.includes("license") || lowercaseText.includes("price") || lowercaseText.includes("subscription")) {
-          reply = `VeggiePOS licensing is active and fully configured for your store. Standard operations are enabled.`;
-        } else if (lowercaseText.includes("sync") || lowercaseText.includes("database") || lowercaseText.includes("error")) {
-          reply = `I have completed a diagnostics run of the local VeggiePOS terminal. Active sync link is established with ID: ${activeTenant.tenantId}. Everything looks stable!`;
+        if (lowercaseText.includes("hindi") || lowercaseText.includes("kya") || lowercaseText.includes("kaise") || lowercaseText.includes("dam") || lowercaseText.includes("price")) {
+          reply = `Veggie POS restaurants aur cafés ke liye complete software hai:
+1. Fast PIN Billing: Sub-100ms speed se quick bills aur UPI payments.
+2. Kitchen KOT & KDS: Stations ke hisab se automatic orders dispatch.
+3. Recipe & Stock BOM: Har dish bikne par raw materials gram-to-gram deduct hote hain.
+4. Pricing: Starter plan ₹799/month se start hota hai, aur 48 hours me aapka menu live ho jata hai!`;
+        } else if (lowercaseText.includes("recipe") || lowercaseText.includes("ingredient") || lowercaseText.includes("stock") || lowercaseText.includes("inventory")) {
+          reply = `In Veggie POS, each dish links to raw ingredients via our Bill of Materials (BOM). When a cashier checks out an order at the POS, ingredient quantities (like cheese, coffee beans, sauces) are automatically deducted in real time, preventing inventory leakage.`;
+        } else if (lowercaseText.includes("price") || lowercaseText.includes("cost") || lowercaseText.includes("plan") || lowercaseText.includes("pricing")) {
+          reply = `Veggie POS offers simple, transparent tiers:
+• Starter / Counter: ₹799/mo (billed annually) for single counter QSRs & cafés.
+• Growth / Full Dine-In: ₹1,499/mo with table layouts, paced KOTs & recipe BOM.
+• Multi-Outlet: ₹2,999/mo for multi-location groups.
+All plans include free updates and zero hardware lease lock-ins!`;
+        } else if (lowercaseText.includes("hardware") || lowercaseText.includes("printer") || lowercaseText.includes("ipad") || lowercaseText.includes("tablet")) {
+          reply = `Veggie POS runs in any modern browser on iPads, Android tablets, Windows laptops, MacBooks, and phones. It connects seamlessly with standard 58mm/80mm ESC/POS thermal receipt and kitchen ticket printers over Bluetooth, USB, and LAN/Wi-Fi.`;
+        } else if (lowercaseText.includes("login") || lowercaseText.includes("terminal") || lowercaseText.includes("sign in")) {
+          reply = `To access your restaurant's billing terminal, click 'Sign In' in the top navigation bar. Enter your Store Code or Restaurant Name once to connect this device, and then your staff can log in using their 4-digit PIN!`;
         }
 
         setMessages(prev => [
@@ -123,7 +137,7 @@ How can I help you optimize your restaurant today?`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }
         ]);
-      }, 600);
+      }, 500);
     }
   };
 
@@ -136,17 +150,17 @@ How can I help you optimize your restaurant today?`,
       {/* FLOATING TRIGGER BUBBLE */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-[80] p-4 bg-slate-900 hover:bg-slate-800 text-white rounded-full shadow-2xl flex items-center justify-center gap-2 transition-all duration-300 hover:scale-105 active:scale-95 group cursor-pointer border border-pink-500/35"
+        className="fixed bottom-6 right-6 z-[80] p-4 bg-[#181A18] hover:bg-[#6E8F45] text-[#FBF9F5] rounded-full shadow-2xl flex items-center justify-center gap-2.5 transition-all duration-200 hover:scale-105 active:scale-95 group cursor-pointer border border-[#2E332D]"
         id="ai-copilot-trigger-bubble"
-        title="VeggiePOS AI Support Copilot"
+        title="Veggie POS AI Assistant"
       >
         <span className="relative flex h-3 w-3">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-3 w-3 bg-pink-500"></span>
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#6E8F45] opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-[#84A955]"></span>
         </span>
-        <Sparkles className="w-5 h-5 text-pink-400 group-hover:rotate-12 transition-transform" />
-        <span className="text-xs font-bold font-display max-w-0 overflow-hidden group-hover:max-w-[160px] transition-all duration-300 whitespace-nowrap pl-0 group-hover:pl-1">
-          Support Copilot
+        <Sparkles className="w-5 h-5 text-[#84A955] group-hover:rotate-12 transition-transform" />
+        <span className="text-xs font-bold font-mono max-w-0 overflow-hidden group-hover:max-w-[160px] transition-all duration-300 whitespace-nowrap pl-0 group-hover:pl-1">
+          Ask Veggie AI
         </span>
       </button>
 
@@ -155,31 +169,31 @@ How can I help you optimize your restaurant today?`,
         <div className="fixed inset-0 z-[999] flex justify-end">
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-slate-950/25 backdrop-blur-xs transition-opacity"
+            className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
             onClick={() => setIsOpen(false)}
           />
 
           {/* Drawer Content */}
-          <div className="relative w-full sm:w-[440px] bg-white h-full shadow-2xl flex flex-col z-10 border-l border-slate-200 animate-slide-in">
+          <div className="relative w-full sm:w-[440px] bg-[#FBF9F5] h-full shadow-2xl flex flex-col z-10 border-l border-[#EAE5DA] animate-slide-in">
             
             {/* DRAWER HEADER */}
-            <div className="p-4 bg-slate-900 text-white flex flex-col shrink-0 border-b border-slate-800">
+            <div className="p-4 bg-[#181A18] text-[#FBF9F5] flex flex-col shrink-0 border-b border-[#2E332D]">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-pink-600 flex items-center justify-center text-white font-extrabold text-sm">
-                    ✨
+                  <div className="w-8 h-8 rounded-lg bg-[#6E8F45] flex items-center justify-center text-[#FBF9F5] font-extrabold text-sm">
+                    🌿
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-sm tracking-tight flex items-center gap-1.5">
-                      VeggiePOS Operations Copilot
-                      <span className="bg-emerald-500/15 text-emerald-400 text-[9px] px-1.5 py-0.5 rounded font-mono font-bold tracking-widest uppercase">AI</span>
+                    <h3 className="font-serif text-sm font-bold tracking-tight flex items-center gap-1.5 text-[#FBF9F5]">
+                      Veggie POS AI Assistant
+                      <span className="bg-[#6E8F45]/20 text-[#84A955] text-[9px] px-1.5 py-0.5 rounded font-mono font-bold tracking-widest uppercase">AI</span>
                     </h3>
-                    <p className="text-[10px] text-slate-400 font-medium">Restaurant Operations Assistant</p>
+                    <p className="text-[10px] text-[#A6AEA0] font-medium">Platform & Operations Advisor</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                  className="p-1.5 rounded-lg hover:bg-[#2E332D] text-[#A6AEA0] hover:text-[#FBF9F5] transition cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -187,23 +201,23 @@ How can I help you optimize your restaurant today?`,
             </div>
 
             {/* CHAT MESSAGES BODY */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#FBF9F5]">
               {messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`flex flex-col max-w-[85%] ${msg.sender === "ai" ? "self-start mr-auto" : "self-end ml-auto"}`}
+                  className={`flex flex-col max-w-[88%] ${msg.sender === "ai" ? "self-start mr-auto" : "self-end ml-auto"}`}
                 >
                   <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-[9px] text-slate-450 font-mono uppercase tracking-wide">
-                      {msg.sender === "ai" ? "Operations Copilot" : `${currentStaff?.name || "Owner"} (${currentStaff?.role || "Owner"})`}
+                    <span className="text-[9px] text-[#787F74] font-mono uppercase tracking-wide">
+                      {msg.sender === "ai" ? "Veggie AI Assistant" : "You"}
                     </span>
-                    <span className="text-[8px] text-slate-350 font-mono">• {msg.timestamp}</span>
+                    <span className="text-[8px] text-[#A6AEA0] font-mono">• {msg.timestamp}</span>
                   </div>
                   <div
-                    className={`p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-line shadow-sm border ${
+                    className={`p-3.5 rounded-2xl text-xs leading-relaxed whitespace-pre-line shadow-xs border ${
                       msg.sender === "ai"
-                        ? "bg-white text-slate-850 border-slate-200/80 rounded-tl-none"
-                        : "bg-slate-900 text-white border-slate-800 rounded-tr-none"
+                        ? "bg-[#F4F0E8] text-[#1C1E1B] border-[#EAE5DA] rounded-tl-none font-sans"
+                        : "bg-[#181A18] text-[#FBF9F5] border-[#2E332D] rounded-tr-none font-sans"
                     }`}
                   >
                     {msg.text}
@@ -213,11 +227,11 @@ How can I help you optimize your restaurant today?`,
 
               {isTyping && (
                 <div className="flex flex-col max-w-[85%] self-start mr-auto">
-                  <span className="text-[9px] text-slate-400 font-mono mb-1">COPILOT IS ANALYZING...</span>
-                  <div className="bg-white border border-slate-200 p-3.5 rounded-2xl rounded-tl-none flex items-center gap-2">
-                    <span className="w-2 h-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                    <span className="w-2 h-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                    <span className="w-2 h-2 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  <span className="text-[9px] text-[#787F74] font-mono mb-1">VEGGIE AI IS THINKING...</span>
+                  <div className="bg-[#F4F0E8] border border-[#EAE5DA] p-3.5 rounded-2xl rounded-tl-none flex items-center gap-2">
+                    <span className="w-2 h-2 bg-[#6E8F45] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-2 h-2 bg-[#6E8F45] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-2 h-2 bg-[#6E8F45] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                   </div>
                 </div>
               )}
@@ -226,42 +240,42 @@ How can I help you optimize your restaurant today?`,
             </div>
 
             {/* SUGGESTIONS PILLS */}
-            <div className="p-3 bg-slate-50 border-t border-slate-150 shrink-0 flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-none">
+            <div className="p-3 bg-[#F4F0E8] border-t border-[#EAE5DA] shrink-0 flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-none">
               <button
-                onClick={() => handleSuggestionClick("How do I map recipe ingredients?")}
-                className="px-2.5 py-1.5 bg-white border border-slate-200 hover:border-slate-350 rounded-lg text-[10px] text-slate-600 font-semibold cursor-pointer transition-all"
+                onClick={() => handleSuggestionClick("Veggie POS ke main features kya hain?")}
+                className="px-2.5 py-1.5 bg-[#FBF9F5] border border-[#EAE5DA] hover:border-[#6E8F45] rounded-lg text-[10px] text-[#1C1E1B] font-semibold cursor-pointer transition-all"
               >
-                Recipe deduction rules?
+                Features in Hindi 🇮🇳
               </button>
               <button
-                onClick={() => handleSuggestionClick("How do I configure product prices?")}
-                className="px-2.5 py-1.5 bg-white border border-slate-200 hover:border-slate-350 rounded-lg text-[10px] text-slate-600 font-semibold cursor-pointer transition-all"
+                onClick={() => handleSuggestionClick("How does recipe inventory deduction work?")}
+                className="px-2.5 py-1.5 bg-[#FBF9F5] border border-[#EAE5DA] hover:border-[#6E8F45] rounded-lg text-[10px] text-[#1C1E1B] font-semibold cursor-pointer transition-all"
               >
-                Pricing configuration
+                Recipe BOM Stock 📦
               </button>
               <button
-                onClick={() => handleSuggestionClick("How do staff shifts rosters work?")}
-                className="px-2.5 py-1.5 bg-white border border-slate-200 hover:border-slate-350 rounded-lg text-[10px] text-slate-600 font-semibold cursor-pointer transition-all"
+                onClick={() => handleSuggestionClick("What are the pricing plans and hardware requirements?")}
+                className="px-2.5 py-1.5 bg-[#FBF9F5] border border-[#EAE5DA] hover:border-[#6E8F45] rounded-lg text-[10px] text-[#1C1E1B] font-semibold cursor-pointer transition-all"
               >
-                Staff duty shifts ⏰
+                Pricing & Hardware ⚡
               </button>
             </div>
 
             {/* SEND MESSAGE FIELD */}
-            <div className="p-3 border-t border-slate-200 bg-white shrink-0">
+            <div className="p-3 border-t border-[#EAE5DA] bg-[#FBF9F5] shrink-0">
               <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  placeholder="Type support query or operations question..."
+                  placeholder="Ask anything about Veggie POS or restaurant operations..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                  className="flex-1 bg-slate-50 border border-slate-200 focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 rounded-xl py-2.5 px-3.5 text-xs text-slate-850"
+                  className="flex-1 bg-[#F4F0E8] border border-[#EAE5DA] focus:bg-[#FBF9F5] focus:outline-none focus:border-[#6E8F45] rounded-xl py-2.5 px-3.5 text-xs text-[#1C1E1B]"
                   id="copilot-text-input-field"
                 />
                 <button
                   onClick={() => handleSend()}
-                  className="p-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition cursor-pointer"
+                  className="p-2.5 bg-[#181A18] hover:bg-[#6E8F45] text-[#FBF9F5] rounded-xl transition cursor-pointer"
                   id="copilot-send-button"
                 >
                   <Send className="w-4 h-4" />

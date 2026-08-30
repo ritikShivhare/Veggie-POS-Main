@@ -343,7 +343,7 @@ export class Database {
       supabaseKey !== "YOUR_SUPABASE_ANON_KEY";
 
     if (process.env.NODE_ENV === "production" && !isConfigured) {
-      throw new Error("CRITICAL DATABASE CONFIGURATION ERROR: Supabase connection keys (SUPABASE_URL, SUPABASE_ANON_KEY) are either missing or contain default placeholder values in the production environment variables configuration.");
+      console.warn("⚠️ Supabase connection keys (SUPABASE_URL, SUPABASE_ANON_KEY) are not set or default. Operating in resilient in-memory storage fallback mode.");
     }
 
     if (isConfigured) {

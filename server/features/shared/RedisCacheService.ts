@@ -49,7 +49,10 @@ export class RedisCacheService {
     }
 
     // Determine if Redis connection parameters are specified
-    const hasParams = !!(redisUrl || process.env.REDIS_HOST || process.env.REDIS_PORT || redisPassword);
+    if (!redisUrl && !process.env.REDIS_HOST) {
+      this.isEnabled = false;
+      return;
+    }
 
     try {
       if (redisUrl) {

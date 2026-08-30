@@ -5,6 +5,7 @@ import { AppContextProvider, useAppContext } from "./features/shared/context/App
 import Sidebar from "./features/shared/components/Sidebar";
 import SaasAdminDashboard from "./features/saas/SaasAdminDashboard";
 import SaasAdminLogin from "./features/saas/SaasAdminLogin";
+import StoreLoginView from "./features/staff/StoreLoginView";
 import PinLogin from "./features/staff/PinLogin";
 import POSBilling from "./features/pos/POSBilling";
 import InventoryManagement from "./features/inventory/InventoryManagement";
@@ -14,6 +15,7 @@ import DeliveryIntegration from "./features/delivery/DeliveryIntegration";
 import LandingPage from "./features/shared/components/LandingPage";
 import SignupPage from "./features/shared/components/SignupPage";
 import LegalPage from "./features/shared/components/LegalPage";
+import MarketingApp from "./features/marketing/MarketingApp";
 import AICopilot from "./features/copilot/AICopilot";
 import BackgroundJobsDashboard from "./features/shared/components/BackgroundJobsDashboard";
 import NotificationCenter from "./features/shared/components/NotificationCenter";
@@ -47,6 +49,8 @@ function AppContent() {
     setActiveTenant,
     activeQrToken,
     handleSwitchTenant,
+    handleConnectStoreCode,
+    handleClearSavedStore,
     showTerminalLogin,
     setShowTerminalLogin,
     menuItems,
@@ -308,125 +312,75 @@ function AppContent() {
   }
 
   if (!currentStaff) {
+    const savedStoreCode = localStorage.getItem("veggiepos_saved_store_code") || localStorage.getItem("veggiepos_active_tenant_id") || undefined;
+
     if (showTerminalLogin) {
-      return (
-        <>
-          <PinLogin
-            staffList={staffList}
-            onLoginSuccess={(staff, sessId, loggedInTenant) => {
-              handleLoginSuccess(staff, sessId, loggedInTenant);
-              setActiveTab(staff.permissions.includes("reports") ? "dashboard" : "billing");
+      if (!savedStoreCode) {
+        return (
+          <StoreLoginView
+            tenants={tenants}
+            onConnectStore={async (code) => {
+              const res = await handleConnectStoreCode(code);
+              return res;
             }}
-            restaurantName={activeTenant.name}
-            tenantId={activeTenant.tenantId}
-            qrToken={activeQrToken}
-            onSwitchTenant={(newTenant, token) => handleSwitchTenant(newTenant, token)}
-            onBackToLanding={() => setShowTerminalLogin(false)}
+            onSelectTenant={(t) => {
+              handleSwitchTenant(t);
+            }}
+            onOpenSignup={() => {
+              setShowSignup(true);
+              setShowTerminalLogin(false);
+              window.history.pushState({}, "", "/signup");
+            }}
+            onBackToWebsite={() => {
+              setShowTerminalLogin(false);
+              window.history.pushState({}, "", "/");
+            }}
           />
-          <AICopilot activeTenant={activeTenant} currentStaff={currentStaff} />
-        </>
+        );
+      }
+
+      return (
+        <PinLogin
+          staffList={staffList}
+          onLoginSuccess={(staff, sessId, loggedInTenant) => {
+            handleLoginSuccess(staff, sessId, loggedInTenant);
+            setActiveTab(staff.permissions.includes("reports") ? "dashboard" : "billing");
+          }}
+          restaurantName={activeTenant.name}
+          tenantId={activeTenant.tenantId}
+          savedStoreCode={savedStoreCode}
+          qrToken={activeQrToken}
+          onSwitchTenant={(newTenant, token) => handleSwitchTenant(newTenant, token)}
+          onConnectStoreCode={handleConnectStoreCode}
+          onClearSavedStore={() => {
+            handleClearSavedStore();
+            window.history.pushState({}, "", "/login");
+          }}
+          onBackToLanding={() => {
+            setShowTerminalLogin(false);
+            window.history.pushState({}, "", "/");
+          }}
+        />
       );
     }
+
     return (
       <>
-        <LandingPage
-          tenants={tenants}
-          staffList={staffList}
-          activeTenant={activeTenant}
-          onSelectTenant={(t) => {
-            setActiveTenant(t);
+        <MarketingApp
+          onOpenLogin={() => {
             setShowTerminalLogin(true);
+            window.history.pushState({}, "", "/login");
           }}
-          onRegisterBusiness={(data) => {
-            setInitialSignupData(data);
+          onOpenLegal={(page) => {
+            setActiveLegalPage(page);
+            window.history.pushState({}, "", `/${page}`);
+          }}
+          onOpenSignup={() => {
             setShowSignup(true);
             window.history.pushState({}, "", "/signup");
           }}
-          onLoginBusiness={async (data) => {
-            try {
-              const matchingTenant = tenants.find(
-                (t) => t.name.toLowerCase() === data.businessName.toLowerCase()
-              );
-              const res = await fetch("/api/auth/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  pin: data.pin,
-                  email: data.email,
-                  tenantId: matchingTenant ? matchingTenant.tenantId : undefined,
-                  restaurantName: data.businessName
-                })
-              });
-
-              if (res.status === 423) {
-                const errData = await res.json();
-                alert(`Access Blocked: ${errData.message}`);
-                return;
-              }
-
-              if (!res.ok) {
-                const errData = await res.json();
-                if (errData.locked) {
-                  alert(`Access locked: ${errData.message}`);
-                } else {
-                  alert(`Authentication failed: ${errData.message} (${errData.remainingAttempts} attempts remaining)`);
-                }
-                return;
-              }
-
-              const result = await res.json();
-              if (result.success) {
-                const loginTenant = result.tenant || tenants.find(
-                  (t) => t.name.toLowerCase() === data.businessName.toLowerCase()
-                );
-
-                if (loginTenant) {
-                  setActiveTenant(loginTenant);
-                  setTenants((prev) => {
-                    const exists = prev.some(t => t.tenantId === loginTenant.tenantId);
-                    return exists ? prev : [...prev, loginTenant];
-                  });
-                }
-
-                handleLoginSuccess(result.user, result.session.sessionId, result.tenant);
-                setActiveTab(result.user.permissions.includes("reports") ? "dashboard" : "billing");
-                alert(`Welcome back, ${result.user.name}!`);
-              }
-            } catch (err) {
-              console.warn("API login failed, logging in locally:", err);
-              const matchingStaff = staffList.find(
-                (s) => s.pin === data.pin && s.role === "Owner"
-              );
-
-              if (matchingStaff) {
-                const existingTenant = tenants.find(
-                  (t) => t.name.toLowerCase() === data.businessName.toLowerCase()
-                );
-
-                if (existingTenant) {
-                  setActiveTenant(existingTenant);
-                }
-
-                setCurrentStaff(matchingStaff);
-                setCurrentSessionId(`sess-${Date.now()}`);
-                setActiveTab("dashboard");
-                alert(`Logged in to terminal for "${data.businessName}".`);
-              } else {
-                const anyMatchingStaff = staffList.find((s) => s.pin === data.pin);
-                if (anyMatchingStaff) {
-                  setCurrentStaff(anyMatchingStaff);
-                  setCurrentSessionId(`sess-${Date.now()}`);
-                  setActiveTab(anyMatchingStaff.permissions.includes("reports") ? "dashboard" : "billing");
-                  alert(`Logged in to terminal as ${anyMatchingStaff.name} (${anyMatchingStaff.role}).`);
-                } else {
-                  alert("Could not authenticate. Verify your Owner Passcode PIN (Demo: 1111).");
-                }
-              }
-            }
-          }}
-          onOpenStaffTerminal={() => setShowTerminalLogin(true)}
         />
-        <AICopilot activeTenant={activeTenant} currentStaff={currentStaff} />
+        <AICopilot activeTenant={activeTenant} currentStaff={null} />
       </>
     );
   }

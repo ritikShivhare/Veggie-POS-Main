@@ -20,6 +20,8 @@ export interface AppContextType {
   setShowTerminalLogin: React.Dispatch<React.SetStateAction<boolean>>;
   handleRegisterTenant: (newTenant: RestaurantTenant) => void;
   handleSwitchTenant: (tenant: RestaurantTenant, qrToken?: string) => void;
+  handleConnectStoreCode: (codeOrName: string, qrToken?: string) => Promise<{ success: boolean; tenant?: RestaurantTenant; error?: string }>;
+  handleClearSavedStore: () => void;
 
   // Sync state & data lists
   menuItems: MenuItem[];
