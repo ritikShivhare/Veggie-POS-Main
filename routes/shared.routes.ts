@@ -168,9 +168,10 @@ router.post("/jobs/clear-logs", authMiddleware, (req, res) => {
 
 // Central Notification System Endpoints
 router.get("/notifications", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId || DEFAULT_TENANT_ID;
   try {
-    const inApp = await notificationService.getInAppNotifications(DEFAULT_TENANT_ID);
-    const logs = await notificationService.getDispatchLogs(DEFAULT_TENANT_ID);
+    const inApp = await notificationService.getInAppNotifications(tenantId);
+    const logs = await notificationService.getDispatchLogs(tenantId);
     res.json({
       success: true,
       notifications: inApp,
@@ -182,9 +183,10 @@ router.get("/notifications", authMiddleware, async (req, res) => {
 });
 
 router.post("/notifications/send", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId || DEFAULT_TENANT_ID;
   const { title, message, severity, channels, recipientEmail, recipientPhone, metadata } = req.body;
   try {
-    const result = await notificationService.send(DEFAULT_TENANT_ID, {
+    const result = await notificationService.send(tenantId, {
       title,
       message,
       severity: severity || "info",
@@ -203,9 +205,10 @@ router.post("/notifications/send", authMiddleware, async (req, res) => {
 });
 
 router.post("/notifications/read", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId || DEFAULT_TENANT_ID;
   const { id } = req.body;
   try {
-    const success = await notificationService.markAsRead(DEFAULT_TENANT_ID, id);
+    const success = await notificationService.markAsRead(tenantId, id);
     res.json({ success, message: success ? "Notification marked as read" : "Notification not found" });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -213,8 +216,9 @@ router.post("/notifications/read", authMiddleware, async (req, res) => {
 });
 
 router.post("/notifications/read-all", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId || DEFAULT_TENANT_ID;
   try {
-    await notificationService.markAllAsRead(DEFAULT_TENANT_ID);
+    await notificationService.markAllAsRead(tenantId);
     res.json({ success: true, message: "All notifications marked as read" });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -222,9 +226,10 @@ router.post("/notifications/read-all", authMiddleware, async (req, res) => {
 });
 
 router.delete("/notifications", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId || DEFAULT_TENANT_ID;
   const { id } = req.body;
   try {
-    const success = await notificationService.deleteNotification(DEFAULT_TENANT_ID, id);
+    const success = await notificationService.deleteNotification(tenantId, id);
     res.json({ success, message: success ? "Notification deleted" : "Notification not found" });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -232,8 +237,9 @@ router.delete("/notifications", authMiddleware, async (req, res) => {
 });
 
 router.post("/notifications/clear-logs", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId || DEFAULT_TENANT_ID;
   try {
-    await notificationService.clearDispatchLogs(DEFAULT_TENANT_ID);
+    await notificationService.clearDispatchLogs(tenantId);
     res.json({ success: true, message: "Dispatch history logs cleared" });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });

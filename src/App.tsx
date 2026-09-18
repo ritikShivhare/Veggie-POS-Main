@@ -148,7 +148,13 @@ function AppContent() {
     const fetchUnreadCount = async () => {
       if (!currentStaff) return;
       try {
-        const res = await fetch("/api/notifications");
+        const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+        const res = await fetch("/api/notifications", {
+          headers: {
+            "Content-Type": "application/json",
+            ...(sessId ? { Authorization: `Bearer ${sessId}`, "x-session-id": sessId } : {})
+          }
+        });
         const data = await res.json();
         if (data.success && data.notifications) {
           const unread = data.notifications.filter((n: any) => !n.read).length;
@@ -508,6 +514,7 @@ function AppContent() {
               onUpdateOrderStatus={handleUpdateOrderStatus}
               customers={customers}
               setCustomers={setCustomers}
+              activeTenant={activeTenant}
             />
           )}
 

@@ -1,6 +1,31 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import QRCode from "qrcode";
 import { MenuItem, Ingredient, Recipe, CartItem, Order, StaffMember, InventorySettings, OrderStatus, Customer } from "../shared/types";
-import { Search, ShoppingCart, Plus, Minus, Trash2, CheckCircle, AlertTriangle, MessageSquare, ChefHat, Receipt, CreditCard, Clock, Utensils, ChevronRight, Coins, Flame } from "lucide-react";
+import {
+  Search,
+  ShoppingCart,
+  Plus,
+  Minus,
+  Trash2,
+  CheckCircle,
+  AlertTriangle,
+  MessageSquare,
+  ChefHat,
+  Receipt,
+  CreditCard,
+  Clock,
+  Utensils,
+  ChevronRight,
+  Coins,
+  Flame,
+  Printer,
+  QrCode,
+  LayoutGrid,
+  Copy,
+  Check,
+  FileText,
+  X
+} from "lucide-react";
 
 interface POSBillingProps {
   menuItems: MenuItem[];
@@ -14,6 +39,7 @@ interface POSBillingProps {
   onUpdateOrderStatus: (orderId: string, status: OrderStatus, paymentMethod?: 'Cash' | 'UPI', paidAt?: string) => void;
   customers: Customer[];
   setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
+  activeTenant?: { name: string; tenantId?: string; vpa?: string };
 }
 
 export default function POSBilling({
@@ -27,7 +53,8 @@ export default function POSBilling({
   orders = [],
   onUpdateOrderStatus,
   customers = [],
-  setCustomers
+  setCustomers,
+  activeTenant
 }: POSBillingProps) {
   const [billingTab, setBillingTab] = useState<"catalog" | "billing">("catalog");
   const [billingOrder, setBillingOrder] = useState<Order | null>(null);
@@ -52,6 +79,14 @@ export default function POSBilling({
   const [selectedPayment, setSelectedPayment] = useState<"Cash" | "UPI">("UPI");
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [receivedAmount, setReceivedAmount] = useState<string>("");
+  const [upiQrDataUrl, setUpiQrDataUrl] = useState<string | null>(null);
+  const [upiCopied, setUpiCopied] = useState(false);
+
+  // Printing & Floor Map Modals
+  const [receiptModalOrder, setReceiptModalOrder] = useState<Order | null>(null);
+  const [kotModalOrder, setKotModalOrder] = useState<Order | null>(null);
+  const [showFloorMap, setShowFloorMap] = useState<boolean>(false);
+  const [billsFilter, setBillsFilter] = useState<"unpaid" | "settled" | "all">("unpaid");
 
   // Order Cancellation Modal State (Problem 1)
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
@@ -332,6 +367,49 @@ export default function POSBilling({
   const actualReceived = isNaN(parsedReceived) ? 0 : parsedReceived;
   const changeDue = Math.max(0, actualReceived - orderAmount);
 
+  // Dynamic UPI QR Code generator based on current settlement amount
+  useEffect(() => {
+    if (!showPaymentModal || selectedPayment !== "UPI") {
+      setUpiQrDataUrl(null);
+      return;
+    }
+
+    const currentAmount = billingOrder ? billingOrder.total : total;
+    const vpa = activeTenant?.vpa || "veggiepos@upi";
+    const brandName = encodeURIComponent(activeTenant?.name || "Veggie POS");
+    const note = encodeURIComponent(`Order ${billingOrder?.orderNumber || "New"}`);
+    const upiUri = `upi://pay?pa=${vpa}&pn=${brandName}&am=${currentAmount.toFixed(2)}&cu=INR&tn=${note}`;
+
+    QRCode.toDataURL(upiUri, {
+      width: 260,
+      margin: 1,
+      color: {
+        dark: "#181A18",
+        light: "#FFFFFF"
+      },
+      errorCorrectionLevel: "M"
+    })
+      .then((url) => setUpiQrDataUrl(url))
+      .catch((err) => console.error("Error generating UPI QR Code:", err));
+  }, [showPaymentModal, selectedPayment, billingOrder, total, activeTenant]);
+
+  // Table Occupancy Status Helper (Occupied, Dining, Billing, Vacant)
+  const getTableOccupancy = (tbl: string) => {
+    const tableOrder = orders.find(
+      (o) => o.tableNo === tbl && (!o.paidAt || !o.paymentMethod)
+    );
+    if (!tableOrder) {
+      return { status: "Vacant" as const, order: null, badgeBg: "bg-emerald-50 text-emerald-700 border-emerald-200", dotBg: "bg-emerald-500" };
+    }
+    if (tableOrder.status === "Ready" || tableOrder.status === "Completed") {
+      return { status: "Billing" as const, order: tableOrder, badgeBg: "bg-purple-50 text-purple-700 border-purple-200", dotBg: "bg-purple-500" };
+    }
+    if (tableOrder.status === "Preparing") {
+      return { status: "Dining" as const, order: tableOrder, badgeBg: "bg-blue-50 text-blue-700 border-blue-200", dotBg: "bg-blue-500" };
+    }
+    return { status: "In Kitchen" as const, order: tableOrder, badgeBg: "bg-amber-50 text-amber-700 border-amber-200", dotBg: "bg-amber-500" };
+  };
+
   // Submit order to kitchen (KDS)
   const handleSubmitOrderToKitchen = () => {
     if (cart.length === 0) return;
@@ -446,26 +524,32 @@ export default function POSBilling({
     setSelectedCustomerId("");
     setRedeemPoints(false);
     setShowCartOnMobile(false);
-    alert(`Order #${randomNum} placed successfully and dispatched to Kitchen Display System (KDS)!`);
+    // Open KOT ticket print modal for immediate kitchen ticket printing
+    setKotModalOrder(newOrder);
   };
 
   // Settle billing & payment for a kitchen order
   const handleSettleOrderPayment = () => {
     if (!billingOrder) return;
 
+    const paidTimestamp = new Date().toISOString();
+    const completedOrder: Order = {
+      ...billingOrder,
+      status: "Completed",
+      paymentMethod: selectedPayment,
+      paidAt: paidTimestamp
+    };
+
     // Update existing order status to Completed and record payment details
     onUpdateOrderStatus(
       billingOrder.id,
       "Completed",
       selectedPayment,
-      new Date().toISOString()
+      paidTimestamp
     );
 
-    let settlementMsg = `Order #${billingOrder.orderNumber} successfully paid & settled via ${selectedPayment}!`;
-    if (selectedPayment === "Cash" && receivedAmount) {
-      settlementMsg += `\n\nAmount Received: INR ${actualReceived.toFixed(2)}\nChange Returned: INR ${changeDue.toFixed(2)}`;
-    }
-    alert(settlementMsg);
+    // Prompt immediate thermal receipt printing
+    setReceiptModalOrder(completedOrder);
     setBillingOrder(null);
     setShowPaymentModal(false);
     setReceivedAmount("");
@@ -531,6 +615,23 @@ export default function POSBilling({
               {/* Active User & Cash Drawer Actions */}
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => setShowFloorMap(!showFloorMap)}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm border ${
+                    showFloorMap
+                      ? "bg-blue-50 text-blue-700 border-blue-300"
+                      : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200"
+                  }`}
+                  title="Live Visual Floor Map & Table Status"
+                  id="pos-floor-map-toggle-btn"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
+                  <span className="hidden sm:inline">Floor Map</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 font-mono text-blue-800">
+                    {orderType === "Dine-In" ? tableNo : "Takeaway"}
+                  </span>
+                </button>
+
+                <button
                   onClick={() => {
                     setShowDrawerPopModal(true);
                     setDrawerPopReason("");
@@ -549,6 +650,64 @@ export default function POSBilling({
                 </div>
               </div>
             </div>
+
+            {/* Live Interactive Visual Floor Map (Collapsible) */}
+            {showFloorMap && (
+              <div className="mb-5 bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm animate-fade-in shrink-0">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-slate-800">Restaurant Floor Map</span>
+                    <span className="text-xs text-slate-500 font-mono">Live Table Status</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-[10px] font-semibold text-slate-500">
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Vacant</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> In Kitchen</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> Dining</span>
+                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500" /> Billing</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2.5">
+                  {["T-01", "T-02", "T-03", "T-04", "T-05", "T-06", "T-07", "T-08"].map((tbl) => {
+                    const occ = getTableOccupancy(tbl);
+                    const isSelected = orderType === "Dine-In" && tableNo === tbl;
+                    return (
+                      <button
+                        key={tbl}
+                        onClick={() => {
+                          setTableNo(tbl);
+                          setOrderType("Dine-In");
+                          if (occ.order) {
+                            // If table already has active order, allow easy switch to view bill or add more items
+                          }
+                        }}
+                        className={`p-3 rounded-xl border text-left transition flex flex-col justify-between select-none ${
+                          isSelected
+                            ? "ring-2 ring-blue-500 border-blue-500 bg-blue-50/20 shadow-sm"
+                            : "bg-slate-50/60 hover:bg-slate-100/80 border-slate-200"
+                        }`}
+                        id={`pos-table-card-${tbl}`}
+                      >
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="font-bold font-mono text-xs text-slate-800">{tbl}</span>
+                          <span className={`w-2 h-2 rounded-full ${occ.dotBg}`} />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border inline-block w-fit ${occ.badgeBg}`}>
+                            {occ.status}
+                          </span>
+                          {occ.order && (
+                            <span className="text-[10px] font-mono text-slate-600 mt-1 font-semibold">
+                              INR {occ.order.total.toFixed(0)}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Category horizontal scroll list */}
             <div className="flex items-center space-x-2 overflow-x-auto pb-3 shrink-0 scrollbar-none">
@@ -656,37 +815,89 @@ export default function POSBilling({
         ) : (
           /* BILLING TAB VIEW: Dynamic Kitchen Orders Settlement Center */
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-3 shrink-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-slate-200 pb-3 shrink-0">
               <div>
-                <h2 className="font-display font-bold text-slate-800 text-base">Active Orders Settlement</h2>
-                <p className="text-slate-500 text-xs mt-0.5">Select ready/served orders from kitchen to collect payments and settle bills.</p>
+                <h2 className="font-display font-bold text-slate-800 text-base">Bills & Settlement Register</h2>
+                <p className="text-slate-500 text-xs mt-0.5">Collect payments, print official ESC/POS thermal receipts, and view live order slips.</p>
               </div>
-              <span className="bg-slate-100 px-3 py-1 rounded-full font-mono text-xs text-slate-600 font-bold border border-slate-200/60">
-                {orders.filter(o => !o.paidAt || !o.paymentMethod).length} Pending Bills
-              </span>
+              
+              {/* Filter Tabs: Unpaid vs Settled vs All */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/60">
+                <button
+                  onClick={() => setBillsFilter("unpaid")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    billsFilter === "unpaid"
+                      ? "bg-white text-blue-600 shadow-sm"
+                      : "text-slate-600 hover:text-slate-800"
+                  }`}
+                  id="pos-bills-filter-unpaid"
+                >
+                  <span>Pending</span>
+                  <span className="bg-rose-500 text-white text-[10px] font-mono px-1.5 py-0.2 rounded-full">
+                    {orders.filter(o => !o.paidAt || !o.paymentMethod).length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setBillsFilter("settled")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    billsFilter === "settled"
+                      ? "bg-white text-emerald-600 shadow-sm"
+                      : "text-slate-600 hover:text-slate-800"
+                  }`}
+                  id="pos-bills-filter-settled"
+                >
+                  <span>Settled</span>
+                  <span className="bg-emerald-100 text-emerald-700 text-[10px] font-mono px-1.5 py-0.2 rounded-full">
+                    {orders.filter(o => Boolean(o.paidAt && o.paymentMethod)).length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setBillsFilter("all")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                    billsFilter === "all"
+                      ? "bg-white text-slate-800 shadow-sm"
+                      : "text-slate-600 hover:text-slate-800"
+                  }`}
+                  id="pos-bills-filter-all"
+                >
+                  <span>All ({orders.length})</span>
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto pr-1">
-              {orders.filter(o => !o.paidAt || !o.paymentMethod).length === 0 ? (
+              {orders.filter(o => {
+                if (billsFilter === "unpaid") return !o.paidAt || !o.paymentMethod;
+                if (billsFilter === "settled") return Boolean(o.paidAt && o.paymentMethod);
+                return true;
+              }).length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                   <span className="text-5xl filter grayscale mb-3">🛎️</span>
-                  <h3 className="text-sm font-bold text-slate-700">All Bills Settled!</h3>
+                  <h3 className="text-sm font-bold text-slate-700">No orders found in this view</h3>
                   <p className="text-xs text-slate-400 max-w-xs mt-1.5 leading-relaxed">
-                    There are no unpaid orders right now. New orders taken by waiters will appear here for checkout once they are sent to the KDS.
+                    {billsFilter === "unpaid"
+                      ? "There are no unpaid orders right now. New orders taken by waiters will appear here for checkout once dispatched to KDS."
+                      : "No settled orders recorded yet in this session."}
                   </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                   {orders
-                    .filter(o => !o.paidAt || !o.paymentMethod)
+                    .filter(o => {
+                      if (billsFilter === "unpaid") return !o.paidAt || !o.paymentMethod;
+                      if (billsFilter === "settled") return Boolean(o.paidAt && o.paymentMethod);
+                      return true;
+                    })
                     .map((order) => {
-                      // Color schemes based on order status (Pending/Preparing vs Ready/Served)
+                      const isPaid = Boolean(order.paidAt && order.paymentMethod);
                       const isReady = order.status === "Ready" || order.status === "Completed";
                       return (
                         <div
                           key={order.id}
                           className={`bg-white border rounded-2xl p-5 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between ${
-                            isReady
+                            isPaid
+                              ? "border-emerald-300 bg-emerald-50/10 shadow-emerald-500/5"
+                              : isReady
                               ? "border-emerald-500/35 bg-emerald-50/15 shadow-emerald-500/5 ring-1 ring-emerald-500/10"
                               : "border-slate-200"
                           }`}
@@ -697,7 +908,9 @@ export default function POSBilling({
                             <div className="flex justify-between items-start mb-3">
                               <div>
                                 <span className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded border ${
-                                  isReady
+                                  isPaid
+                                    ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                    : isReady
                                     ? "text-emerald-700 bg-emerald-50 border-emerald-200"
                                     : "text-slate-500 bg-slate-100 border-slate-200"
                                 }`}>
@@ -706,7 +919,12 @@ export default function POSBilling({
                                 <h4 className="font-bold text-slate-800 text-sm mt-1.5">Order #{order.orderNumber}</h4>
                               </div>
                               <div className="flex flex-col items-end">
-                                {isReady ? (
+                                {isPaid ? (
+                                  <span className="text-[10px] bg-emerald-600 text-white font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                                    <Check className="w-3 h-3" />
+                                    <span>Paid ({order.paymentMethod})</span>
+                                  </span>
+                                ) : isReady ? (
                                   <span className="text-[10px] bg-emerald-500 text-white font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm animate-pulse">
                                     <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
                                     <span>Served / Ready</span>
@@ -743,6 +961,11 @@ export default function POSBilling({
                                   <div key={index} className="flex justify-between text-xs text-slate-600 font-medium">
                                     <span>
                                       {item.quantity}x {itemName}
+                                      {item.note && (
+                                        <span className="block text-[10px] text-amber-700 italic">
+                                          Note: {item.note}
+                                        </span>
+                                      )}
                                     </span>
                                     <span className="font-mono text-slate-700">
                                       INR {item.quantity * itemPrice}
@@ -753,45 +976,72 @@ export default function POSBilling({
                             </div>
                           </div>
 
-                          {/* Order Totals & Settle Action */}
+                          {/* Order Totals & Action Controls */}
                           <div className="border-t border-slate-100 pt-4 mt-4">
                             <div className="flex justify-between items-center text-xs mb-3">
-                              <span className="text-slate-500 font-semibold">Total Amount Due:</span>
+                              <span className="text-slate-500 font-semibold">
+                                {isPaid ? "Total Paid:" : "Total Amount Due:"}
+                              </span>
                               <span className="font-bold font-mono text-slate-800 text-sm">
                                 INR {order.total.toFixed(2)}
                               </span>
                             </div>
-                            <div className="flex gap-2">
+                            
+                            <div className="flex flex-wrap gap-2">
+                              {/* Print KOT Slip Button */}
                               <button
-                                onClick={() => {
-                                  setCancelModalOrder(order);
-                                  setCancelReason("");
-                                  setCancelManagerPin("");
-                                  setCancelError(null);
-                                }}
-                                className="px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition flex items-center justify-center gap-1 shrink-0"
-                                title="Cancel / Void Order (Manager PIN Required)"
-                                id={`pos-cancel-btn-${order.id}`}
+                                onClick={() => setKotModalOrder(order)}
+                                className="px-2.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition flex items-center justify-center gap-1"
+                                title="Print Kitchen Order Ticket (KOT Slip)"
+                                id={`pos-print-kot-btn-${order.id}`}
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Void</span>
+                                <ChefHat className="w-3.5 h-3.5 text-slate-600" />
+                                <span>KOT</span>
                               </button>
-                              <button
-                                onClick={() => {
-                                  setBillingOrder(order);
-                                  setReceivedAmount(order.total.toFixed(2));
-                                  setShowPaymentModal(true);
-                                }}
-                                className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 select-none ${
-                                  isReady
-                                    ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98]"
-                                    : "bg-slate-100 hover:bg-slate-200 text-slate-600 active:scale-[0.98]"
-                                }`}
-                                id={`pos-settle-btn-${order.id}`}
-                              >
-                                <Coins className="w-3.5 h-3.5" />
-                                <span>{isReady ? "Collect & Settle Bill" : "Pre-Settle Payment"}</span>
-                              </button>
+
+                              {!isPaid ? (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setCancelModalOrder(order);
+                                      setCancelReason("");
+                                      setCancelManagerPin("");
+                                      setCancelError(null);
+                                    }}
+                                    className="px-2.5 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 transition flex items-center justify-center gap-1"
+                                    title="Cancel / Void Order (Manager PIN Required)"
+                                    id={`pos-cancel-btn-${order.id}`}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <span>Void</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setBillingOrder(order);
+                                      setReceivedAmount(order.total.toFixed(2));
+                                      setShowPaymentModal(true);
+                                    }}
+                                    className={`flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 select-none ${
+                                      isReady
+                                        ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98]"
+                                        : "bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-[0.98]"
+                                    }`}
+                                    id={`pos-settle-btn-${order.id}`}
+                                  >
+                                    <Coins className="w-3.5 h-3.5" />
+                                    <span>{isReady ? "Collect & Settle Bill" : "Pre-Settle"}</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => setReceiptModalOrder(order)}
+                                  className="flex-1 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98]"
+                                  id={`pos-print-receipt-btn-${order.id}`}
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                  <span>Print Thermal Receipt</span>
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1184,25 +1434,73 @@ export default function POSBilling({
                 <span className="text-blue-600 font-bold font-mono uppercase">{selectedPayment}</span>
               </div>
 
-              {/* Amount Received Input */}
-              <div className="border-t border-slate-200/60 pt-3 space-y-2">
-                <label className="block text-[11px] font-semibold text-slate-500">
-                  Payment Received:
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-slate-400 font-bold text-xs">INR</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={receivedAmount}
-                    onChange={(e) => setReceivedAmount(e.target.value)}
-                    className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-xs font-bold font-mono text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    placeholder="0.00"
-                  />
-                </div>
+              {/* DYNAMIC UPI QR CODE DISPLAY */}
+              {selectedPayment === "UPI" && (
+                <div className="border-t border-slate-200/60 pt-3 flex flex-col items-center text-center space-y-2.5">
+                  <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center">
+                    {upiQrDataUrl ? (
+                      <img
+                        src={upiQrDataUrl}
+                        alt="Dynamic UPI QR Code"
+                        className="w-44 h-44 rounded-xl object-contain"
+                      />
+                    ) : (
+                      <div className="w-44 h-44 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl">
+                        <QrCode className="w-8 h-8 animate-pulse mb-1 text-slate-300" />
+                        <span className="text-[10px]">Generating UPI QR...</span>
+                      </div>
+                    )}
+                    <span className="text-[10px] font-mono text-slate-500 font-bold mt-1">
+                      {activeTenant?.vpa || "veggiepos@upi"}
+                    </span>
+                  </div>
 
-                {/* Quick denomination buttons for cash */}
-                {selectedPayment === "Cash" && (
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-bold text-slate-700">
+                      Scan with Any UPI App
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      Google Pay, PhonePe, Paytm, BHIM, Cred • Auto-fills ₹{orderAmount.toFixed(2)}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const vpa = activeTenant?.vpa || "veggiepos@upi";
+                      const brandName = encodeURIComponent(activeTenant?.name || "Veggie POS");
+                      const upiUri = `upi://pay?pa=${vpa}&pn=${brandName}&am=${orderAmount.toFixed(2)}&cu=INR&tn=Order${billingOrder?.orderNumber || "Bill"}`;
+                      navigator.clipboard?.writeText(upiUri);
+                      setUpiCopied(true);
+                      setTimeout(() => setUpiCopied(false), 2000);
+                    }}
+                    className="text-[10px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 bg-blue-50 hover:bg-blue-100/80 px-2.5 py-1 rounded-lg transition"
+                  >
+                    {upiCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    <span>{upiCopied ? "UPI URI Copied!" : "Copy UPI Link"}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Amount Received Input (for Cash) */}
+              {selectedPayment === "Cash" && (
+                <div className="border-t border-slate-200/60 pt-3 space-y-2">
+                  <label className="block text-[11px] font-semibold text-slate-500">
+                    Cash Tender Received:
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-slate-400 font-bold text-xs">INR</span>
+                    <input
+                      type="number"
+                      step="any"
+                      value={receivedAmount}
+                      onChange={(e) => setReceivedAmount(e.target.value)}
+                      className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-lg text-xs font-bold font-mono text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  {/* Quick denomination buttons for cash */}
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     <button
                       type="button"
@@ -1225,16 +1523,14 @@ export default function POSBilling({
                         </button>
                       ))}
                   </div>
-                )}
-              </div>
 
-              {/* Change due calculation */}
-              {selectedPayment === "Cash" && (
-                <div className="flex justify-between items-center border-t border-slate-200/60 pt-3 text-slate-500">
-                  <span className="font-semibold text-slate-600">Change Due:</span>
-                  <span className={`font-bold font-mono text-sm ${changeDue > 0 ? "text-emerald-600" : "text-slate-700"}`}>
-                    INR {changeDue.toFixed(2)}
-                  </span>
+                  {/* Change due calculation */}
+                  <div className="flex justify-between items-center border-t border-slate-200/60 pt-3 text-slate-500">
+                    <span className="font-semibold text-slate-600">Change Due:</span>
+                    <span className={`font-bold font-mono text-sm ${changeDue > 0 ? "text-emerald-600" : "text-slate-700"}`}>
+                      INR {changeDue.toFixed(2)}
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -1248,10 +1544,11 @@ export default function POSBilling({
               </button>
               <button
                 onClick={handleSettleOrderPayment}
-                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition duration-150 shadow-md shadow-blue-600/10"
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs transition duration-150 shadow-md shadow-blue-600/10 flex items-center justify-center gap-1.5"
                 id="pos-confirm-payment-btn"
               >
-                Settle & Complete Bill
+                <Printer className="w-3.5 h-3.5" />
+                <span>Settle & Print Receipt</span>
               </button>
             </div>
           </div>
@@ -1483,6 +1780,233 @@ export default function POSBilling({
                 id="pos-confirm-discount-btn"
               >
                 Authorize & Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* THERMAL RECEIPT & TAX INVOICE PRINT MODAL */}
+      {receiptModalOrder && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in">
+          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto text-slate-900">
+            {/* Modal Header Actions (Excluded from print) */}
+            <div className="no-print bg-slate-100 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Printer className="w-4 h-4 text-emerald-600" />
+                <span className="text-xs font-bold text-slate-800">Thermal Receipt Preview (80mm)</span>
+              </div>
+              <button
+                onClick={() => setReceiptModalOrder(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg transition"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Printable Thermal Receipt Container */}
+            <div className="p-6 overflow-y-auto max-h-[70vh] bg-white">
+              <div className="printable-thermal-receipt bg-white text-black p-4 border border-dashed border-slate-300 rounded font-mono text-[11px] leading-relaxed mx-auto">
+                <div className="text-center pb-2 border-b border-dashed border-slate-400">
+                  <h2 className="text-sm font-black uppercase tracking-wider">
+                    {activeTenant?.name || "VEGGIE RESTAURANT & POS"}
+                  </h2>
+                  <p className="text-[10px] text-slate-600">Pure Vegetarian Hospitality Suite</p>
+                  <p className="text-[9px] text-slate-500 mt-0.5">GSTIN: 27AAAAA0000A1Z5</p>
+                  <p className="text-[10px] font-bold mt-1 uppercase">*** TAX INVOICE ***</p>
+                </div>
+
+                <div className="py-2 border-b border-dashed border-slate-400 space-y-0.5 text-[10px]">
+                  <div className="flex justify-between">
+                    <span>Invoice #: REC-{receiptModalOrder.orderNumber}</span>
+                    <span>{receiptModalOrder.type}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Date: {new Date(receiptModalOrder.date).toLocaleDateString()}</span>
+                    <span>Time: {new Date(receiptModalOrder.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  {receiptModalOrder.tableNo && (
+                    <div className="flex justify-between font-bold">
+                      <span>Table: {receiptModalOrder.tableNo}</span>
+                      <span>Server: {receiptModalOrder.cashierName || currentStaff.name}</span>
+                    </div>
+                  )}
+                  {receiptModalOrder.customerName && (
+                    <div className="flex justify-between text-slate-700">
+                      <span>Customer: {receiptModalOrder.customerName}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Items Table */}
+                <div className="py-2 border-b border-dashed border-slate-400">
+                  <div className="flex justify-between font-bold pb-1 text-[10px] border-b border-slate-200">
+                    <span className="w-1/2">ITEM</span>
+                    <span className="w-1/6 text-center">QTY</span>
+                    <span className="w-1/6 text-right">RATE</span>
+                    <span className="w-1/6 text-right">AMT</span>
+                  </div>
+                  <div className="pt-1.5 space-y-1">
+                    {(receiptModalOrder.items || []).map((item, idx) => (
+                      <div key={idx} className="flex justify-between text-[10px]">
+                        <span className="w-1/2 truncate">{item.menuItem.name}</span>
+                        <span className="w-1/6 text-center">{item.quantity}</span>
+                        <span className="w-1/6 text-right font-mono">{item.menuItem.price}</span>
+                        <span className="w-1/6 text-right font-mono">{(item.quantity * item.menuItem.price).toFixed(0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Bill Calculation Summary */}
+                <div className="py-2 border-b border-dashed border-slate-400 space-y-1 text-[10px]">
+                  <div className="flex justify-between">
+                    <span>Subtotal</span>
+                    <span className="font-mono">INR {receiptModalOrder.subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600">
+                    <span>CGST + SGST (5%)</span>
+                    <span className="font-mono">INR {receiptModalOrder.tax.toFixed(2)}</span>
+                  </div>
+                  {receiptModalOrder.discount && receiptModalOrder.discount > 0 && (
+                    <div className="flex justify-between text-emerald-700 font-semibold">
+                      <span>Loyalty/Discount</span>
+                      <span className="font-mono">-INR {receiptModalOrder.discount.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-black text-xs pt-1 border-t border-slate-300">
+                    <span>GRAND TOTAL</span>
+                    <span className="font-mono text-sm">INR {receiptModalOrder.total.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Payment Status Info */}
+                <div className="py-2 border-b border-dashed border-slate-400 text-center text-[10px] space-y-0.5">
+                  <p className="font-bold uppercase tracking-wider text-emerald-800">
+                    PAID VIA {receiptModalOrder.paymentMethod || "CASH / UPI"}
+                  </p>
+                  <p className="text-[9px] text-slate-500 font-mono">
+                    Settled: {new Date(receiptModalOrder.paidAt || Date.now()).toLocaleTimeString()}
+                  </p>
+                </div>
+
+                {/* Footer Message */}
+                <div className="text-center pt-2 space-y-0.5 text-[9px] text-slate-600">
+                  <p className="font-semibold">Thank you for dining with us!</p>
+                  <p>Have a wonderful day ahead.</p>
+                  <p className="font-mono text-[8px] text-slate-400 mt-1">*** POWERED BY VEGGIEPOS ENTERPRISE ***</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Bottom Buttons */}
+            <div className="no-print p-4 bg-slate-50 border-t border-slate-200 flex gap-2">
+              <button
+                onClick={() => setReceiptModalOrder(null)}
+                className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition"
+              >
+                Done
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5"
+                id="pos-print-receipt-confirm-btn"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print Receipt</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KITCHEN ORDER TICKET (KOT) PRINT MODAL */}
+      {kotModalOrder && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in">
+          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto text-slate-900">
+            {/* Modal Header Actions */}
+            <div className="no-print bg-slate-100 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ChefHat className="w-4 h-4 text-amber-600" />
+                <span className="text-xs font-bold text-slate-800">Kitchen Slip (KOT)</span>
+              </div>
+              <button
+                onClick={() => setKotModalOrder(null)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg transition"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Printable KOT Slip */}
+            <div className="p-6 overflow-y-auto max-h-[70vh] bg-white">
+              <div className="printable-thermal-receipt bg-white text-black p-4 border border-dashed border-slate-400 rounded font-mono text-[11px] leading-relaxed mx-auto">
+                <div className="text-center pb-2 border-b-2 border-dashed border-black">
+                  <h2 className="text-base font-black tracking-wider">
+                    *** KITCHEN ORDER TICKET ***
+                  </h2>
+                  <p className="text-xs font-bold uppercase mt-0.5">
+                    {kotModalOrder.type} {kotModalOrder.tableNo ? `• TABLE ${kotModalOrder.tableNo}` : ""}
+                  </p>
+                </div>
+
+                <div className="py-2 border-b border-dashed border-black space-y-0.5 text-[10px]">
+                  <div className="flex justify-between font-bold">
+                    <span>KOT #: {kotModalOrder.orderNumber}</span>
+                    <span>TIME: {new Date(kotModalOrder.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Server: {kotModalOrder.cashierName || currentStaff.name}</span>
+                    <span>Date: {new Date(kotModalOrder.date).toLocaleDateString()}</span>
+                  </div>
+                  {kotModalOrder.customerName && (
+                    <div>
+                      <span>Cust: {kotModalOrder.customerName}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Items List for Chefs */}
+                <div className="py-3 border-b-2 border-dashed border-black space-y-2">
+                  {(kotModalOrder.items || []).map((item, idx) => (
+                    <div key={idx} className="border-b border-dotted border-slate-300 pb-1.5 last:border-0">
+                      <div className="flex justify-between items-baseline font-bold text-xs">
+                        <span className="text-sm font-black">{item.quantity}x</span>
+                        <span className="flex-1 ml-2 font-black uppercase">{item.menuItem.name}</span>
+                      </div>
+                      {item.note && (
+                        <div className="bg-slate-100 p-1 rounded font-bold text-[10px] text-red-700 mt-0.5">
+                          NOTE: {item.note}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="pt-2 text-center text-[10px] font-bold">
+                  <span>TOTAL ITEMS: {(kotModalOrder.items || []).reduce((s, i) => s + i.quantity, 0)}</span>
+                  <p className="text-[9px] text-slate-500 font-normal mt-0.5">Dispatched to Kitchen Display System</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Bottom Buttons */}
+            <div className="no-print p-4 bg-slate-50 border-t border-slate-200 flex gap-2">
+              <button
+                onClick={() => setKotModalOrder(null)}
+                className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition"
+              >
+                Dismiss
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-amber-600/20 flex items-center justify-center gap-1.5"
+                id="pos-print-kot-confirm-btn"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print KOT Slip</span>
               </button>
             </div>
           </div>

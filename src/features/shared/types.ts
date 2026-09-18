@@ -75,6 +75,7 @@ export interface Order {
   items: CartItem[];
   subtotal: number;
   tax: number;
+  discount?: number;
   total: number;
   status: OrderStatus;
   paymentMethod?: 'Cash' | 'UPI';

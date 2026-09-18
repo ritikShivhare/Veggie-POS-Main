@@ -55,3 +55,42 @@ h1, h2, h3, .font-serif {
     scroll-behavior: auto !important;
   }
 }
+
+/* Thermal POS Printing Standard Styles (80mm / 58mm ESC/POS) */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  body * {
+    visibility: hidden;
+  }
+
+  .printable-thermal-receipt,
+  .printable-thermal-receipt * {
+    visibility: visible;
+  }
+
+  .printable-thermal-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 76mm;
+    margin: 0 auto;
+    padding: 6mm 4mm;
+    font-family: 'JetBrains Mono', monospace, Courier, monospace;
+    font-size: 11px;
+    line-height: 1.35;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
