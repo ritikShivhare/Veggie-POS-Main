@@ -56,24 +56,10 @@ export default function NotificationCenter() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<any[] | null>(null);
 
-  const getAuthHeaders = (): Record<string, string> => {
-    const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json"
-    };
-    if (sessId) {
-      headers["Authorization"] = `Bearer ${sessId}`;
-      headers["x-session-id"] = sessId;
-    }
-    return headers;
-  };
-
   const fetchNotificationData = async (silent = false) => {
     if (!silent) setRefreshing(true);
     try {
-      const res = await fetch("/api/notifications", {
-        headers: getAuthHeaders()
-      });
+      const res = await fetch("/api/notifications");
       const data = await res.json();
       if (data.success) {
         setNotifications(data.notifications || []);
@@ -97,7 +83,7 @@ export default function NotificationCenter() {
     try {
       const res = await fetch("/api/notifications/read", {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
       const data = await res.json();
@@ -114,10 +100,7 @@ export default function NotificationCenter() {
 
   const handleMarkAllAsRead = async () => {
     try {
-      const res = await fetch("/api/notifications/read-all", {
-        method: "POST",
-        headers: getAuthHeaders()
-      });
+      const res = await fetch("/api/notifications/read-all", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
@@ -131,7 +114,7 @@ export default function NotificationCenter() {
     try {
       const res = await fetch("/api/notifications", {
         method: "DELETE",
-        headers: getAuthHeaders(),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
       const data = await res.json();
@@ -146,10 +129,7 @@ export default function NotificationCenter() {
   const handleClearLogs = async () => {
     if (!window.confirm("Confirm clearing the multi-channel dispatch log history?")) return;
     try {
-      const res = await fetch("/api/notifications/clear-logs", {
-        method: "POST",
-        headers: getAuthHeaders()
-      });
+      const res = await fetch("/api/notifications/clear-logs", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         setDispatchLogs([]);
@@ -176,7 +156,7 @@ export default function NotificationCenter() {
     try {
       const res = await fetch("/api/notifications/send", {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
           message,

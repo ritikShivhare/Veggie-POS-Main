@@ -334,16 +334,16 @@ export class Database {
       return null;
     }
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     const isConfigured = 
       supabaseUrl &&
       supabaseKey &&
       supabaseUrl !== "YOUR_SUPABASE_URL" &&
-      supabaseKey !== "YOUR_SUPABASE_ANON_KEY";
+      supabaseKey !== "YOUR_SUPABASE_SERVICE_ROLE_KEY";
 
     if (process.env.NODE_ENV === "production" && !isConfigured) {
-      console.warn("⚠️ Supabase connection keys (SUPABASE_URL, SUPABASE_ANON_KEY) are not set or default. Operating in resilient in-memory storage fallback mode.");
+      console.warn("⚠️ Supabase connection keys (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) are not set or default. Operating in resilient in-memory storage fallback mode.");
     }
 
     if (isConfigured) {
@@ -508,6 +508,7 @@ export class Database {
           console.warn(`Supabase table ${tableName} is not available or restricted by RLS for write. Cached changes locally in memory for tenant ${tenantId}.`);
         } else {
           console.error(`Failed to bulk sync table ${tableName} in Supabase for tenant ${tenantId}:`, errMsg);
+          throw new Error(`Failed to save ${tableName}: ${errMsg}`);
         }
       }
     });
@@ -756,6 +757,7 @@ export class Database {
           console.warn(`Supabase table ${tableName === "settings" ? "settings" : "tenant_objects"} is not available or restricted by RLS for write. Cached changes in local memory for tenant ${tenantId}.`);
         } else {
           console.error(`Failed to save object ${sliceKey} in Supabase for tenant ${tenantId}:`, errMsg);
+          throw new Error(`Failed to save ${sliceKey}: ${errMsg}`);
         }
       }
     });

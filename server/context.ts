@@ -148,9 +148,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     return next();
   }
 
-  const authHeader = req.headers.authorization;
-  const bearerToken = authHeader && authHeader.startsWith("Bearer ") ? authHeader.substring(7).trim() : null;
-  const sessionId = bearerToken || (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || (req.body.sessionId as string);
+  const sessionId = (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || (req.body.sessionId as string);
 
   if (!sessionId) {
     return res.status(401).json({
