@@ -10,7 +10,13 @@ const TABLE_MAP: Record<string, string> = {
   orders: "orders",
   customers: "customers",
   shifts: "shifts",
-  settings: "settings"
+  settings: "settings",
+  idempotency_keys: "idempotency_keys",
+  orderItems: "order_items",
+  order_items: "order_items",
+  payments: "payments",
+  inventoryMovements: "inventory_movements",
+  inventory_movements: "inventory_movements"
 };
 
 const isRlsErrorMessage = (msg: string): boolean => {
@@ -309,13 +315,125 @@ class TenantLockManager {
   }
 }
 
+export class DatabaseUnavailableError extends Error {
+  public code = "DATABASE_UNAVAILABLE";
+  public status = 503;
+  public statusCode = 503;
+
+  constructor(message: string = "Database is unavailable. Writes cannot be committed.") {
+    super(message);
+    this.name = "DatabaseUnavailableError";
+    Object.setPrototypeOf(this, DatabaseUnavailableError.prototype);
+  }
+}
+
+export class OptimisticLockConflictError extends Error {
+  public code = "OPTIMISTIC_LOCK_CONFLICT";
+  public status = 409;
+  public statusCode = 409;
+  public entityId?: string;
+  public expectedVersion?: number;
+  public currentVersion?: number;
+
+  constructor(
+    message: string = "Optimistic lock conflict: stale update rejected.",
+    details?: { entityId?: string; expectedVersion?: number; currentVersion?: number }
+  ) {
+    super(message);
+    this.name = "OptimisticLockConflictError";
+    this.status = 409;
+    this.statusCode = 409;
+    this.code = "OPTIMISTIC_LOCK_CONFLICT";
+    if (details) {
+      this.entityId = details.entityId;
+      this.expectedVersion = details.expectedVersion;
+      this.currentVersion = details.currentVersion;
+    }
+    Object.setPrototypeOf(this, OptimisticLockConflictError.prototype);
+  }
+}
+
+export class TransactionRollbackError extends Error {
+  public code = "TRANSACTION_ROLLBACK";
+  public status = 400;
+  public statusCode = 400;
+
+  constructor(message: string = "Transaction was rolled back.") {
+    super(message);
+    this.name = "TransactionRollbackError";
+    this.status = 400;
+    this.statusCode = 400;
+    this.code = "TRANSACTION_ROLLBACK";
+    Object.setPrototypeOf(this, TransactionRollbackError.prototype);
+  }
+}
+
+export interface DatabaseTransaction {
+  tenantId: string;
+  saveSlice<T>(sliceKey: string, data: T[]): Promise<void>;
+  saveObject<T>(key: string, data: T): Promise<void>;
+  rollback(): Promise<void>;
+}
+
+export function handleApiError(res: any, error: any, defaultMessage?: string) {
+  if (
+    error?.code === "TRANSACTION_ROLLBACK" ||
+    error?.status === 400 ||
+    error?.statusCode === 400 ||
+    error instanceof TransactionRollbackError
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: "TRANSACTION_ROLLBACK",
+      message: error.message || defaultMessage || "Transaction was rolled back."
+    });
+  }
+  if (
+    error?.code === "OPTIMISTIC_LOCK_CONFLICT" ||
+    error?.status === 409 ||
+    error?.statusCode === 409 ||
+    error instanceof OptimisticLockConflictError
+  ) {
+    return res.status(409).json({
+      success: false,
+      error: "OPTIMISTIC_LOCK_CONFLICT",
+      message: error.message || defaultMessage || "Optimistic lock conflict: stale updates rejected.",
+      entityId: error.entityId,
+      expectedVersion: error.expectedVersion,
+      currentVersion: error.currentVersion
+    });
+  }
+  if (
+    error?.code === "DATABASE_UNAVAILABLE" ||
+    error?.status === 503 ||
+    error?.statusCode === 503 ||
+    error instanceof DatabaseUnavailableError
+  ) {
+    return res.status(503).json({
+      success: false,
+      error: "DATABASE_UNAVAILABLE",
+      message: error.message || defaultMessage || "Database is unavailable. Writes cannot be committed."
+    });
+  }
+  const status = typeof error?.status === "number" ? error.status : typeof error?.statusCode === "number" ? error.statusCode : 500;
+  return res.status(status).json({
+    success: false,
+    error: error?.code || error?.name || "INTERNAL_SERVER_ERROR",
+    message: error?.message || defaultMessage || "An unexpected error occurred."
+  });
+}
+
 export class Database {
   private static instance: Database;
   
-  // In-memory relational emulation layer for local development / fallback
+  // In-memory relational emulation layer for local development / test runner
   private tablesByTenant: Record<string, Record<string, any[]>> = {};
   private objectsByTenant: Record<string, Record<string, any>> = {};
   
+  // Tracks slices and objects that failed DB commit and are marked stale/readonly
+  private staleSlices: Set<string> = new Set();
+  private staleObjects: Set<string> = new Set();
+
   private supabase: any = null;
 
   private constructor() {
@@ -327,6 +445,48 @@ export class Database {
       Database.instance = new Database();
     }
     return Database.instance;
+  }
+
+  public markSliceStale(tenantId: string, sliceKey: string): void {
+    this.staleSlices.add(`${tenantId}:${sliceKey}`);
+    console.warn(`[Database] [STALE/READONLY] Marked slice [${sliceKey}] for Tenant [${tenantId}] as stale/readonly due to failed DB write.`);
+  }
+
+  public unmarkSliceStale(tenantId: string, sliceKey: string): void {
+    this.staleSlices.delete(`${tenantId}:${sliceKey}`);
+  }
+
+  public isSliceStale(tenantId: string, sliceKey: string): boolean {
+    return this.staleSlices.has(`${tenantId}:${sliceKey}`);
+  }
+
+  public markObjectStale(tenantId: string, sliceKey: string): void {
+    this.staleObjects.add(`${tenantId}:${sliceKey}`);
+    console.warn(`[Database] [STALE/READONLY] Marked object [${sliceKey}] for Tenant [${tenantId}] as stale/readonly due to failed DB write.`);
+  }
+
+  public unmarkObjectStale(tenantId: string, sliceKey: string): void {
+    this.staleObjects.delete(`${tenantId}:${sliceKey}`);
+  }
+
+  public isObjectStale(tenantId: string, sliceKey: string): boolean {
+    return this.staleObjects.has(`${tenantId}:${sliceKey}`);
+  }
+
+  private dbStopped: boolean = false;
+
+  public stopDatabase(): void {
+    this.dbStopped = true;
+    console.warn("[Database] Database engine has been stopped / simulated offline.");
+  }
+
+  public resumeDatabase(): void {
+    this.dbStopped = false;
+    console.log("[Database] Database engine has been resumed / online.");
+  }
+
+  public isDatabaseStopped(): boolean {
+    return this.dbStopped;
   }
 
   private getSupabaseClient() {
@@ -343,7 +503,7 @@ export class Database {
       supabaseKey !== "YOUR_SUPABASE_SERVICE_ROLE_KEY";
 
     if (process.env.NODE_ENV === "production" && !isConfigured) {
-      console.warn("⚠️ Supabase connection keys (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) are not set or default. Operating in resilient in-memory storage fallback mode.");
+      console.error("❌ CRITICAL: Supabase connection keys (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) are missing in production! In-memory write fallback is strictly disabled.");
     }
 
     if (isConfigured) {
@@ -378,12 +538,14 @@ export class Database {
     const client = this.getSupabaseClient();
 
     if (!client) {
-      // Return from local mock table
+      if (process.env.NODE_ENV === "production") {
+        console.error(`[Database] Database connection unavailable in production for slice [${sliceKey}]. Local cache served in READONLY mode.`);
+      }
+      // Return from local cache
       if (!this.tablesByTenant[tenantId]) this.tablesByTenant[tenantId] = {};
       const localData = (this.tablesByTenant[tenantId][tableName] as T[]) || [];
-      // Populate Redis with mock data so we don't bypass cache on mock mode either
       if (redisCacheService.isActive() && localData) {
-        await redisCacheService.set(cacheKey, localData, 300); // 5 mins TTL for mock data
+        await redisCacheService.set(cacheKey, localData, 300);
       }
       return localData;
     }
@@ -395,12 +557,9 @@ export class Database {
         .eq("tenant_id", tenantId);
 
       if (error) {
+        this.markSliceStale(tenantId, sliceKey);
         const errMsg = error.message || "";
-        if (errMsg.includes("Could not find the table") || errMsg.includes("relation") && errMsg.includes("does not exist")) {
-          console.warn(`Supabase table ${tableName} is not available. Using local memory cache fallback for tenant ${tenantId}.`);
-        } else {
-          console.warn(`Supabase load warning for table ${tableName} on tenant ${tenantId} (using local dev fallback):`, errMsg);
-        }
+        console.warn(`[Database] Supabase load warning for table ${tableName} on tenant ${tenantId} (serving readonly local cache):`, errMsg);
         if (!this.tablesByTenant[tenantId]) this.tablesByTenant[tenantId] = {};
         return (this.tablesByTenant[tenantId][tableName] as T[]) || [];
       }
@@ -408,6 +567,7 @@ export class Database {
       // Sync to local memory cache
       if (!this.tablesByTenant[tenantId]) this.tablesByTenant[tenantId] = {};
       this.tablesByTenant[tenantId][tableName] = data || [];
+      this.unmarkSliceStale(tenantId, sliceKey);
 
       // Save to Redis Cache
       if (redisCacheService.isActive() && data) {
@@ -417,12 +577,9 @@ export class Database {
 
       return data as T[];
     } catch (err: any) {
+      this.markSliceStale(tenantId, sliceKey);
       const errMsg = err.message || String(err);
-      if (errMsg.includes("Could not find the table") || errMsg.includes("relation") && errMsg.includes("does not exist")) {
-        console.warn(`Supabase table ${tableName} is not available. Using local memory cache fallback for tenant ${tenantId}.`);
-      } else {
-        console.error(`Failed to fetch table ${tableName} for tenant ${tenantId}:`, errMsg);
-      }
+      console.error(`[Database] Failed to fetch table ${tableName} for tenant ${tenantId} (serving readonly local cache):`, errMsg);
       if (!this.tablesByTenant[tenantId]) this.tablesByTenant[tenantId] = {};
       return (this.tablesByTenant[tenantId][tableName] as T[]) || [];
     }
@@ -430,23 +587,35 @@ export class Database {
 
   /**
    * Persists an array slice (relational table rows) for a tenant under transactional lock.
+   * Write reliability guarantee: NEVER returns success without confirmed database commit.
+   * On failure, throws DatabaseUnavailableError (HTTP 503) and marks local cache as stale/readonly.
    */
   public async saveSlice<T>(tenantId: string, sliceKey: string, data: T[]): Promise<void> {
     const tableName = TABLE_MAP[sliceKey] || sliceKey;
+    const client = this.getSupabaseClient();
+    const isVitest = Boolean(process.env.VITEST);
+    const isProduction = process.env.NODE_ENV === "production";
 
-    // Cache immediately in local storage fallback
-    if (!this.tablesByTenant[tenantId]) this.tablesByTenant[tenantId] = {};
-    this.tablesByTenant[tenantId][tableName] = data;
-
-    // Evict Redis Cache
-    const cacheKey = `veggiepos:tenant:${tenantId}:slice:${sliceKey}`;
-    if (redisCacheService.isActive()) {
-      await redisCacheService.delete(cacheKey);
-      console.log(`[Database] [CACHE EVICT] Evicted slice [${sliceKey}] for Tenant [${tenantId}] on saveSlice write.`);
+    if (this.dbStopped) {
+      this.markSliceStale(tenantId, sliceKey);
+      throw new DatabaseUnavailableError(
+        `Database is unavailable (database is stopped). Cannot persist slice '${sliceKey}' for tenant '${tenantId}'.`
+      );
     }
 
-    const client = this.getSupabaseClient();
-    if (!client) return;
+    // In production or live mode, in-memory write fallback is strictly disabled!
+    if (!client) {
+      if (isProduction || !isVitest) {
+        this.markSliceStale(tenantId, sliceKey);
+        throw new DatabaseUnavailableError(
+          `Database is unavailable. Cannot persist slice '${sliceKey}' for tenant '${tenantId}'. In-memory write fallback is disabled.`
+        );
+      }
+      // Only allowed in local Vitest unit test environment when DB is not configured
+      if (!this.tablesByTenant[tenantId]) this.tablesByTenant[tenantId] = {};
+      this.tablesByTenant[tenantId][tableName] = data;
+      return;
+    }
 
     // Use TenantLockManager to execute sequentially
     await TenantLockManager.acquire(tenantId, async () => {
@@ -467,7 +636,7 @@ export class Database {
             .upsert(rows);
 
           if (insertError) {
-            throw new Error(`Insert/Upsert failed: ${insertError.message}`);
+            throw new DatabaseUnavailableError(`DB commit failed on table '${tableName}': ${insertError.message}`);
           }
 
           // 2. Delete old rows that are not in the new dataset for this tenant
@@ -484,7 +653,7 @@ export class Database {
               .not(keyField, "in", `(${incomingKeys.join(",")})`);
 
             if (deleteError) {
-              throw new Error(`Delete cleanup failed: ${deleteError.message}`);
+              throw new DatabaseUnavailableError(`DB cleanup failed on table '${tableName}': ${deleteError.message}`);
             }
           }
         } else {
@@ -495,22 +664,441 @@ export class Database {
             .eq("tenant_id", tenantId);
 
           if (deleteError) {
-            throw new Error(`Delete failed: ${deleteError.message}`);
+            throw new DatabaseUnavailableError(`DB deletion failed on table '${tableName}': ${deleteError.message}`);
           }
         }
+
+        // CONFIRMED DB COMMIT:
+        // Update local memory cache ONLY after DB confirms commit!
+        if (!this.tablesByTenant[tenantId]) this.tablesByTenant[tenantId] = {};
+        this.tablesByTenant[tenantId][tableName] = data;
+        this.unmarkSliceStale(tenantId, sliceKey);
+
+        // Evict Redis Cache
+        const cacheKey = `veggiepos:tenant:${tenantId}:slice:${sliceKey}`;
+        if (redisCacheService.isActive()) {
+          await redisCacheService.delete(cacheKey);
+          console.log(`[Database] [CACHE EVICT] Evicted slice [${sliceKey}] for Tenant [${tenantId}] on confirmed DB write.`);
+        }
       } catch (err: any) {
+        // Mark local cache as stale/readonly on failure
+        this.markSliceStale(tenantId, sliceKey);
         const errMsg = err.message || String(err);
-        if (
-          errMsg.includes("Could not find the table") || 
-          (errMsg.includes("relation") && errMsg.includes("does not exist")) ||
-          isRlsErrorMessage(errMsg)
-        ) {
-          console.warn(`Supabase table ${tableName} is not available or restricted by RLS for write. Cached changes locally in memory for tenant ${tenantId}.`);
-        } else {
-          console.error(`Failed to bulk sync table ${tableName} in Supabase for tenant ${tenantId}:`, errMsg);
-          throw new Error(`Failed to save ${tableName}: ${errMsg}`);
+        console.error(`[Database] DB commit rejected for slice '${sliceKey}' (table '${tableName}', tenant '${tenantId}'):`, errMsg);
+
+        if (err instanceof DatabaseUnavailableError || err.code === "DATABASE_UNAVAILABLE") {
+          throw err;
+        }
+        throw new DatabaseUnavailableError(`DB commit failed on table '${tableName}': ${errMsg}`);
+      }
+    });
+  }
+
+  /**
+   * Updates an individual item conditionally using optimistic locking:
+   * Requires WHERE id = ? AND version = ?
+   * If version does not match, rejects with 409 OptimisticLockConflictError.
+   * Increments version on confirmed update.
+   */
+  public async updateItem<T>(
+    tenantId: string,
+    sliceKey: string,
+    id: any,
+    item: T,
+    expectedVersion?: number
+  ): Promise<T> {
+    const tableName = TABLE_MAP[sliceKey] || sliceKey;
+    const client = this.getSupabaseClient();
+    const isVitest = Boolean(process.env.VITEST);
+    const isProduction = process.env.NODE_ENV === "production";
+
+    if (this.dbStopped) {
+      this.markSliceStale(tenantId, sliceKey);
+      throw new DatabaseUnavailableError(
+        `Database is unavailable (database is stopped). Cannot update slice '${sliceKey}' for tenant '${tenantId}'.`
+      );
+    }
+
+    if (!client && (isProduction || !isVitest)) {
+      this.markSliceStale(tenantId, sliceKey);
+      throw new DatabaseUnavailableError(
+        `Database is unavailable. Cannot update slice '${sliceKey}' for tenant '${tenantId}'. In-memory write fallback is disabled.`
+      );
+    }
+
+    const keyField = tableName === "recipes" ? "menuItemId" : "id";
+
+    return await TenantLockManager.acquire(tenantId, async () => {
+      // 1. In-memory / Vitest checks
+      if (!this.tablesByTenant[tenantId]) this.tablesByTenant[tenantId] = {};
+      const localSlice = (this.tablesByTenant[tenantId][tableName] as any[]) || [];
+      const index = localSlice.findIndex((i: any) => String(i[keyField]) === String(id));
+
+      let currentVer = 1;
+      if (index !== -1) {
+        currentVer = typeof localSlice[index].version === "number" ? localSlice[index].version : 1;
+      }
+
+      const incomingItem = item as any;
+      const targetExpectedVer = expectedVersion !== undefined ? expectedVersion : incomingItem.version;
+
+      // Check conditional lock: WHERE id = ? AND version = ?
+      if (index !== -1 && targetExpectedVer !== undefined && targetExpectedVer !== currentVer) {
+        throw new OptimisticLockConflictError(
+          `Optimistic lock conflict on table '${tableName}' for ${keyField} '${String(id)}': expected version was ${targetExpectedVer}, but current version is ${currentVer}.`,
+          { entityId: String(id), expectedVersion: targetExpectedVer, currentVersion: currentVer }
+        );
+      }
+
+      const nextVersion = currentVer + 1;
+      const nowIso = new Date().toISOString();
+      const updatedRecord = {
+        ...incomingItem,
+        version: nextVersion,
+        updated_at: nowIso
+      };
+
+      if (client) {
+        try {
+          const { tenant_id, ...dbPayload } = updatedRecord;
+          const { data, error } = await client
+            .from(tableName)
+            .update({
+              ...dbPayload,
+              version: nextVersion,
+              updated_at: nowIso
+            })
+            .eq("tenant_id", tenantId)
+            .eq(keyField, id)
+            .eq("version", targetExpectedVer !== undefined ? targetExpectedVer : currentVer)
+            .select();
+
+          if (error) {
+            throw new DatabaseUnavailableError(`DB update failed on table '${tableName}': ${error.message}`);
+          }
+
+          if (!data || data.length === 0) {
+            // Row was not updated; query current row to verify if it was a version mismatch
+            const { data: currentDbRow } = await client
+              .from(tableName)
+              .select("version")
+              .eq("tenant_id", tenantId)
+              .eq(keyField, id)
+              .maybeSingle();
+
+            if (currentDbRow) {
+              throw new OptimisticLockConflictError(
+                `Optimistic lock conflict on table '${tableName}' for ${keyField} '${String(id)}': row in DB was updated concurrently (current DB version: ${currentDbRow.version}, expected: ${targetExpectedVer ?? currentVer}).`,
+                { entityId: String(id), expectedVersion: targetExpectedVer ?? currentVer, currentVersion: currentDbRow.version }
+              );
+            } else {
+              throw new Error(`Item with ${keyField} '${String(id)}' not found in table '${tableName}'.`);
+            }
+          }
+        } catch (err: any) {
+          if (err instanceof OptimisticLockConflictError || err.code === "OPTIMISTIC_LOCK_CONFLICT") {
+            throw err;
+          }
+          this.markSliceStale(tenantId, sliceKey);
+          throw new DatabaseUnavailableError(`DB update failed on table '${tableName}': ${err.message || String(err)}`);
         }
       }
+
+      // Update in-memory cache
+      if (index !== -1) {
+        localSlice[index] = updatedRecord;
+      } else {
+        localSlice.push(updatedRecord);
+      }
+      this.tablesByTenant[tenantId][tableName] = localSlice;
+      this.unmarkSliceStale(tenantId, sliceKey);
+
+      // Evict Redis Cache
+      const cacheKey = `veggiepos:tenant:${tenantId}:slice:${sliceKey}`;
+      if (redisCacheService.isActive()) {
+        await redisCacheService.delete(cacheKey);
+      }
+
+      return updatedRecord as T;
+    });
+  }
+
+  /**
+   * Executes a multi-slice transactional operation for a tenant.
+   * Guarantees atomicity: all staged slices and objects are saved together.
+   * If ANY operation or commit fails, everything is rolled back to the pre-transaction state.
+   */
+  public async runTransaction<R>(
+    tenantId: string,
+    work: (trx: DatabaseTransaction) => Promise<R>
+  ): Promise<R> {
+    const isVitest = Boolean(process.env.VITEST);
+    const isProduction = process.env.NODE_ENV === "production";
+    const client = this.getSupabaseClient();
+
+    if (this.dbStopped) {
+      this.markSliceStale(tenantId, "transaction");
+      throw new DatabaseUnavailableError(
+        `Database is unavailable (database is stopped). Cannot run transaction for tenant '${tenantId}'.`
+      );
+    }
+
+    if (!client && (isProduction || !isVitest)) {
+      this.markSliceStale(tenantId, "transaction");
+      throw new DatabaseUnavailableError(
+        `Database is unavailable. Cannot run transaction for tenant '${tenantId}'. In-memory write fallback is disabled.`
+      );
+    }
+
+    return await TenantLockManager.acquire(tenantId, async () => {
+      // 1. Take snapshot of in-memory tenant state
+      const memoryTableSnapshot: Record<string, any[]> = {};
+      const memoryObjectSnapshot: Record<string, any> = {};
+
+      if (this.tablesByTenant[tenantId]) {
+        for (const [k, v] of Object.entries(this.tablesByTenant[tenantId])) {
+          memoryTableSnapshot[k] = JSON.parse(JSON.stringify(v));
+        }
+      }
+      if (this.objectsByTenant[tenantId]) {
+        for (const [k, v] of Object.entries(this.objectsByTenant[tenantId])) {
+          memoryObjectSnapshot[k] = JSON.parse(JSON.stringify(v));
+        }
+      }
+
+      const stagedSlices: Map<string, any[]> = new Map();
+      const stagedObjects: Map<string, any> = new Map();
+      const touchedSlices: Set<string> = new Set();
+      const touchedObjects: Set<string> = new Set();
+      let explicitRollback = false;
+
+      const rollbackMemory = () => {
+        if (!this.tablesByTenant[tenantId]) this.tablesByTenant[tenantId] = {};
+        for (const [k, v] of Object.entries(memoryTableSnapshot)) {
+          this.tablesByTenant[tenantId][k] = v;
+        }
+        for (const k of touchedSlices) {
+          if (!memoryTableSnapshot[k]) {
+            delete this.tablesByTenant[tenantId][k];
+          }
+        }
+
+        if (!this.objectsByTenant[tenantId]) this.objectsByTenant[tenantId] = {};
+        for (const [k, v] of Object.entries(memoryObjectSnapshot)) {
+          this.objectsByTenant[tenantId][k] = v;
+        }
+        for (const k of touchedObjects) {
+          if (!memoryObjectSnapshot[k]) {
+            delete this.objectsByTenant[tenantId][k];
+          }
+        }
+      };
+
+      const trx: DatabaseTransaction = {
+        tenantId,
+        saveSlice: async <T>(sliceKey: string, data: T[]): Promise<void> => {
+          if (explicitRollback) {
+            throw new TransactionRollbackError("Transaction has been rolled back. Further operations rejected.");
+          }
+          const tableName = TABLE_MAP[sliceKey] || sliceKey;
+          stagedSlices.set(sliceKey, data);
+          touchedSlices.add(tableName);
+        },
+        saveObject: async <T>(key: string, data: T): Promise<void> => {
+          if (explicitRollback) {
+            throw new TransactionRollbackError("Transaction has been rolled back. Further operations rejected.");
+          }
+          stagedObjects.set(key, data);
+          touchedObjects.add(key);
+        },
+        rollback: async (): Promise<void> => {
+          explicitRollback = true;
+          rollbackMemory();
+          throw new TransactionRollbackError(`Transaction explicitly rolled back for tenant '${tenantId}'`);
+        }
+      };
+
+      // 2. Execute work block
+      let result: R;
+      try {
+        result = await work(trx);
+      } catch (err: any) {
+        rollbackMemory();
+        console.error(`[Database] Transaction aborted during work execution for tenant '${tenantId}':`, err.message || err);
+        throw err;
+      }
+
+      if (explicitRollback) {
+        rollbackMemory();
+        throw new TransactionRollbackError(`Transaction explicitly rolled back for tenant '${tenantId}'`);
+      }
+
+      // 3. Database commit with atomic rollback guarantee
+      const dbTableSnapshots: Record<string, any[]> = {};
+      const dbObjectSnapshots: Record<string, any> = {};
+      const committedTables: string[] = [];
+      const committedObjects: string[] = [];
+
+      if (client) {
+        try {
+          // Pre-fetch snapshots of original DB rows for touched tables
+          for (const [sliceKey] of stagedSlices) {
+            const tableName = TABLE_MAP[sliceKey] || sliceKey;
+            const { data: existingRows } = await client
+              .from(tableName)
+              .select("*")
+              .eq("tenant_id", tenantId);
+
+            if (existingRows) {
+              dbTableSnapshots[tableName] = existingRows;
+            }
+          }
+
+          // Pre-fetch snapshots of original DB objects
+          for (const [key] of stagedObjects) {
+            const { data: existingObj } = await client
+              .from("tenant_objects")
+              .select("*")
+              .eq("tenant_id", tenantId)
+              .eq("key", key)
+              .maybeSingle();
+
+            if (existingObj) {
+              dbObjectSnapshots[key] = existingObj;
+            }
+          }
+
+          // Execute slice writes
+          for (const [sliceKey, data] of stagedSlices) {
+            const tableName = TABLE_MAP[sliceKey] || sliceKey;
+            if (data.length > 0) {
+              const rows = data.map((item: any) => {
+                const { tenant_id, ...rest } = item;
+                return {
+                  ...rest,
+                  tenant_id: tenantId
+                };
+              });
+
+              const { error: upsertError } = await client
+                .from(tableName)
+                .upsert(rows);
+
+              if (upsertError) {
+                throw new DatabaseUnavailableError(`DB commit failed on table '${tableName}': ${upsertError.message}`);
+              }
+
+              const keyField = tableName === "recipes" ? "menuItemId" : "id";
+              const incomingKeys = data
+                .map((item: any) => item[keyField])
+                .filter((val) => val !== undefined && val !== null);
+
+              if (incomingKeys.length > 0) {
+                const { error: deleteError } = await client
+                  .from(tableName)
+                  .delete()
+                  .eq("tenant_id", tenantId)
+                  .not(keyField, "in", `(${incomingKeys.join(",")})`);
+
+                if (deleteError) {
+                  throw new DatabaseUnavailableError(`DB cleanup failed on table '${tableName}': ${deleteError.message}`);
+                }
+              }
+            } else {
+              const { error: deleteError } = await client
+                .from(tableName)
+                .delete()
+                .eq("tenant_id", tenantId);
+
+              if (deleteError) {
+                throw new DatabaseUnavailableError(`DB deletion failed on table '${tableName}': ${deleteError.message}`);
+              }
+            }
+            committedTables.push(tableName);
+          }
+
+          // Execute object writes
+          for (const [key, data] of stagedObjects) {
+            const { error: objError } = await client
+              .from("tenant_objects")
+              .upsert({
+                tenant_id: tenantId,
+                key,
+                value: data,
+                updated_at: new Date().toISOString()
+              });
+
+            if (objError) {
+              throw new DatabaseUnavailableError(`DB commit failed on object '${key}': ${objError.message}`);
+            }
+            committedObjects.push(key);
+          }
+        } catch (dbErr: any) {
+          console.error(`[Database] Rolling back DB transaction for tenant '${tenantId}':`, dbErr.message || dbErr);
+
+          // ROLLBACK DATABASE MODIFICATIONS
+          for (const tableName of committedTables) {
+            try {
+              await client.from(tableName).delete().eq("tenant_id", tenantId);
+              const original = dbTableSnapshots[tableName];
+              if (original && original.length > 0) {
+                await client.from(tableName).upsert(original);
+              }
+            } catch (revertErr) {
+              console.error(`[Database] Error while rolling back table '${tableName}':`, revertErr);
+            }
+          }
+
+          for (const key of committedObjects) {
+            try {
+              await client.from("tenant_objects").delete().eq("tenant_id", tenantId).eq("key", key);
+              const original = dbObjectSnapshots[key];
+              if (original) {
+                await client.from("tenant_objects").upsert(original);
+              }
+            } catch (revertErr) {
+              console.error(`[Database] Error while rolling back object '${key}':`, revertErr);
+            }
+          }
+
+          rollbackMemory();
+          for (const [sliceKey] of stagedSlices) {
+            this.markSliceStale(tenantId, sliceKey);
+          }
+
+          if (dbErr instanceof DatabaseUnavailableError || dbErr.code === "DATABASE_UNAVAILABLE") {
+            throw dbErr;
+          }
+          throw new DatabaseUnavailableError(`DB transaction commit failed: ${dbErr.message || String(dbErr)}`);
+        }
+      }
+
+      // 4. ATOMIC COMMIT TO IN-MEMORY CACHE
+      if (!this.tablesByTenant[tenantId]) this.tablesByTenant[tenantId] = {};
+      for (const [sliceKey, data] of stagedSlices) {
+        const tableName = TABLE_MAP[sliceKey] || sliceKey;
+        this.tablesByTenant[tenantId][tableName] = data;
+        this.unmarkSliceStale(tenantId, sliceKey);
+      }
+
+      if (!this.objectsByTenant[tenantId]) this.objectsByTenant[tenantId] = {};
+      for (const [key, data] of stagedObjects) {
+        this.objectsByTenant[tenantId][key] = data;
+      }
+
+      // 5. EVICT REDIS CACHES ONLY ON SUCCESSFUL COMMIT
+      if (redisCacheService.isActive()) {
+        for (const [sliceKey] of stagedSlices) {
+          const cacheKey = `veggiepos:tenant:${tenantId}:slice:${sliceKey}`;
+          await redisCacheService.delete(cacheKey);
+        }
+        for (const [key] of stagedObjects) {
+          const cacheKey = `veggiepos:tenant:${tenantId}:object:${key}`;
+          await redisCacheService.delete(cacheKey);
+        }
+      }
+
+      return result;
     });
   }
 
@@ -564,16 +1152,9 @@ export class Database {
         }
 
         if (error) {
+          this.markObjectStale(tenantId, sliceKey);
           const errMsg = error.message || "";
-          if (
-            errMsg.includes("Could not find the table") || 
-            (errMsg.includes("relation") && errMsg.includes("does not exist")) ||
-            isRlsErrorMessage(errMsg)
-          ) {
-            console.warn(`Supabase table settings is not available or restricted by RLS. Object load fallback to local memory cache for tenant ${tenantId}.`);
-          } else {
-            console.warn(`Supabase object load warning for settings table on tenant ${tenantId}:`, errMsg);
-          }
+          console.warn(`[Database] Supabase object load warning for settings table on tenant ${tenantId} (serving readonly local cache):`, errMsg);
           if (!this.objectsByTenant[tenantId]) this.objectsByTenant[tenantId] = {};
           const existing = this.objectsByTenant[tenantId][tableName] || {};
           const merged = { ...existing, ...settingsExtra };
@@ -585,6 +1166,7 @@ export class Database {
           const existing = this.objectsByTenant[tenantId][tableName] || {};
           const merged = { ...existing, ...settingsExtra, ...data };
           this.objectsByTenant[tenantId][tableName] = merged;
+          this.unmarkObjectStale(tenantId, sliceKey);
 
           // Save to Redis Cache
           if (redisCacheService.isActive()) {
@@ -596,16 +1178,9 @@ export class Database {
         }
         return null;
       } catch (err: any) {
+        this.markObjectStale(tenantId, sliceKey);
         const errMsg = err.message || String(err);
-        if (
-          errMsg.includes("Could not find the table") || 
-          (errMsg.includes("relation") && errMsg.includes("does not exist")) ||
-          isRlsErrorMessage(errMsg)
-        ) {
-          console.warn(`Supabase table settings is not available or restricted by RLS. Using local memory cache for tenant ${tenantId}.`);
-        } else {
-          console.error(`Error loading settings for tenant ${tenantId}:`, errMsg);
-        }
+        console.error(`[Database] Error loading settings for tenant ${tenantId} (serving readonly local cache):`, errMsg);
         if (!this.objectsByTenant[tenantId]) this.objectsByTenant[tenantId] = {};
         return this.objectsByTenant[tenantId][tableName] || null;
       }
@@ -630,16 +1205,9 @@ export class Database {
         .maybeSingle();
 
       if (error) {
+        this.markObjectStale(tenantId, sliceKey);
         const errMsg = error.message || "";
-        if (
-          errMsg.includes("Could not find the table") || 
-          (errMsg.includes("relation") && errMsg.includes("does not exist")) ||
-          isRlsErrorMessage(errMsg)
-        ) {
-          console.warn(`Supabase table tenant_objects is not available or restricted by RLS. Object ${sliceKey} load fallback to local memory cache for tenant ${tenantId}.`);
-        } else {
-          console.warn(`Supabase load warning for object ${sliceKey} on tenant ${tenantId}:`, errMsg);
-        }
+        console.warn(`[Database] Supabase load warning for object ${sliceKey} on tenant ${tenantId} (serving readonly local cache):`, errMsg);
         if (!this.objectsByTenant[tenantId]) this.objectsByTenant[tenantId] = {};
         return this.objectsByTenant[tenantId][sliceKey] || null;
       }
@@ -647,6 +1215,7 @@ export class Database {
       if (data && data.value) {
         if (!this.objectsByTenant[tenantId]) this.objectsByTenant[tenantId] = {};
         this.objectsByTenant[tenantId][sliceKey] = data.value;
+        this.unmarkObjectStale(tenantId, sliceKey);
 
         // Save to Redis Cache
         if (redisCacheService.isActive()) {
@@ -657,16 +1226,9 @@ export class Database {
         return data.value as T;
       }
     } catch (err: any) {
+      this.markObjectStale(tenantId, sliceKey);
       const errMsg = err.message || String(err);
-      if (
-        errMsg.includes("Could not find the table") || 
-        (errMsg.includes("relation") && errMsg.includes("does not exist")) ||
-        isRlsErrorMessage(errMsg)
-      ) {
-        console.warn(`Supabase table tenant_objects is not available or restricted by RLS. Object ${sliceKey} load fallback to local memory cache for tenant ${tenantId}.`);
-      } else {
-        console.error(`Failed to fetch object ${sliceKey} for tenant ${tenantId}:`, errMsg);
-      }
+      console.error(`[Database] Failed to fetch object ${sliceKey} for tenant ${tenantId} (serving readonly local cache):`, errMsg);
     }
 
     if (!this.objectsByTenant[tenantId]) this.objectsByTenant[tenantId] = {};
@@ -675,22 +1237,35 @@ export class Database {
 
   /**
    * Save a loose object configuration back to the tenant_objects table under transactional lock.
+   * Write reliability guarantee: NEVER returns success without confirmed database commit.
+   * On failure, throws DatabaseUnavailableError (HTTP 503) and marks local cache as stale/readonly.
    */
   public async saveObject<T>(tenantId: string, sliceKey: string, data: T): Promise<void> {
     const tableName = TABLE_MAP[sliceKey];
+    const client = this.getSupabaseClient();
+    const isVitest = Boolean(process.env.VITEST);
+    const isProduction = process.env.NODE_ENV === "production";
 
-    if (!this.objectsByTenant[tenantId]) this.objectsByTenant[tenantId] = {};
-    this.objectsByTenant[tenantId][sliceKey] = data;
-
-    // Evict Redis Cache
-    const cacheKey = `veggiepos:tenant:${tenantId}:object:${sliceKey}`;
-    if (redisCacheService.isActive()) {
-      await redisCacheService.delete(cacheKey);
-      console.log(`[Database] [CACHE EVICT] Evicted object [${sliceKey}] for Tenant [${tenantId}] on saveObject write.`);
+    if (this.dbStopped) {
+      this.markObjectStale(tenantId, sliceKey);
+      throw new DatabaseUnavailableError(
+        `Database is unavailable (database is stopped). Cannot persist object '${sliceKey}' for tenant '${tenantId}'.`
+      );
     }
 
-    const client = this.getSupabaseClient();
-    if (!client) return;
+    // In production or live mode, in-memory write fallback is strictly disabled!
+    if (!client) {
+      if (isProduction || !isVitest) {
+        this.markObjectStale(tenantId, sliceKey);
+        throw new DatabaseUnavailableError(
+          `Database is unavailable. Cannot persist object '${sliceKey}' for tenant '${tenantId}'. In-memory write fallback is disabled.`
+        );
+      }
+      // Only allowed in local Vitest unit test environment when DB is not configured
+      if (!this.objectsByTenant[tenantId]) this.objectsByTenant[tenantId] = {};
+      this.objectsByTenant[tenantId][sliceKey] = data;
+      return;
+    }
 
     await TenantLockManager.acquire(tenantId, async () => {
       try {
@@ -722,9 +1297,11 @@ export class Database {
             .from("settings")
             .upsert(dbObj);
 
-          if (dbError) throw dbError;
+          if (dbError) {
+            throw new DatabaseUnavailableError(`DB commit failed on table 'settings': ${dbError.message}`);
+          }
 
-          // 2. Save any custom/alert columns (like emailAlertAddress, slackWebhookUrl, sentryDsn, enableAlerts) to tenant_objects
+          // 2. Save any custom/alert columns to tenant_objects
           if (Object.keys(extraObj).length > 0) {
             const { error: extraError } = await client
               .from("tenant_objects")
@@ -734,7 +1311,9 @@ export class Database {
                 value: extraObj,
                 updated_at: new Date().toISOString()
               });
-            if (extraError) throw extraError;
+            if (extraError) {
+              throw new DatabaseUnavailableError(`DB commit failed for 'settings_extra': ${extraError.message}`);
+            }
           }
         } else {
           const { error } = await client
@@ -745,20 +1324,33 @@ export class Database {
               value: data,
               updated_at: new Date().toISOString()
             });
-          if (error) throw error;
+          if (error) {
+            throw new DatabaseUnavailableError(`DB commit failed on table 'tenant_objects' for '${sliceKey}': ${error.message}`);
+          }
+        }
+
+        // CONFIRMED DB COMMIT:
+        // Update local memory cache ONLY after DB confirms commit!
+        if (!this.objectsByTenant[tenantId]) this.objectsByTenant[tenantId] = {};
+        this.objectsByTenant[tenantId][sliceKey] = data;
+        this.unmarkObjectStale(tenantId, sliceKey);
+
+        // Evict Redis Cache
+        const cacheKey = `veggiepos:tenant:${tenantId}:object:${sliceKey}`;
+        if (redisCacheService.isActive()) {
+          await redisCacheService.delete(cacheKey);
+          console.log(`[Database] [CACHE EVICT] Evicted object [${sliceKey}] for Tenant [${tenantId}] on confirmed DB write.`);
         }
       } catch (err: any) {
+        // Mark local cache as stale/readonly on failure
+        this.markObjectStale(tenantId, sliceKey);
         const errMsg = err.message || String(err);
-        if (
-          errMsg.includes("Could not find the table") || 
-          (errMsg.includes("relation") && errMsg.includes("does not exist")) ||
-          isRlsErrorMessage(errMsg)
-        ) {
-          console.warn(`Supabase table ${tableName === "settings" ? "settings" : "tenant_objects"} is not available or restricted by RLS for write. Cached changes in local memory for tenant ${tenantId}.`);
-        } else {
-          console.error(`Failed to save object ${sliceKey} in Supabase for tenant ${tenantId}:`, errMsg);
-          throw new Error(`Failed to save ${sliceKey}: ${errMsg}`);
+        console.error(`[Database] DB commit rejected for object '${sliceKey}' on tenant '${tenantId}':`, errMsg);
+
+        if (err instanceof DatabaseUnavailableError || err.code === "DATABASE_UNAVAILABLE") {
+          throw err;
         }
+        throw new DatabaseUnavailableError(`DB commit failed for object '${sliceKey}': ${errMsg}`);
       }
     });
   }

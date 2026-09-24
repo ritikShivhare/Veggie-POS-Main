@@ -1,0 +1,27 @@
+-- Migration 003: Optimistic Locking & Versioning to Prevent Lost Updates
+-- Adds version and updated_at columns to tenant tables
+
+-- 1. Orders table
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+
+-- 2. Staff table
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1;
+ALTER TABLE staff ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+
+-- 3. Menu Items table
+ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1;
+ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+
+-- 4. Additional Tenant Data Tables
+ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1;
+ALTER TABLE ingredients ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1;
+ALTER TABLE customers ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1;
+ALTER TABLE shifts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS version INTEGER DEFAULT 1;
+ALTER TABLE purchases ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();

@@ -140,7 +140,83 @@ describe("Express authMiddleware Unit Tests", () => {
 
     expect(sessionSpy).toHaveBeenCalledWith("veg-main-001", "valid-active-session-token");
     expect(mockRequest.session).toEqual(dummySession);
+    expect(mockRequest.tenantId).toBe("veg-main-001");
     expect(nextFunction).toHaveBeenCalled();
     expect(mockResponse.status).not.toHaveBeenCalled();
+  });
+
+  it("should derive tenant exclusively from session even if client sends NO tenant header", async () => {
+    mockRequest.path = "/api/menu";
+    mockRequest.method = "GET";
+    mockRequest.headers = {
+      "x-session-id": "session-reetesh-123"
+    };
+
+    SessionService.getInstance().registerSessionTenant("session-reetesh-123", "veg-reetesh-dhaba");
+
+    const dummySession: any = {
+      sessionId: "session-reetesh-123",
+      userId: "u-reetesh-1",
+      userName: "Reetesh Dhaba Owner",
+      role: "Owner",
+      tenantId: "veg-reetesh-dhaba"
+    };
+
+    vi.spyOn(SessionService.getInstance(), "validateAndTouchSession")
+      .mockResolvedValue(dummySession);
+
+    await authMiddleware(mockRequest, mockResponse, nextFunction);
+
+    expect(nextFunction).toHaveBeenCalled();
+    expect(mockRequest.tenantId).toBe("veg-reetesh-dhaba");
+  });
+
+  it("should reject cross-tenant spoofing with 403 TENANT_MISMATCH when client sends different tenantId", async () => {
+    mockRequest.path = "/api/orders";
+    mockRequest.method = "POST";
+    mockRequest.headers = {
+      "x-session-id": "session-user-1",
+      "x-tenant-id": "veg-victim-tenant" // Spoofed header
+    };
+
+    SessionService.getInstance().registerSessionTenant("session-user-1", "veg-attacker-tenant");
+
+    const dummySession: any = {
+      sessionId: "session-user-1",
+      userId: "u-attacker",
+      userName: "Attacker",
+      role: "Staff",
+      tenantId: "veg-attacker-tenant" // Real session tenant
+    };
+
+    vi.spyOn(SessionService.getInstance(), "validateAndTouchSession")
+      .mockResolvedValue(dummySession);
+
+    await authMiddleware(mockRequest, mockResponse, nextFunction);
+
+    expect(nextFunction).not.toHaveBeenCalled();
+    expect(mockResponse.status).toHaveBeenCalledWith(403);
+    expect(mockResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: "TENANT_MISMATCH"
+      })
+    );
+  });
+
+  it("should reject non-allowlisted auth paths without a session as 401 UNAUTHORIZED", async () => {
+    mockRequest.path = "/api/auth/some-private-admin-bypass";
+    mockRequest.method = "POST";
+
+    await authMiddleware(mockRequest, mockResponse, nextFunction);
+
+    expect(nextFunction).not.toHaveBeenCalled();
+    expect(mockResponse.status).toHaveBeenCalledWith(401);
+    expect(mockResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: "UNAUTHORIZED"
+      })
+    );
   });
 });

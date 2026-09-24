@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { RestaurantTenant } from "../../shared/types";
 import { toast } from "../../shared/services/toast";
+import { ApiClient } from "../../shared/services/api";
 
 interface StaffQrModalProps {
   isOpen: boolean;
@@ -228,7 +229,7 @@ export default function StaffQrModal({
   const handleRotateQrCode = async () => {
     setIsRotating(true);
     try {
-      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const sessId = ApiClient.getSessionId() || "";
       const currentTenantId = tenant.tenantId;
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (sessId) headers["x-session-id"] = sessId;
@@ -237,6 +238,7 @@ export default function StaffQrModal({
       const res = await fetch("/api/auth/tenant/regenerate-qr", {
         method: "POST",
         headers,
+        credentials: "include",
         body: JSON.stringify({ tenantId: currentTenantId })
       });
 

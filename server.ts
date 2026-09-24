@@ -1,16 +1,19 @@
 import express from "express";
+import http from "http";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import helmet from "helmet";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 
 // Import Setup & Context
 import { initializeEventSubscribers } from "./server/features/shared/EventBusSetup";
 import {
   monitoringService,
-  jobsService
+  jobsService,
+  realtimeService
 } from "./server/context";
 
 // Import Route Groups
@@ -96,6 +99,7 @@ app.use("/api/auth/login", loginLimiter);
 app.use("/api", apiLimiter);
 
 // Setup Request Parsing Middleware
+app.use(cookieParser());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -143,6 +147,12 @@ app.use("/api", adminRouter);
 app.use("/api", posRouter);
 app.use("/api", sharedRouter);
 
+// Global Error Handler (catches 503 DATABASE_UNAVAILABLE and other unhandled route errors)
+import { handleApiError } from "./server/features/shared/database";
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  handleApiError(res, err);
+});
+
 // Capture process-level crashes and unhandled promise rejections (Backend Sentry equivalent)
 process.on("uncaughtException", (error) => {
   console.error("Uncaught Exception on Node Server (Sentry Alert Captured):", error);
@@ -183,7 +193,12 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const httpServer = http.createServer(app);
+
+  // Attach server-mediated real-time WebSocket server
+  realtimeService.attach(httpServer);
+
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
   });
 }
@@ -191,3 +206,6 @@ async function startServer() {
 if (!process.env.VITEST) {
   startServer();
 }
+
+export { app };
+

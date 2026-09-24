@@ -37,6 +37,7 @@ export interface SyncResponse {
     settings?: InventorySettings;
   };
   error?: string;
+  message?: string;
 }
 
 export interface ReportPayload {
@@ -87,16 +88,35 @@ export interface CopilotResponse {
  * Centralized API Client Service for UI-backend database communication.
  */
 export class ApiClient {
-  private static getHeaders(tenantId?: string, sessionId?: string): Record<string, string> {
+  private static inMemorySessionId: string | null = null;
+
+  public static setSessionId(sessionId: string | null): void {
+    this.inMemorySessionId = sessionId;
+  }
+
+  public static getSessionId(): string | null {
+    return this.inMemorySessionId;
+  }
+
+  public static generateIdempotencyKey(prefix: string = "ik"): string {
+    const random = Math.random().toString(36).substring(2, 10);
+    return `${prefix}_${Date.now()}_${random}`;
+  }
+
+  private static getHeaders(tenantId?: string, sessionId?: string, idempotencyKey?: string): Record<string, string> {
     const headers: Record<string, string> = {
       "Content-Type": "application/json"
     };
     if (tenantId) {
       headers["x-tenant-id"] = tenantId;
     }
-    const sessId = sessionId || localStorage.getItem("veggiepos_current_session_id");
+    // Strictly in-memory session token (never read from localStorage)
+    const sessId = sessionId || this.inMemorySessionId;
     if (sessId) {
       headers["x-session-id"] = sessId;
+    }
+    if (idempotencyKey) {
+      headers["Idempotency-Key"] = idempotencyKey;
     }
     return headers;
   }
@@ -148,7 +168,8 @@ export class ApiClient {
   public static async getTenantSync(tenantId: string, sessionId?: string): Promise<SyncResponse> {
     try {
       const response = await fetch(`/api/sync?tenantId=${encodeURIComponent(tenantId)}`, {
-        headers: this.getHeaders(tenantId, sessionId)
+        headers: this.getHeaders(tenantId, sessionId),
+        credentials: "include"
       });
       this.handleHttpError(response, "Fetch sync state failed");
       const data: SyncResponse = await response.json();
@@ -166,14 +187,43 @@ export class ApiClient {
   /**
    * Saves the updated tenant synchronized state back to the server database.
    */
-  public static async saveTenantSync(tenantId: string, payload: SyncPayload, sessionId?: string): Promise<SyncResponse> {
+  public static async saveTenantSync(tenantId: string, payload: SyncPayload, sessionId?: string, idempotencyKey?: string): Promise<SyncResponse> {
     try {
+      const idempKey = idempotencyKey || this.generateIdempotencyKey("sync");
       const response = await fetch(`/api/sync?tenantId=${encodeURIComponent(tenantId)}`, {
         method: "POST",
-        headers: this.getHeaders(tenantId, sessionId),
+        headers: this.getHeaders(tenantId, sessionId, idempKey),
+        credentials: "include",
         body: JSON.stringify(payload)
       });
-      this.handleHttpError(response, "Save sync state failed");
+      if (!response.ok) {
+        let errJson: any = null;
+        try {
+          errJson = await response.json();
+        } catch (e) {}
+
+        if (response.status === 409 || errJson?.error === "OPTIMISTIC_LOCK_CONFLICT") {
+          const errMsg = errJson?.message || "Optimistic lock conflict: stale updates rejected.";
+          this.logApiError(`ApiClient.saveTenantSync [409 OPTIMISTIC_LOCK_CONFLICT] for tenant ${tenantId}`, new Error(errMsg));
+          return {
+            success: false,
+            initialized: true,
+            error: "OPTIMISTIC_LOCK_CONFLICT",
+            message: errMsg
+          };
+        }
+
+        if (response.status === 503 || errJson?.error === "DATABASE_UNAVAILABLE") {
+          const errMsg = errJson?.message || "Database is unavailable. Writes cannot be committed.";
+          this.logApiError(`ApiClient.saveTenantSync [503 DATABASE_UNAVAILABLE] for tenant ${tenantId}`, new Error(errMsg));
+          return {
+            success: false,
+            initialized: false,
+            error: "DATABASE_UNAVAILABLE"
+          };
+        }
+        this.handleHttpError(response, "Save sync state failed");
+      }
       const data: SyncResponse = await response.json();
       return this.handleApiResponse(`ApiClient.saveTenantSync for tenant ${tenantId}`, data);
     } catch (error: any) {
@@ -194,6 +244,7 @@ export class ApiClient {
       const response = await fetch("/api/reports/generate", {
         method: "POST",
         headers: this.getHeaders(),
+        credentials: "include",
         body: JSON.stringify(payload)
       });
       this.handleHttpError(response, "Report generation failed");
@@ -218,6 +269,7 @@ export class ApiClient {
       const response = await fetch("/api/copilot-chat", {
         method: "POST",
         headers: this.getHeaders(payload.tenantId),
+        credentials: "include",
         body: JSON.stringify(payload)
       });
       this.handleHttpError(response, "Copilot request failed");
@@ -241,7 +293,8 @@ export class ApiClient {
   public static async getStaffDirectory(tenantId: string): Promise<{ success: boolean; staff?: any[]; error?: string }> {
     try {
       const response = await fetch(`/api/auth/staff-directory?tenantId=${encodeURIComponent(tenantId)}`, {
-        headers: this.getHeaders(tenantId)
+        headers: this.getHeaders(tenantId),
+        credentials: "include"
       });
       this.handleHttpError(response, "Staff directory fetch failed");
       const data = await response.json();
@@ -256,12 +309,13 @@ export class ApiClient {
   }
 
   /**
-   * Fetches the Supabase connection keys for frontend Realtime subscriptions.
+   * Fetches the server realtime configuration (indicates server-mediated WebSockets).
    */
-  public static async getSupabaseConfig(): Promise<{ success: boolean; supabaseUrl?: string; supabaseAnonKey?: string; error?: string }> {
+  public static async getSupabaseConfig(): Promise<{ success: boolean; serverMediatedRealtime?: boolean; wsPath?: string; supabaseUrl?: string; supabaseAnonKey?: string; error?: string }> {
     try {
       const response = await fetch("/api/supabase-config", {
-        headers: this.getHeaders()
+        headers: this.getHeaders(),
+        credentials: "include"
       });
       this.handleHttpError(response, "Fetch Supabase config failed");
       const data = await response.json();

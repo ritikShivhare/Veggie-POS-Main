@@ -19,6 +19,10 @@ import {
   verifyTOTP,
   generateTOTP
 } from "../server/context";
+import {
+  SESSION_COOKIE_NAME,
+  getSessionCookieOptions
+} from "../server/features/auth/SessionService";
 
 const router = express.Router();
 
@@ -83,6 +87,9 @@ router.post("/saas-admin/login", async (req, res) => {
       userAgent
     );
 
+    // Set production-grade HttpOnly Secure session cookie
+    res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
+
     return res.json({
       success: true,
       session,
@@ -118,7 +125,7 @@ router.get("/admin/tenants", adminAuthMiddleware, async (req, res) => {
 
         // Find Owner PIN passcode
         const ownerMember = staffList.find(s => s.role === "Owner");
-        const ownerPin = ownerMember ? ownerMember.pin : "";
+        const ownerPin = ownerMember ? (ownerMember.pin?.startsWith("$2") ? "••••• (Hashed)" : ownerMember.pin) : "";
 
         return {
           ...t,

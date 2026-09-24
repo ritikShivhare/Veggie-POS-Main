@@ -1,4 +1,58 @@
+import crypto from "crypto";
 import { Database } from "../shared/database";
+
+export const SESSION_COOKIE_NAME = "veggiepos_session";
+
+export interface CookieSecurityOptions {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: "none" | "lax" | "strict";
+  path: string;
+  maxAge?: number;
+}
+
+/**
+ * Returns production-hardened HttpOnly cookie security configuration.
+ * Automatically enforces Secure & SameSite=None under HTTPS / cloud proxy environments.
+ */
+export function getSessionCookieOptions(req?: any): CookieSecurityOptions {
+  const isHttps =
+    process.env.NODE_ENV === "production" ||
+    Boolean(req?.secure) ||
+    req?.headers?.["x-forwarded-proto"] === "https";
+
+  return {
+    httpOnly: true,
+    secure: isHttps,
+    sameSite: isHttps ? "none" : "lax",
+    path: "/",
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
+  };
+}
+
+/**
+ * Returns options to clear the HttpOnly session cookie on logout / revoke.
+ */
+export function getClearCookieOptions(req?: any): CookieSecurityOptions {
+  const isHttps =
+    process.env.NODE_ENV === "production" ||
+    Boolean(req?.secure) ||
+    req?.headers?.["x-forwarded-proto"] === "https";
+
+  return {
+    httpOnly: true,
+    secure: isHttps,
+    sameSite: isHttps ? "none" : "lax",
+    path: "/"
+  };
+}
+
+/**
+ * Generates a cryptographically secure 256-bit random session identifier (URL-safe base64url).
+ */
+export function generateSecureSessionId(): string {
+  return crypto.randomBytes(32).toString("base64url");
+}
 
 export interface UserSession {
   sessionId: string;
@@ -6,6 +60,7 @@ export interface UserSession {
   userName: string;
   role: string;
   tenantId: string;
+  permissions?: string[];
   ipAddress: string;
   device: {
     os: string;
@@ -186,10 +241,27 @@ export class SessionService {
     const active = sessions.filter(session => new Date(session.expiresAt) > now);
     
     if (active.length !== sessions.length) {
-      await this.db.saveObject(tenantId, "system_active_sessions", active);
+      try {
+        await this.db.saveObject(tenantId, "system_active_sessions", active);
+      } catch {
+        // Non-blocking prune save during DB downtime
+      }
     }
     
     return active;
+  }
+
+  /**
+   * Directly get and validate an active session by sessionId across registered tenants
+   */
+  public async getSession(sessionId: string): Promise<UserSession | null> {
+    if (!sessionId) return null;
+    const tenantId = await this.resolveTenantId(sessionId, async () => {
+      const globalList = await this.db.getObject<any[]>("veg-main-001", "global_tenants_list");
+      return globalList || [];
+    });
+    if (!tenantId) return null;
+    return this.validateAndTouchSession(tenantId, sessionId);
   }
 
   /**
@@ -214,7 +286,11 @@ export class SessionService {
     session.lastActivityAt = now.toISOString();
     session.expiresAt = new Date(now.getTime() + settings.sessionTimeoutMinutes * 60 * 1000).toISOString();
 
-    await this.db.saveObject(tenantId, "system_active_sessions", sessions);
+    try {
+      await this.db.saveObject(tenantId, "system_active_sessions", sessions);
+    } catch {
+      // Non-blocking touch save during DB downtime so session stays valid in memory
+    }
     return session;
   }
 
@@ -227,20 +303,30 @@ export class SessionService {
     userName: string,
     role: string,
     ipAddress: string,
-    userAgent: string
+    userAgent: string,
+    permissions?: string[]
   ): Promise<UserSession> {
     const settings = await this.getSecuritySettings(tenantId);
     const deviceDetails = this.parseUserAgent(userAgent);
     
     const now = new Date();
     const expiresAt = new Date(now.getTime() + settings.sessionTimeoutMinutes * 60 * 1000).toISOString();
+
+    const resolvedPermissions = permissions && permissions.length > 0
+      ? permissions
+      : (role === "Owner" || role === "SaaS Owner"
+          ? ["billing", "inventory", "reports", "settings", "staff", "orders"]
+          : role === "Manager"
+            ? ["billing", "inventory", "reports", "orders", "staff"]
+            : ["billing", "orders"]);
     
     const newSession: UserSession = {
-      sessionId: `sess-${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
+      sessionId: crypto.randomBytes(32).toString("base64url"),
       userId,
       userName,
       role,
       tenantId,
+      permissions: resolvedPermissions,
       ipAddress: ipAddress || "127.0.0.1",
       device: {
         ...deviceDetails,

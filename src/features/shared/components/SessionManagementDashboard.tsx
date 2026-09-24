@@ -101,7 +101,7 @@ export default function SessionManagementDashboard({
   const fetchSessionData = async (silent = false) => {
     if (!silent) setSyncing(true);
     try {
-      const res = await fetch("/api/auth/sessions-data");
+      const res = await fetch("/api/auth/sessions-data", { credentials: "include" });
       const data = await res.json();
       if (data.success) {
         setActiveSessions(data.activeSessions || []);
@@ -140,6 +140,7 @@ export default function SessionManagementDashboard({
       const res = await fetch("/api/auth/sessions/revoke", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ sessionId })
       });
       const data = await res.json();
@@ -162,6 +163,7 @@ export default function SessionManagementDashboard({
       const res = await fetch("/api/auth/sessions/revoke-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ exceptSessionId: currentSessionId || "" })
       });
       const data = await res.json();
@@ -181,7 +183,7 @@ export default function SessionManagementDashboard({
   const handleClearHistory = async () => {
     if (!window.confirm("Are you sure you want to completely purge the audit logs of authentication attempts?")) return;
     try {
-      const res = await fetch("/api/auth/history/clear", { method: "POST" });
+      const res = await fetch("/api/auth/history/clear", { method: "POST", credentials: "include" });
       const data = await res.json();
       if (data.success) {
         setLoginHistory([]);
@@ -198,6 +200,7 @@ export default function SessionManagementDashboard({
       const res = await fetch("/api/auth/settings/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           sessionTimeoutMinutes: formTimeout,
           maxFailedAttempts: formMaxAttempts,

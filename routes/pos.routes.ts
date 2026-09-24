@@ -1,4 +1,5 @@
 import express from "express";
+import { handleApiError } from "../server/features/shared/database";
 import {
   staffRepo,
   orderRepo,
@@ -6,25 +7,33 @@ import {
   shiftRepo,
   auditLogService,
   authMiddleware,
+  idempotencyMiddleware,
+  requireRole,
+  requirePermission,
   PLAN_LIMITS
 } from "../server/context";
+import {
+  hashPin,
+  verifyPin,
+  findStaffByPinConstantTime
+} from "../server/features/auth/PinSecurityService";
 
 const router = express.Router();
 
 // ============================================================================
-// REST ENDPOINTS: STAFF
+// REST ENDPOINTS: STAFF (Protected: Staff Management requires Owner/Manager role)
 // ============================================================================
-router.get("/staff", authMiddleware, async (req, res) => {
+router.get("/staff", authMiddleware, requirePermission("staff"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     const data = await staffRepo.getAll(tenantId);
     res.json({ success: true, data });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/staff", authMiddleware, async (req, res) => {
+router.post("/staff", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   const sub = (req as any).subscription;
   try {
@@ -40,37 +49,37 @@ router.post("/staff", authMiddleware, async (req, res) => {
     await staffRepo.add(tenantId, req.body);
     res.json({ success: true, message: "Staff member added successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/staff/bulk", authMiddleware, async (req, res) => {
+router.post("/staff/bulk", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await staffRepo.saveAll(tenantId, req.body);
     res.json({ success: true, message: "Staff list synchronized." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.put("/staff/:id", authMiddleware, async (req, res) => {
+router.put("/staff/:id", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await staffRepo.update(tenantId, req.body);
     res.json({ success: true, message: "Staff updated successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.delete("/staff/:id", authMiddleware, async (req, res) => {
+router.delete("/staff/:id", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await staffRepo.delete(tenantId, req.params.id);
     res.json({ success: true, message: "Staff deleted successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -83,11 +92,11 @@ router.get("/orders", authMiddleware, async (req, res) => {
     const data = await orderRepo.getAll(tenantId);
     res.json({ success: true, data });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/orders", authMiddleware, async (req, res) => {
+router.post("/orders", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const sub = (req as any).subscription;
   try {
@@ -107,37 +116,50 @@ router.post("/orders", authMiddleware, async (req, res) => {
     await orderRepo.add(tenantId, req.body);
     res.json({ success: true, message: "Order placed successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/orders/bulk", authMiddleware, async (req, res) => {
+router.post("/orders/bulk", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await orderRepo.saveAll(tenantId, req.body);
     res.json({ success: true, message: "Orders synchronized successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
 router.put("/orders/:id", authMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
+    // Order cancellation protection: Only Owner or Manager can transition order status to 'Cancelled'
+    if (req.body && req.body.status === "Cancelled") {
+      const session = (req as any).session;
+      const role = session?.role;
+      const isOwnerOrManager = role === "Owner" || role === "Manager" || role === "SaaS Owner";
+      if (!isOwnerOrManager) {
+        return res.status(403).json({
+          success: false,
+          error: "FORBIDDEN",
+          message: "Cancelling an order requires Owner or Manager role authorization."
+        });
+      }
+    }
     await orderRepo.update(tenantId, req.body);
     res.json({ success: true, message: "Order updated successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.delete("/orders/:id", authMiddleware, async (req, res) => {
+router.delete("/orders/:id", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await orderRepo.delete(tenantId, req.params.id);
     res.json({ success: true, message: "Order cancelled/deleted." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -150,7 +172,7 @@ router.get("/customers", authMiddleware, async (req, res) => {
     const data = await customerRepo.getAll(tenantId);
     res.json({ success: true, data });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -160,7 +182,7 @@ router.post("/customers", authMiddleware, async (req, res) => {
     await customerRepo.add(tenantId, req.body);
     res.json({ success: true, message: "Customer profile added." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -170,7 +192,7 @@ router.post("/customers/bulk", authMiddleware, async (req, res) => {
     await customerRepo.saveAll(tenantId, req.body);
     res.json({ success: true, message: "Customers synchronized successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -180,7 +202,7 @@ router.put("/customers/:id", authMiddleware, async (req, res) => {
     await customerRepo.update(tenantId, req.body);
     res.json({ success: true, message: "Customer profile updated." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -190,7 +212,7 @@ router.delete("/customers/:id", authMiddleware, async (req, res) => {
     await customerRepo.delete(tenantId, req.params.id);
     res.json({ success: true, message: "Customer profile deleted." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -203,7 +225,7 @@ router.get("/shifts", authMiddleware, async (req, res) => {
     const data = await shiftRepo.getAll(tenantId);
     res.json({ success: true, data });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -213,7 +235,7 @@ router.post("/shifts", authMiddleware, async (req, res) => {
     await shiftRepo.add(tenantId, req.body);
     res.json({ success: true, message: "Shift details saved." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -223,7 +245,7 @@ router.post("/shifts/bulk", authMiddleware, async (req, res) => {
     await shiftRepo.saveAll(tenantId, req.body);
     res.json({ success: true, message: "Shifts synchronized successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -233,7 +255,7 @@ router.put("/shifts/:id", authMiddleware, async (req, res) => {
     await shiftRepo.update(tenantId, req.body);
     res.json({ success: true, message: "Shift updated." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -243,7 +265,7 @@ router.delete("/shifts/:id", authMiddleware, async (req, res) => {
     await shiftRepo.delete(tenantId, req.params.id);
     res.json({ success: true, message: "Shift log deleted." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -261,7 +283,7 @@ router.post("/pos/verify-pin", authMiddleware, async (req, res) => {
 
   try {
     const staffList = (await staffRepo.getAll(tenantId)) || [];
-    const matchingStaff = staffList.find((s) => s.pin === pin);
+    const matchingStaff = await findStaffByPinConstantTime(staffList, pin);
 
     if (!matchingStaff) {
       return res.status(401).json({ success: false, error: "INVALID_PIN", message: "Invalid Manager/Owner PIN code entered." });
@@ -284,12 +306,12 @@ router.post("/pos/verify-pin", authMiddleware, async (req, res) => {
       }
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
 // Problem 1: Order Cancellation with Manager PIN & Required Reason
-router.post("/orders/:id/cancel", authMiddleware, async (req, res) => {
+router.post("/orders/:id/cancel", authMiddleware, requireRole("Owner", "Manager"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const orderId = req.params.id;
   const { managerPin, reason, staffName = "Staff" } = req.body;
@@ -304,7 +326,8 @@ router.post("/orders/:id/cancel", authMiddleware, async (req, res) => {
 
   try {
     const staffList = (await staffRepo.getAll(tenantId)) || [];
-    const manager = staffList.find((s) => s.pin === managerPin && (s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("cancel_order" as any)));
+    const authorizedStaff = staffList.filter((s) => s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("cancel_order" as any));
+    const manager = await findStaffByPinConstantTime(authorizedStaff, managerPin);
 
     if (!manager) {
       return res.status(403).json({ success: false, error: "UNAUTHORIZED_PIN", message: "Invalid Manager PIN or insufficient authorization for order cancellation." });
@@ -347,12 +370,12 @@ router.post("/orders/:id/cancel", authMiddleware, async (req, res) => {
       order: targetOrder
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
 // Problem 2: Audit Discount Application & Custom Price Edits
-router.post("/orders/audit-discount", authMiddleware, async (req, res) => {
+router.post("/orders/audit-discount", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { orderId, originalAmount, discountAmount, finalAmount, managerPin, reason = "Custom Discount" } = req.body;
 
@@ -362,7 +385,8 @@ router.post("/orders/audit-discount", authMiddleware, async (req, res) => {
 
   try {
     const staffList = (await staffRepo.getAll(tenantId)) || [];
-    const manager = staffList.find((s) => s.pin === managerPin && (s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("apply_discount" as any)));
+    const authorizedStaff = staffList.filter((s) => s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("apply_discount" as any));
+    const manager = await findStaffByPinConstantTime(authorizedStaff, managerPin);
 
     if (!manager) {
       return res.status(403).json({ success: false, error: "UNAUTHORIZED_PIN", message: "Invalid Owner/Manager PIN or insufficient privilege to apply discounts." });
@@ -385,7 +409,7 @@ router.post("/orders/audit-discount", authMiddleware, async (req, res) => {
 
     res.json({ success: true, message: "Discount authorization audit recorded successfully.", authorizer: manager.name });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -400,7 +424,8 @@ router.post("/menu/audit-price-change", authMiddleware, async (req, res) => {
 
   try {
     const staffList = (await staffRepo.getAll(tenantId)) || [];
-    const owner = staffList.find((s) => s.pin === managerPin && (s.role === "Owner" || s.permissions?.includes("edit_prices" as any)));
+    const authorizedStaff = staffList.filter((s) => s.role === "Owner" || s.permissions?.includes("edit_prices" as any));
+    const owner = await findStaffByPinConstantTime(authorizedStaff, managerPin);
 
     if (!owner) {
       return res.status(403).json({ success: false, error: "UNAUTHORIZED_PIN", message: "Only Restaurant Owner PIN can modify item prices." });
@@ -416,12 +441,12 @@ router.post("/menu/audit-price-change", authMiddleware, async (req, res) => {
 
     res.json({ success: true, message: "Price change authorized and audit entry created.", authorizer: owner.name });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
 // Problem 3 Solution 2: Cash Drawer Open Audit Log & Alert
-router.post("/pos/open-cash-drawer", authMiddleware, async (req, res) => {
+router.post("/pos/open-cash-drawer", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { staffName = "Cashier", reason } = req.body;
 
@@ -440,7 +465,7 @@ router.post("/pos/open-cash-drawer", authMiddleware, async (req, res) => {
 
     res.json({ success: true, message: "Cash drawer pop audit logged and alert dispatched." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -491,7 +516,8 @@ router.post("/shifts/:id/close-blind", authMiddleware, async (req, res) => {
       }
 
       const staffList = (await staffRepo.getAll(tenantId)) || [];
-      const manager = staffList.find((s) => s.pin === managerPin && (s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("close_shift" as any)));
+      const authorizedStaff = staffList.filter((s) => s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("close_shift" as any));
+      const manager = await findStaffByPinConstantTime(authorizedStaff, managerPin);
 
       if (!manager) {
         return res.status(403).json({
@@ -554,7 +580,7 @@ router.post("/shifts/:id/close-blind", authMiddleware, async (req, res) => {
       variance
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 

@@ -17,9 +17,22 @@ import {
   auditLogService,
   getGlobalTenantsList,
   saveGlobalTenantsList,
-  DEFAULT_TENANT_ID,
-  authMiddleware
+  authMiddleware,
+  requirePermission,
+  requireRole
 } from "../server/context";
+import {
+  hashPin,
+  verifyPin,
+  findStaffByPinConstantTime,
+  verifyMasterVerificationCode,
+  constantTimeStringCompare
+} from "../server/features/auth/PinSecurityService";
+import {
+  SESSION_COOKIE_NAME,
+  getSessionCookieOptions,
+  getClearCookieOptions
+} from "../server/features/auth/SessionService";
 
 const router = express.Router();
 
@@ -100,9 +113,10 @@ router.post("/auth/verify", async (req, res) => {
     return res.status(400).json({ success: false, error: "Registration session has expired or is invalid" });
   }
 
-  // Support 5th Suggestion: Master/Admin verification code bypass
-  const masterCode = process.env.MASTER_VERIFICATION_CODE;
-  const isCodeValid = signup.verificationCode === verificationCode || (masterCode && verificationCode === masterCode);
+  // Constant-time verification code validation & Master code check (strict env var only)
+  const isDirectCodeValid = constantTimeStringCompare(verificationCode, signup.verificationCode);
+  const isMasterCodeValid = verifyMasterVerificationCode(verificationCode);
+  const isCodeValid = isDirectCodeValid || isMasterCodeValid;
 
   if (!isCodeValid) {
     return res.status(400).json({ success: false, error: "INVALID_CODE", message: "The verification code entered is incorrect. Please try again." });
@@ -114,7 +128,7 @@ router.post("/auth/verify", async (req, res) => {
       id: newOwnerId,
       name: signup.ownerName,
       role: "Owner" as any,
-      pin: signup.pin,
+      pin: await hashPin(signup.pin),
       permissions: ["billing", "inventory", "reports", "settings"]
     };
 
@@ -342,7 +356,7 @@ router.post("/auth/verify", async (req, res) => {
           ownerName: signup.ownerName,
           email: signup.email,
           ownerPhone: signup.ownerPhone || "",
-          ownerPin: signup.pin
+          ownerPin: await hashPin(signup.pin)
         });
         await saveGlobalTenantsList(list);
       }
@@ -366,6 +380,9 @@ router.post("/auth/verify", async (req, res) => {
 
     // Remove from pending map
     pendingSignups.delete(pendingToken);
+
+    // Set production-grade HttpOnly Secure session cookie
+    res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
 
     res.json({
       success: true,
@@ -427,11 +444,11 @@ router.get("/auth/tenant-info", async (req, res) => {
   }
 });
 
-// Rotate / Change QR Code for restaurant staff access
-router.post("/auth/tenant/regenerate-qr", async (req, res) => {
-  const tenantId = (req.headers["x-tenant-id"] as string) || req.body.tenantId;
+// Rotate / Change QR Code for restaurant staff access (Protected by session auth & settings permission)
+router.post("/auth/tenant/regenerate-qr", authMiddleware, requirePermission("settings"), async (req, res) => {
+  const tenantId = (req as any).tenantId;
   if (!tenantId) {
-    return res.status(400).json({ success: false, error: "Tenant identifier is required" });
+    return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant could not be resolved from session" });
   }
   try {
     const list = await getGlobalTenantsList();
@@ -476,13 +493,42 @@ router.post("/auth/login", async (req, res) => {
         (email && t.email && t.email.toLowerCase() === email.toLowerCase())
     );
 
-    let effectiveTenantId = targetTenant ? targetTenant.tenantId : (tenantId || DEFAULT_TENANT_ID);
+    let effectiveTenantId = targetTenant ? targetTenant.tenantId : tenantId;
 
     if (targetTenant && targetTenant.status === "suspended") {
       return res.status(403).json({
         success: false,
         error: "TENANT_SUSPENDED",
         message: "This restaurant workspace has been suspended by the SaaS administrator. Please contact support."
+      });
+    }
+
+    let staff = effectiveTenantId ? ((await staffRepo.getAll(effectiveTenantId)) || []) : [];
+    let matchingUser = pin ? await findStaffByPinConstantTime(staff, pin) : null;
+
+    // 2. UNIVERSAL AUTO-DETECT: If not found in effective tenant, search across all registered tenants (only if tenant wasn't strictly fixed)
+    if (!matchingUser && pin && !tenantId) {
+      for (const tenant of globalTenants) {
+        if (tenant.tenantId === effectiveTenantId) continue;
+        if (tenant.status === "suspended") continue;
+        
+        const tenantStaff = (await staffRepo.getAll(tenant.tenantId)) || [];
+        const found = await findStaffByPinConstantTime(tenantStaff, pin);
+        if (found) {
+          effectiveTenantId = tenant.tenantId;
+          targetTenant = tenant;
+          matchingUser = found;
+          staff = tenantStaff;
+          break;
+        }
+      }
+    }
+
+    if (!effectiveTenantId) {
+      return res.status(400).json({
+        success: false,
+        error: "MISSING_TENANT",
+        message: "Tenant identifier is required or could not be determined."
       });
     }
 
@@ -503,27 +549,6 @@ router.post("/auth/login", async (req, res) => {
             ? `Security Alert: Terminal locked for 5 minutes due to 5 failed attempts. Please wait ${lockout.cooldownSeconds}s.`
             : `Keypad paused for ${lockout.cooldownSeconds}s cooldown.`
       });
-    }
-
-    let staff = (await staffRepo.getAll(effectiveTenantId)) || [];
-    let matchingUser = staff.find((s) => s.pin === pin);
-
-    // 2. UNIVERSAL AUTO-DETECT: If not found in effective tenant, search across all registered tenants (only if tenant wasn't strictly fixed)
-    if (!matchingUser && pin && !tenantId) {
-      for (const tenant of globalTenants) {
-        if (tenant.tenantId === effectiveTenantId) continue;
-        if (tenant.status === "suspended") continue;
-        
-        const tenantStaff = (await staffRepo.getAll(tenant.tenantId)) || [];
-        const found = tenantStaff.find((s) => s.pin === pin);
-        if (found) {
-          effectiveTenantId = tenant.tenantId;
-          targetTenant = tenant;
-          matchingUser = found;
-          staff = tenantStaff;
-          break;
-        }
-      }
     }
     
     const userId = matchingUser ? matchingUser.id : "unknown";
@@ -590,15 +615,19 @@ router.post("/auth/login", async (req, res) => {
       matchingUser.name,
       matchingUser.role,
       ip,
-      userAgent
+      userAgent,
+      matchingUser.permissions
     );
+
+    // Set production-grade HttpOnly Secure session cookie
+    res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
 
     res.json({
       success: true,
       session,
       tenant: targetTenant || {
         id: `t-${effectiveTenantId}`,
-        name: effectiveTenantId === DEFAULT_TENANT_ID ? "Veggie Delight Dhaba" : effectiveTenantId,
+        name: targetTenant?.name || effectiveTenantId,
         tenantId: effectiveTenantId,
         status: "active"
       },
@@ -616,7 +645,10 @@ router.post("/auth/login", async (req, res) => {
 
 // Check Terminal Lockout Status
 router.get("/auth/lockout-status", async (req, res) => {
-  const tenantId = (req.query.tenantId as string) || DEFAULT_TENANT_ID;
+  const tenantId = req.query.tenantId as string;
+  if (!tenantId) {
+    return res.status(400).json({ success: false, error: "MISSING_TENANT", message: "Tenant ID parameter is required." });
+  }
   const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
   const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
 
@@ -633,7 +665,10 @@ router.get("/auth/lockout-status", async (req, res) => {
 
 // Emergency Owner Master Unlock Override
 router.post("/auth/unlock-override", async (req, res) => {
-  const { tenantId = DEFAULT_TENANT_ID, masterPin, ownerEmail } = req.body;
+  const { tenantId, masterPin, ownerEmail } = req.body;
+  if (!tenantId) {
+    return res.status(400).json({ success: false, error: "MISSING_TENANT", message: "Tenant ID is required for unlock override." });
+  }
   const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
   const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
 
@@ -644,10 +679,20 @@ router.post("/auth/unlock-override", async (req, res) => {
     const staff = (await staffRepo.getAll(tenantId)) || [];
     const owner = staff.find(s => s.role === "Owner" || s.permissions.includes("settings"));
 
-    const masterSecret = process.env.MASTER_VERIFICATION_CODE || "VEGGIE-SUPER-ADMIN-2026";
-    const isMasterCode = masterPin === masterSecret;
-    const isOwnerPinMatch = owner && (owner.pin === masterPin || targetTenant?.ownerPin === masterPin);
-    const isOwnerEmailMatch = targetTenant && ownerEmail && targetTenant.email.toLowerCase() === ownerEmail.toLowerCase();
+    // Strictly require MASTER_VERIFICATION_CODE from environment variable; no fallback default string
+    const isMasterCode = verifyMasterVerificationCode(masterPin);
+    let isOwnerPinMatch = false;
+    if (owner && masterPin) {
+      isOwnerPinMatch = await verifyPin(masterPin, owner.pin);
+    }
+    if (!isOwnerPinMatch && targetTenant?.ownerPin && masterPin) {
+      isOwnerPinMatch = await verifyPin(masterPin, targetTenant.ownerPin);
+    }
+    const isOwnerEmailMatch = Boolean(
+      targetTenant &&
+      ownerEmail &&
+      constantTimeStringCompare(targetTenant.email.toLowerCase(), ownerEmail.toLowerCase())
+    );
 
     if (!isMasterCode && !isOwnerPinMatch && !isOwnerEmailMatch) {
       return res.status(403).json({
@@ -677,45 +722,137 @@ router.post("/auth/unlock-override", async (req, res) => {
 });
 
 router.post("/auth/validate", async (req, res) => {
-  const { sessionId, tenantId = DEFAULT_TENANT_ID } = req.body;
+  const sessionId = req.body?.sessionId || (req.cookies?.[SESSION_COOKIE_NAME] as string);
+  if (!sessionId) {
+    return res.status(400).json({ success: false, error: "MISSING_SESSION", message: "Session ID is required." });
+  }
   try {
-    let session = await sessionService.validateAndTouchSession(tenantId, sessionId);
-    if (!session && tenantId !== "saas-admin") {
-      // Fallback check in case SaaS Owner validates session with business tenant ID context
-      session = await sessionService.validateAndTouchSession("saas-admin", sessionId);
-    }
-    if (!session && sessionId) {
-      const resolvedTid = await sessionService.resolveTenantId(sessionId, getGlobalTenantsList);
-      if (resolvedTid && resolvedTid !== tenantId) {
-        session = await sessionService.validateAndTouchSession(resolvedTid, sessionId);
-      }
-    }
-    if (!session) {
+    const resolvedTid = await sessionService.resolveTenantId(sessionId, getGlobalTenantsList);
+    if (!resolvedTid) {
+      res.clearCookie(SESSION_COOKIE_NAME, getClearCookieOptions(req));
       return res.json({ success: false, error: "SESSION_EXPIRED", message: "Session is inactive or has expired due to idle timeout." });
     }
+    const session = await sessionService.validateAndTouchSession(resolvedTid, sessionId);
+    if (!session) {
+      res.clearCookie(SESSION_COOKIE_NAME, getClearCookieOptions(req));
+      return res.json({ success: false, error: "SESSION_EXPIRED", message: "Session is inactive or has expired due to idle timeout." });
+    }
+    // Refresh HttpOnly cookie activity
+    res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
     res.json({ success: true, session });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.post("/auth/logout", async (req, res) => {
-  const { sessionId, tenantId = DEFAULT_TENANT_ID } = req.body;
+// Securely retrieve and restore active user session from HttpOnly cookie on application launch
+router.get("/auth/session/current", async (req, res) => {
+  const sessionId =
+    (req.cookies?.[SESSION_COOKIE_NAME] as string) ||
+    (req.headers["x-session-id"] as string) ||
+    (typeof req.headers["authorization"] === "string" && req.headers["authorization"].startsWith("Bearer ")
+      ? req.headers["authorization"].substring(7).trim()
+      : undefined);
+
+  if (!sessionId) {
+    return res.status(401).json({ success: false, error: "NO_ACTIVE_SESSION", message: "No active session cookie found." });
+  }
+
   try {
-    let success = await sessionService.revokeSession(tenantId, sessionId);
-    if (!success && tenantId !== "saas-admin") {
-      success = await sessionService.revokeSession("saas-admin", sessionId);
+    const resolvedTid = await sessionService.resolveTenantId(sessionId, getGlobalTenantsList);
+    if (!resolvedTid) {
+      res.clearCookie(SESSION_COOKIE_NAME, getClearCookieOptions(req));
+      return res.status(401).json({ success: false, error: "SESSION_EXPIRED", message: "Session has expired or is invalid." });
     }
-    res.json({ success, message: "Logged out successfully" });
+
+    const session = await sessionService.validateAndTouchSession(resolvedTid, sessionId);
+    if (!session) {
+      res.clearCookie(SESSION_COOKIE_NAME, getClearCookieOptions(req));
+      return res.status(401).json({ success: false, error: "SESSION_EXPIRED", message: "Session has expired." });
+    }
+
+    // Refresh HttpOnly cookie expiration
+    res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
+
+    // Resolve tenant info
+    let tenantInfo: any = null;
+    const allTenants = await getGlobalTenantsList();
+    tenantInfo = allTenants.find((t: any) => t.tenantId === resolvedTid) || {
+      id: `t-${resolvedTid}`,
+      name: resolvedTid,
+      tenantId: resolvedTid,
+      status: "active"
+    };
+
+    // Resolve user info
+    const userInfo: any = {
+      id: session.userId,
+      name: session.userName,
+      role: session.role,
+      permissions: session.permissions
+    };
+
+    return res.json({
+      success: true,
+      session,
+      tenant: tenantInfo,
+      user: userInfo
+    });
   } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post("/auth/logout", async (req, res) => {
+  const sessionId = req.body?.sessionId || (req.cookies?.[SESSION_COOKIE_NAME] as string);
+  try {
+    if (sessionId) {
+      const resolvedTid = await sessionService.resolveTenantId(sessionId, getGlobalTenantsList);
+      if (resolvedTid) {
+        await sessionService.revokeSession(resolvedTid, sessionId);
+      } else {
+        await sessionService.revokeSession("saas-admin", sessionId);
+      }
+    }
+    // Always clear the HttpOnly secure session cookie on logout
+    res.clearCookie(SESSION_COOKIE_NAME, getClearCookieOptions(req));
+    res.json({ success: true, message: "Logged out successfully" });
+  } catch (error: any) {
+    res.clearCookie(SESSION_COOKIE_NAME, getClearCookieOptions(req));
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 router.get("/auth/staff-directory", async (req, res) => {
-  const tenantId = (req.headers["x-tenant-id"] as string) || (req.query.tenantId as string) || DEFAULT_TENANT_ID;
+  const targetTenantId = (req.headers["x-tenant-id"] as string) || (req.query.tenantId as string);
+  if (!targetTenantId) {
+    return res.status(400).json({ success: false, error: "MISSING_TENANT", message: "Tenant identifier is required." });
+  }
+
+  // Cross-tenant security check: If request has an active session, verify tenant match
+  const sessionId =
+    (req.cookies?.[SESSION_COOKIE_NAME] as string) ||
+    (req.headers["x-session-id"] as string) ||
+    (typeof req.headers["authorization"] === "string" && req.headers["authorization"].startsWith("Bearer ")
+      ? req.headers["authorization"].substring(7).trim()
+      : undefined);
+
+  if (sessionId) {
+    const session = await sessionService.getSession(sessionId);
+    if (session) {
+      const isSaaSAdmin = session.role === "SaaS Owner" || session.tenantId === "saas-admin";
+      if (session.tenantId !== targetTenantId && !isSaaSAdmin) {
+        return res.status(403).json({
+          success: false,
+          error: "FORBIDDEN",
+          message: `Cross-tenant access forbidden: Authenticated tenant (${session.tenantId}) cannot access staff directory of tenant (${targetTenantId}).`
+        });
+      }
+    }
+  }
+
   try {
-    const staff = (await staffRepo.getAll(tenantId)) || [];
+    const staff = (await staffRepo.getAll(targetTenantId)) || [];
     // Only return ID, name, role, and avatar to avoid leaking PIN codes
     const publicStaff = staff.map((s) => ({
       id: s.id,
@@ -730,8 +867,10 @@ router.get("/auth/staff-directory", async (req, res) => {
 });
 
 router.get("/auth/sessions-data", authMiddleware, async (req, res) => {
-  const { tenantId = DEFAULT_TENANT_ID } = req.query;
-  const tid = String(tenantId);
+  const tid = (req as any).tenantId;
+  if (!tid) {
+    return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
+  }
   try {
     const activeSessions = await sessionService.getActiveSessions(tid);
     const loginHistory = await sessionService.getLoginHistory(tid);
@@ -748,17 +887,25 @@ router.get("/auth/sessions-data", authMiddleware, async (req, res) => {
 });
 
 router.post("/auth/sessions/revoke", authMiddleware, async (req, res) => {
-  const { sessionId, tenantId = DEFAULT_TENANT_ID } = req.body;
+  const tenantId = (req as any).tenantId;
+  const { sessionId } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ success: false, error: "MISSING_SESSION", message: "Session ID to revoke is required." });
+  }
   try {
     const success = await sessionService.revokeSession(tenantId, sessionId);
+    if (req.cookies?.[SESSION_COOKIE_NAME] === sessionId) {
+      res.clearCookie(SESSION_COOKIE_NAME, getClearCookieOptions(req));
+    }
     res.json({ success: true, message: `Session revoked successfully.` });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.post("/auth/sessions/revoke-all", authMiddleware, async (req, res) => {
-  const { tenantId = DEFAULT_TENANT_ID, exceptSessionId } = req.body;
+router.post("/auth/sessions/revoke-all", authMiddleware, requirePermission("settings"), async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  const { exceptSessionId } = req.body;
   try {
     if (exceptSessionId) {
       const active = await sessionService.getActiveSessions(tenantId);
@@ -774,8 +921,8 @@ router.post("/auth/sessions/revoke-all", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/auth/history/clear", authMiddleware, async (req, res) => {
-  const { tenantId = DEFAULT_TENANT_ID } = req.body;
+router.post("/auth/history/clear", authMiddleware, requirePermission("settings"), async (req, res) => {
+  const tenantId = (req as any).tenantId;
   try {
     await sessionService.clearLoginHistory(tenantId);
     res.json({ success: true, message: "Login history successfully wiped." });
@@ -784,8 +931,9 @@ router.post("/auth/history/clear", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/auth/settings/update", authMiddleware, async (req, res) => {
-  const { tenantId = DEFAULT_TENANT_ID, sessionTimeoutMinutes, maxFailedAttempts, lockoutDurationSeconds, enableBruteForceProtection } = req.body;
+router.post("/auth/settings/update", authMiddleware, requirePermission("settings"), async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  const { sessionTimeoutMinutes, maxFailedAttempts, lockoutDurationSeconds, enableBruteForceProtection } = req.body;
   try {
     const settings = {
       sessionTimeoutMinutes: Number(sessionTimeoutMinutes) || 60,

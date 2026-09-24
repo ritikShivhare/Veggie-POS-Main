@@ -4,8 +4,10 @@ import {
   menuRepo,
   purchaseRepo,
   recipeRepo,
-  authMiddleware
+  authMiddleware,
+  requirePermission
 } from "../server/context";
+import { handleApiError } from "../server/features/shared/database";
 
 const router = express.Router();
 
@@ -18,47 +20,47 @@ router.get("/ingredients", authMiddleware, async (req, res) => {
     const data = await ingredientRepo.getAll(tenantId);
     res.json({ success: true, data });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/ingredients", authMiddleware, async (req, res) => {
+router.post("/ingredients", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await ingredientRepo.add(tenantId, req.body);
     res.json({ success: true, message: "Ingredient logged successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/ingredients/bulk", authMiddleware, async (req, res) => {
+router.post("/ingredients/bulk", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await ingredientRepo.saveAll(tenantId, req.body);
     res.json({ success: true, message: "Ingredients synchronized successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.put("/ingredients/:id", authMiddleware, async (req, res) => {
+router.put("/ingredients/:id", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await ingredientRepo.update(tenantId, req.body);
     res.json({ success: true, message: "Ingredient updated successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.delete("/ingredients/:id", authMiddleware, async (req, res) => {
+router.delete("/ingredients/:id", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await ingredientRepo.delete(tenantId, req.params.id);
     res.json({ success: true, message: "Ingredient deleted successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -71,47 +73,47 @@ router.get("/menu-items", authMiddleware, async (req, res) => {
     const data = await menuRepo.getAll(tenantId);
     res.json({ success: true, data });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/menu-items", authMiddleware, async (req, res) => {
+router.post("/menu-items", authMiddleware, requirePermission("inventory", "settings"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await menuRepo.add(tenantId, req.body);
     res.json({ success: true, message: "Menu item added successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/menu-items/bulk", authMiddleware, async (req, res) => {
+router.post("/menu-items/bulk", authMiddleware, requirePermission("inventory", "settings"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await menuRepo.saveAll(tenantId, req.body);
     res.json({ success: true, message: "Menu items synchronized successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.put("/menu-items/:id", authMiddleware, async (req, res) => {
+router.put("/menu-items/:id", authMiddleware, requirePermission("inventory", "settings"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await menuRepo.update(tenantId, req.body);
     res.json({ success: true, message: "Menu item updated successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.delete("/menu-items/:id", authMiddleware, async (req, res) => {
+router.delete("/menu-items/:id", authMiddleware, requirePermission("inventory", "settings"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await menuRepo.delete(tenantId, req.params.id);
     res.json({ success: true, message: "Menu item deleted successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -124,47 +126,47 @@ router.get("/purchases", authMiddleware, async (req, res) => {
     const data = await purchaseRepo.getAll(tenantId);
     res.json({ success: true, data });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/purchases", authMiddleware, async (req, res) => {
+router.post("/purchases", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await purchaseRepo.add(tenantId, req.body);
     res.json({ success: true, message: "Purchase invoice registered." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/purchases/bulk", authMiddleware, async (req, res) => {
+router.post("/purchases/bulk", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await purchaseRepo.saveAll(tenantId, req.body);
     res.json({ success: true, message: "Purchases synchronized successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.put("/purchases/:id", authMiddleware, async (req, res) => {
+router.put("/purchases/:id", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await purchaseRepo.update(tenantId, req.body);
     res.json({ success: true, message: "Purchase updated successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.delete("/purchases/:id", authMiddleware, async (req, res) => {
+router.delete("/purchases/:id", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await purchaseRepo.delete(tenantId, req.params.id);
     res.json({ success: true, message: "Purchase deleted successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -177,37 +179,37 @@ router.get("/recipes", authMiddleware, async (req, res) => {
     const data = await recipeRepo.getAll(tenantId);
     res.json({ success: true, data });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/recipes", authMiddleware, async (req, res) => {
+router.post("/recipes", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await recipeRepo.addOrUpdate(tenantId, req.body);
     res.json({ success: true, message: "Recipe saved successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/recipes/bulk", authMiddleware, async (req, res) => {
+router.post("/recipes/bulk", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await recipeRepo.saveAll(tenantId, req.body);
     res.json({ success: true, message: "Recipes synchronized successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.delete("/recipes/:menuItemId", authMiddleware, async (req, res) => {
+router.delete("/recipes/:menuItemId", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await recipeRepo.delete(tenantId, req.params.menuItemId);
     res.json({ success: true, message: "Recipe deleted successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 

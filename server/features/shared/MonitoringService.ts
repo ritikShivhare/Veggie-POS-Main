@@ -100,7 +100,11 @@ export class MonitoringService {
     // Persist logs with a clean sliding window of last 250 log entries
     const logs = await this.getLogs();
     logs.unshift(entry);
-    await this.db.saveObject("global", "system_telemetry_logs", logs.slice(0, 250));
+    try {
+      await this.db.saveObject("global", "system_telemetry_logs", logs.slice(0, 250));
+    } catch {
+      // Telemetry log persistence is non-blocking during DB downtime
+    }
 
     return entry;
   }

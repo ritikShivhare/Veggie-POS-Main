@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Shift, StaffMember, StaffRole, RestaurantTenant } from "../shared/types";
 import { Clock, Play, LogOut, CheckCircle2, UserCheck, Eye, UserPlus, AlertCircle, ShieldAlert, Trash2, UserMinus, Zap, QrCode, Smartphone, Share2 } from "lucide-react";
+import { ApiClient } from "../shared/services/api";
 import StaffQrModal from "./components/StaffQrModal";
 
 interface StaffShiftsProps {
@@ -65,7 +66,7 @@ export default function StaffShifts({
         payload.managerPin = overridePin;
       }
 
-      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const sessId = ApiClient.getSessionId() || "";
       const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || activeTenant?.tenantId || "";
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (sessId) headers["x-session-id"] = sessId;
@@ -74,6 +75,7 @@ export default function StaffShifts({
       const res = await fetch(`/api/shifts/${activeShift.id}/close-blind`, {
         method: "POST",
         headers,
+        credentials: "include",
         body: JSON.stringify(payload)
       });
 
@@ -202,7 +204,7 @@ export default function StaffShifts({
 
     // Instant Backend Sync
     try {
-      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const sessId = ApiClient.getSessionId() || "";
       const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || activeTenant?.tenantId || "";
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (sessId) headers["x-session-id"] = sessId;
@@ -211,6 +213,7 @@ export default function StaffShifts({
       await fetch("/api/pos/staff", {
         method: "POST",
         headers,
+        credentials: "include",
         body: JSON.stringify(newStaff)
       });
     } catch (syncErr) {
@@ -234,7 +237,7 @@ export default function StaffShifts({
 
     // Instant Backend Sync Delete
     try {
-      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const sessId = ApiClient.getSessionId() || "";
       const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || activeTenant?.tenantId || "";
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (sessId) headers["x-session-id"] = sessId;
@@ -242,7 +245,8 @@ export default function StaffShifts({
 
       await fetch(`/api/pos/staff/${staffId}`, {
         method: "DELETE",
-        headers
+        headers,
+        credentials: "include"
       });
     } catch (syncErr) {
       console.warn("Backend direct staff delete error:", syncErr);

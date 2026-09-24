@@ -24,6 +24,7 @@ import SessionManagementDashboard from "./features/shared/components/SessionMana
 import Dashboard from "./features/shared/components/Dashboard";
 import { ToastContainer } from "./features/shared/components/ToastContainer";
 import { toast } from "./features/shared/services/toast";
+import { ApiClient } from "./features/shared/services/api";
 
 const KitchenKDS = React.lazy(() => import("./features/kitchen/KitchenKDS"));
 const AIReportsView = React.lazy(() => import("./features/shared/components/AIReportsView"));
@@ -245,8 +246,17 @@ function AppContent() {
           </div>
           <button
             onClick={() => {
-              localStorage.removeItem("veggiepos_current_session_id");
+              fetch("/api/auth/logout", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ sessionId: currentSessionId, tenantId: "saas-admin" })
+              }).catch(() => {});
+              try {
+                localStorage.removeItem("veggiepos_current_session_id");
+              } catch (e) {}
               localStorage.removeItem("veggiepos_current_staff");
+              ApiClient.setSessionId(null);
               setCurrentSessionId(null);
               setCurrentStaff(null);
               setShowAdminPanel(false);

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import QRCode from "qrcode";
 import { MenuItem, Ingredient, Recipe, CartItem, Order, StaffMember, InventorySettings, OrderStatus, Customer } from "../shared/types";
+import { ApiClient } from "../shared/services/api";
 import {
   Search,
   ShoppingCart,
@@ -123,7 +124,7 @@ export default function POSBilling({
     }
 
     try {
-      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const sessId = ApiClient.getSessionId() || "";
       const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || "";
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (sessId) headers["x-session-id"] = sessId;
@@ -131,7 +132,11 @@ export default function POSBilling({
 
       const res = await fetch(`/api/orders/${cancelModalOrder.id}/cancel`, {
         method: "POST",
-        headers,
+        headers: {
+          ...headers,
+          "Idempotency-Key": ApiClient.generateIdempotencyKey(`cancel_${cancelModalOrder.id}`)
+        },
+        credentials: "include",
         body: JSON.stringify({
           managerPin: cancelManagerPin,
           reason: cancelReason.trim(),
@@ -167,7 +172,7 @@ export default function POSBilling({
     }
 
     try {
-      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const sessId = ApiClient.getSessionId() || "";
       const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || "";
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (sessId) headers["x-session-id"] = sessId;
@@ -175,7 +180,11 @@ export default function POSBilling({
 
       const res = await fetch("/api/pos/open-cash-drawer", {
         method: "POST",
-        headers,
+        headers: {
+          ...headers,
+          "Idempotency-Key": ApiClient.generateIdempotencyKey("drawer_pop")
+        },
+        credentials: "include",
         body: JSON.stringify({
           staffName: currentStaff?.name || "Cashier",
           reason: drawerPopReason.trim(),
@@ -220,7 +229,7 @@ export default function POSBilling({
 
     try {
       const origTotal = subtotal + tax;
-      const sessId = localStorage.getItem("veggiepos_current_session_id") || "";
+      const sessId = ApiClient.getSessionId() || "";
       const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || "";
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (sessId) headers["x-session-id"] = sessId;
@@ -228,7 +237,11 @@ export default function POSBilling({
 
       const res = await fetch("/api/orders/audit-discount", {
         method: "POST",
-        headers,
+        headers: {
+          ...headers,
+          "Idempotency-Key": ApiClient.generateIdempotencyKey(`disc_${billingOrder?.id || "cart"}`)
+        },
+        credentials: "include",
         body: JSON.stringify({
           originalAmount: origTotal,
           discountAmount: numVal,

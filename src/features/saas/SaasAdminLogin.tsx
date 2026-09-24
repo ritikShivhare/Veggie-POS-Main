@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Crown, AlertTriangle, RefreshCw } from "lucide-react";
 import { StaffMember } from "../shared/types";
+import { ApiClient } from "../shared/services/api";
 
 interface SaasAdminLoginProps {
   currentStaff: StaffMember | null;
@@ -60,12 +61,16 @@ export default function SaasAdminLogin({
               const res = await fetch("/api/saas-admin/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                credentials: "include",
                 body: JSON.stringify({ password: mfaRequire.password, totp: mfaCode })
               });
               const data = await res.json();
               if (data.success && data.user?.role === "SaaS Owner") {
-                localStorage.setItem("veggiepos_current_session_id", data.session.sessionId);
+                try {
+                  localStorage.removeItem("veggiepos_current_session_id");
+                } catch (e) {}
                 localStorage.setItem("veggiepos_current_staff", JSON.stringify(data.user));
+                ApiClient.setSessionId(data.session.sessionId);
                 setCurrentSessionId(data.session.sessionId);
                 setCurrentStaff(data.user);
                 setActiveTab("saas-admin");
@@ -131,6 +136,7 @@ export default function SaasAdminLogin({
               const res = await fetch("/api/saas-admin/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
+                credentials: "include",
                 body: JSON.stringify({ password: inputPassword })
               });
               const data = await res.json();
@@ -142,8 +148,11 @@ export default function SaasAdminLogin({
                   setMfaCode("");
                   setMfaError("");
                 } else if (data.user?.role === "SaaS Owner") {
-                  localStorage.setItem("veggiepos_current_session_id", data.session.sessionId);
+                  try {
+                    localStorage.removeItem("veggiepos_current_session_id");
+                  } catch (e) {}
                   localStorage.setItem("veggiepos_current_staff", JSON.stringify(data.user));
+                  ApiClient.setSessionId(data.session.sessionId);
                   setCurrentSessionId(data.session.sessionId);
                   setCurrentStaff(data.user);
                   setActiveTab("saas-admin");

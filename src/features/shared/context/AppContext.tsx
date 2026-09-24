@@ -2,6 +2,7 @@ import React, { createContext, useContext } from "react";
 import { useTenantData } from "../hooks/useTenantData";
 import { useSyncState } from "../hooks/useSyncState";
 import { useAuthSession } from "../hooks/useAuthSession";
+import { ApiClient } from "../services/api";
 import { MenuItem, Ingredient, Recipe, Purchase, StaffMember, Shift, Order, RestaurantTenant, InventorySettings, Customer } from "../types";
 
 export interface AppContextType {
@@ -102,18 +103,33 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     return null;
   });
 
-  const [currentSessionId, setCurrentSessionId] = React.useState<string | null>(() => {
-    const savedStaff = localStorage.getItem("veggiepos_current_staff");
-    if (savedStaff) {
-      try {
-        const parsed = JSON.parse(savedStaff);
-        if (parsed && parsed.name) {
-          return localStorage.getItem("veggiepos_current_session_id") || null;
+  // Strictly in-memory session identifier (CWE-312 / CWE-922: Never stored in localStorage)
+  const [currentSessionId, setCurrentSessionId] = React.useState<string | null>(null);
+
+  // Securely bootstrap session from HttpOnly cookie on application launch
+  React.useEffect(() => {
+    // Purge any legacy localStorage session tokens
+    try {
+      localStorage.removeItem("veggiepos_current_session_id");
+    } catch (e) {}
+
+    fetch("/api/auth/session/current", { credentials: "include" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.session && data.user) {
+          setCurrentStaff(data.user);
+          setCurrentSessionId(data.session.sessionId);
+          ApiClient.setSessionId(data.session.sessionId);
+          if (data.tenant) {
+            tenant.handleRegisterTenant(data.tenant);
+            tenant.setActiveTenant(data.tenant);
+          }
         }
-      } catch (e) {}
-    }
-    return null;
-  });
+      })
+      .catch(() => {
+        // No active session or network error - terminal remains secure
+      });
+  }, []);
 
   // Run Auth hook or Sync hook depending on tenant
   const sync = useSyncState({
@@ -137,6 +153,9 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     if (loggedInTenant && loggedInTenant.tenantId) {
       tenant.handleRegisterTenant(loggedInTenant);
       tenant.setActiveTenant(loggedInTenant);
+    }
+    if (sessionId) {
+      ApiClient.setSessionId(sessionId);
     }
     auth.handleLoginSuccess(staff, sessionId);
   };

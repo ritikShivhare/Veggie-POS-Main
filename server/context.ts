@@ -19,10 +19,13 @@ import { NotificationService } from "./features/notifications/NotificationServic
 import { EventBus } from "./features/shared/EventBus";
 import { AuditLogService } from "./features/shared/AuditLogService";
 import { Database } from "./features/shared/database";
-import { SessionService } from "./features/auth/SessionService";
+import { SessionService, SESSION_COOKIE_NAME } from "./features/auth/SessionService";
 import { MonitoringService } from "./features/shared/MonitoringService";
+import { IdempotencyService } from "./features/shared/IdempotencyService";
+import { idempotencyMiddleware } from "./middleware/idempotency.middleware";
+import { realtimeService, RealtimeService } from "./features/shared/RealtimeService";
 import { getSubscription, saveSubscription, PLAN_LIMITS } from "./features/shared/subscription";
-export { getSubscription, saveSubscription, PLAN_LIMITS };
+export { getSubscription, saveSubscription, PLAN_LIMITS, realtimeService, RealtimeService };
 
 // Instantiate Repositories
 export const menuRepo = new MenuRepository();
@@ -55,6 +58,8 @@ export const jobsService = BackgroundJobsService.getInstance();
 export const notificationService = NotificationService.getInstance();
 export const eventBus = EventBus.getInstance();
 export const auditLogService = AuditLogService.getInstance();
+export const idempotencyService = IdempotencyService.getInstance();
+export { idempotencyMiddleware };
 
 export const DEFAULT_TENANT_ID = "veg-main-001";
 
@@ -129,26 +134,62 @@ getGlobalTenantsList().then((list) => {
   console.error("Failed to pre-load suspended tenants:", err);
 });
 
-// Authentication & Tenant Validation Middleware
-export const authMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const isAuthRoute = req.path.startsWith("/api/auth/login") || 
-                      req.path.startsWith("/api/auth/validate") || 
-                      req.path.startsWith("/api/auth/logout") ||
-                      req.path.startsWith("/api/auth/staff-directory") ||
-                      req.path.startsWith("/api/auth/signup") ||
-                      req.path.startsWith("/api/auth/verify") ||
-                      req.path.startsWith("/api/saas-admin/login") ||
-                      req.path.startsWith("/api/health") ||
-                      req.path.startsWith("/api/copilot-chat") ||
-                      req.path.startsWith("/api/webhooks");
+// Strict Allowlist of Public Routes (Method + Path)
+// Only these endpoints can be accessed without a valid active session.
+// Client-sent tenantId is NEVER treated as authority on any route.
+export const PUBLIC_ROUTES = [
+  { method: "GET", path: "/api/health" },
+  { method: "POST", path: "/api/auth/login" },
+  { method: "POST", path: "/api/auth/signup" },
+  { method: "POST", path: "/api/auth/verify" },
+  { method: "GET", path: "/api/auth/lockout-status" },
+  { method: "POST", path: "/api/auth/unlock-override" },
+  { method: "POST", path: "/api/auth/validate" },
+  { method: "POST", path: "/api/auth/logout" },
+  { method: "GET", path: "/api/auth/tenant-info" },
+  { method: "GET", path: "/api/auth/staff-directory" },
+  { method: "POST", path: "/api/saas-admin/login" },
+  { method: "POST", path: "/api/webhooks/stripe" },
+  { method: "POST", path: "/api/monitoring/report-error" },
+  { method: "POST", path: "/api/copilot-chat" },
+  { method: "GET", path: "/api/billing/mock-checkout" },
+  { method: "POST", path: "/api/billing/mock-payment-success" },
+  { method: "POST", path: "/api/billing/mock-payment-fail" },
+  { method: "GET", path: "/api/billing/mock-portal" }
+];
 
-  if (isAuthRoute) {
-    const clientTenantId = (req.headers["x-tenant-id"] as string) || (req.query.tenantId as string) || (req.body.tenantId as string) || "veg-main-001";
-    (req as any).tenantId = clientTenantId;
+export function isPublicRoute(req: express.Request): boolean {
+  const reqMethod = (req.method || "GET").toUpperCase();
+  let reqPath = (req.originalUrl || req.path || "").split("?")[0];
+  if (!reqPath.startsWith("/api/")) {
+    if (reqPath.startsWith("/")) {
+      reqPath = "/api" + reqPath;
+    } else {
+      reqPath = "/api/" + reqPath;
+    }
+  }
+
+  return PUBLIC_ROUTES.some((route) => {
+    return route.method === reqMethod && route.path === reqPath;
+  });
+}
+
+// Authentication & Tenant Isolation Middleware
+// Enforces: Tenant is ALWAYS derived from verified session. Client-sent tenantId is never authoritative.
+export const authMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (isPublicRoute(req)) {
+    // Public routes proceed without setting an authoritative session-derived tenant
     return next();
   }
 
-  const sessionId = (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || (req.body.sessionId as string);
+  const sessionId =
+    (req.cookies?.[SESSION_COOKIE_NAME] as string) ||
+    (req.headers["x-session-id"] as string) ||
+    (typeof req.headers["authorization"] === "string" && req.headers["authorization"].startsWith("Bearer ")
+      ? req.headers["authorization"].substring(7).trim()
+      : undefined) ||
+    (req.query?.sessionId as string) ||
+    (req.body?.sessionId as string);
 
   if (!sessionId) {
     return res.status(401).json({
@@ -158,7 +199,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     });
   }
 
-  // Resolve the tenantId in O(1) using our direct sessionId-to-tenantId index
+  // Resolve the tenantId strictly from session
   let session: any = null;
   const resolvedTenantId = await sessionService.resolveTenantId(sessionId, getGlobalTenantsList);
 
@@ -174,8 +215,33 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     });
   }
 
-  // Tenant ID is exclusively resolved from the validated session!
+  // Tenant ID is strictly derived from the validated session!
   const tenantId = session.tenantId;
+  if (!tenantId) {
+    return res.status(403).json({
+      success: false,
+      error: "MISSING_TENANT",
+      message: "Session is not associated with any valid tenant."
+    });
+  }
+
+  // Anti-Spoofing: Client-sent tenantId cannot override or contradict session tenant
+  const clientProvidedTenant =
+    (req.headers["x-tenant-id"] as string) ||
+    (req.query?.tenantId as string) ||
+    (req.body?.tenantId as string);
+
+  if (clientProvidedTenant && clientProvidedTenant !== tenantId) {
+    const isSaaSAdmin = session.role === "SaaS Owner" || tenantId === "saas-admin";
+    if (!isSaaSAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: "TENANT_MISMATCH",
+        message: `Tenant isolation violation: Client-provided tenantId (${clientProvidedTenant}) does not match authenticated session tenant (${tenantId}).`
+      });
+    }
+  }
+
   (req as any).tenantId = tenantId;
   (req as any).session = session;
 
@@ -197,16 +263,107 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     return res.status(403).json({
       success: false,
       error: "READ_ONLY_MODE",
-      message: "This account is currently in Read-Only mode due to an unpaid, past-due, or canceled subscription. Please update your payment details or subscribe in the Rules Settings panel to restore full write access."
+      message: "This account is currently in Read-Only mode due to an unpaid, past-due, or canceled subscription."
     });
   }
 
   next();
 };
 
+/**
+ * Centralized Role-Based Access Control (RBAC) Middleware: requireRole
+ * Ensures that the authenticated session user has one of the allowed roles.
+ * Note: 'Owner' and 'SaaS Owner' inherit top-level administrative authority.
+ */
+export const requireRole = (...allowedRoles: string[]) => {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const session = (req as any).session;
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        error: "UNAUTHORIZED",
+        message: "Authentication session is required to perform this action."
+      });
+    }
+
+    const role = session.role;
+    const isSuperOrOwner = role === "Owner" || role === "SaaS Owner";
+    if (isSuperOrOwner || allowedRoles.includes(role)) {
+      return next();
+    }
+
+    return res.status(403).json({
+      success: false,
+      error: "FORBIDDEN",
+      message: `Access denied. Action requires one of the following roles: [${allowedRoles.join(", ")}]. Current role: "${role}".`
+    });
+  };
+};
+
+/**
+ * Centralized Permission-Based Access Control (PBAC) Middleware: requirePermission
+ * Ensures that the authenticated user possesses the required permission(s).
+ * Note: 'Owner' and 'SaaS Owner' inherently possess all permissions.
+ */
+export const requirePermission = (...requiredPermissions: string[]) => {
+  return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const session = (req as any).session;
+    if (!session) {
+      return res.status(401).json({
+        success: false,
+        error: "UNAUTHORIZED",
+        message: "Authentication session is required to perform this action."
+      });
+    }
+
+    const role = session.role;
+    if (role === "Owner" || role === "SaaS Owner") {
+      return next();
+    }
+
+    let userPermissions: string[] = session.permissions || [];
+
+    // Fallback: If permissions not present on session, resolve from staffRepo
+    if (!userPermissions || userPermissions.length === 0) {
+      try {
+        const tenantId = (req as any).tenantId;
+        if (tenantId) {
+          const staffList = (await staffRepo.getAll(tenantId)) || [];
+          const currentStaff = staffList.find(s => s.id === session.userId);
+          if (currentStaff && currentStaff.permissions) {
+            userPermissions = currentStaff.permissions;
+            session.permissions = userPermissions;
+          }
+        }
+      } catch (err) {
+        console.error("Error resolving staff permissions for RBAC:", err);
+      }
+    }
+
+    const hasPermission = requiredPermissions.some(perm => userPermissions.includes(perm));
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        success: false,
+        error: "FORBIDDEN",
+        message: `Access denied. Action requires permission: [${requiredPermissions.join(", ")}]. Current permissions: [${userPermissions.join(", ")}].`
+      });
+    }
+
+    return next();
+  };
+};
+
 // SaaS Super-Admin Management Middleware
 export const adminAuthMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const sessionId = (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || (req.body.sessionId as string);
+  const sessionId =
+    (req.cookies?.[SESSION_COOKIE_NAME] as string) ||
+    (req.headers["x-session-id"] as string) ||
+    (typeof req.headers["authorization"] === "string" && req.headers["authorization"].startsWith("Bearer ")
+      ? req.headers["authorization"].substring(7).trim()
+      : undefined) ||
+    (req.query?.sessionId as string) ||
+    (req.body?.sessionId as string);
   
   if (!sessionId) {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Super-Admin session ID required." });

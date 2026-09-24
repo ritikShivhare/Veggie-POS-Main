@@ -1,5 +1,5 @@
 import express from "express";
-import { Database } from "../server/features/shared/database";
+import { Database, handleApiError } from "../server/features/shared/database";
 import { redisCacheService } from "../server/features/shared/RedisCacheService";
 import {
   settingsRepo,
@@ -12,7 +12,9 @@ import {
   auditLogService,
   monitoringService,
   authMiddleware,
-  DEFAULT_TENANT_ID
+  idempotencyMiddleware,
+  requirePermission,
+  requireRole
 } from "../server/context";
 
 const router = express.Router();
@@ -26,17 +28,17 @@ router.get("/settings", authMiddleware, async (req, res) => {
     const data = await settingsRepo.get(tenantId);
     res.json({ success: true, data });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-router.post("/settings", authMiddleware, async (req, res) => {
+router.post("/settings", authMiddleware, requirePermission("settings"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await settingsRepo.save(tenantId, req.body);
     res.json({ success: true, message: "Settings saved successfully." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
@@ -52,12 +54,12 @@ router.get("/sync", authMiddleware, async (req, res) => {
     });
   } catch (error: any) {
     console.error(`Sync GET error for tenant ${tenantId}:`, error);
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
 // Backward compatibility wrapper route: bulk saves everything via separate tables
-router.post("/sync", authMiddleware, async (req, res) => {
+router.post("/sync", authMiddleware, requireRole("Owner", "Manager"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     const data = await syncService.saveFullState(tenantId, req.body);
@@ -68,16 +70,17 @@ router.post("/sync", authMiddleware, async (req, res) => {
     });
   } catch (error: any) {
     console.error(`Sync POST error for tenant ${tenantId}:`, error);
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res, error);
   }
 });
 
-// Expose Supabase credentials securely to authenticated client terminals for Realtime subscriptions
+// Realtime configuration: Anon key access for sensitive database events has been retired
+// in favor of server-mediated WebSockets (/ws) with strict tenant claim verification.
 router.get("/supabase-config", authMiddleware, (req, res) => {
   res.json({
     success: true,
-    supabaseUrl: process.env.SUPABASE_URL,
-    supabaseAnonKey: process.env.SUPABASE_ANON_KEY
+    serverMediatedRealtime: true,
+    wsPath: "/ws"
   });
 });
 
@@ -99,11 +102,15 @@ router.post("/reports/generate", authMiddleware, async (req, res) => {
 // Interactive AI Copilot Chat endpoint (Accessible to authenticated app staff & public website visitors)
 router.post("/copilot-chat", async (req, res) => {
   const { prompt, history, tenantId, tenantName, staffName, staffRole } = req.body;
+  const effectiveTenantId = (req as any).tenantId || tenantId;
+  if (!effectiveTenantId) {
+    return res.status(400).json({ success: false, error: "MISSING_TENANT", message: "Tenant identifier is required for Copilot." });
+  }
   try {
     const result = await copilotService.handleChat(
       prompt,
       history,
-      tenantId || (req as any).tenantId || DEFAULT_TENANT_ID,
+      effectiveTenantId,
       tenantName || "VeggiePOS Website Visitor",
       staffName || "Guest User",
       staffRole || "Visitor"
@@ -168,9 +175,13 @@ router.post("/jobs/clear-logs", authMiddleware, (req, res) => {
 
 // Central Notification System Endpoints
 router.get("/notifications", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  if (!tenantId) {
+    return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
+  }
   try {
-    const inApp = await notificationService.getInAppNotifications(DEFAULT_TENANT_ID);
-    const logs = await notificationService.getDispatchLogs(DEFAULT_TENANT_ID);
+    const inApp = await notificationService.getInAppNotifications(tenantId);
+    const logs = await notificationService.getDispatchLogs(tenantId);
     res.json({
       success: true,
       notifications: inApp,
@@ -182,9 +193,13 @@ router.get("/notifications", authMiddleware, async (req, res) => {
 });
 
 router.post("/notifications/send", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  if (!tenantId) {
+    return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
+  }
   const { title, message, severity, channels, recipientEmail, recipientPhone, metadata } = req.body;
   try {
-    const result = await notificationService.send(DEFAULT_TENANT_ID, {
+    const result = await notificationService.send(tenantId, {
       title,
       message,
       severity: severity || "info",
@@ -203,9 +218,10 @@ router.post("/notifications/send", authMiddleware, async (req, res) => {
 });
 
 router.post("/notifications/read", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
   const { id } = req.body;
   try {
-    const success = await notificationService.markAsRead(DEFAULT_TENANT_ID, id);
+    const success = await notificationService.markAsRead(tenantId, id);
     res.json({ success, message: success ? "Notification marked as read" : "Notification not found" });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -213,8 +229,9 @@ router.post("/notifications/read", authMiddleware, async (req, res) => {
 });
 
 router.post("/notifications/read-all", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
   try {
-    await notificationService.markAllAsRead(DEFAULT_TENANT_ID);
+    await notificationService.markAllAsRead(tenantId);
     res.json({ success: true, message: "All notifications marked as read" });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -222,9 +239,10 @@ router.post("/notifications/read-all", authMiddleware, async (req, res) => {
 });
 
 router.delete("/notifications", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
   const { id } = req.body;
   try {
-    const success = await notificationService.deleteNotification(DEFAULT_TENANT_ID, id);
+    const success = await notificationService.deleteNotification(tenantId, id);
     res.json({ success, message: success ? "Notification deleted" : "Notification not found" });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -232,8 +250,9 @@ router.delete("/notifications", authMiddleware, async (req, res) => {
 });
 
 router.post("/notifications/clear-logs", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
   try {
-    await notificationService.clearDispatchLogs(DEFAULT_TENANT_ID);
+    await notificationService.clearDispatchLogs(tenantId);
     res.json({ success: true, message: "Dispatch history logs cleared" });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -242,11 +261,15 @@ router.post("/notifications/clear-logs", authMiddleware, async (req, res) => {
 
 // Central Event-Driven Architecture Endpoints
 router.get("/events", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  if (!tenantId) {
+    return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
+  }
   try {
     const history = eventBus.getHistory();
-    const logs = await auditLogService.getLogs(DEFAULT_TENANT_ID);
+    const logs = await auditLogService.getLogs(tenantId);
     const db = Database.getInstance();
-    const analytics = await db.getObject(DEFAULT_TENANT_ID, "system_event_analytics") || {
+    const analytics = await db.getObject(tenantId, "system_event_analytics") || {
       totalEventsProcessed: 0,
       totalOrdersCompleted: 0,
       totalPaymentsProcessed: 0,
@@ -266,9 +289,13 @@ router.get("/events", authMiddleware, async (req, res) => {
 });
 
 router.post("/events/publish", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  if (!tenantId) {
+    return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
+  }
   const { type, payload } = req.body;
   try {
-    eventBus.publish(DEFAULT_TENANT_ID, type, payload);
+    eventBus.publish(tenantId, type, payload);
     res.json({ success: true, message: `Event ${type} published successfully.` });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -276,15 +303,19 @@ router.post("/events/publish", authMiddleware, async (req, res) => {
 });
 
 router.post("/events/clear", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  if (!tenantId) {
+    return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
+  }
   try {
     eventBus.clearHistory();
     try {
-      await auditLogService.clearLogs(DEFAULT_TENANT_ID);
+      await auditLogService.clearLogs(tenantId);
     } catch (auditErr: any) {
       console.warn("Audit logs are protected and immutable:", auditErr.message);
     }
     const db = Database.getInstance();
-    await db.saveObject(DEFAULT_TENANT_ID, "system_event_analytics", {
+    await db.saveObject(tenantId, "system_event_analytics", {
       totalEventsProcessed: 0,
       totalOrdersCompleted: 0,
       totalPaymentsProcessed: 0,

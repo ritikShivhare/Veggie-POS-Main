@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { MenuItem, Ingredient, Recipe, Purchase, StaffMember, Shift, Order, InventorySettings, Customer } from "../types";
 import { ApiClient } from "../services/api";
-import { createClient } from "@supabase/supabase-js";
 import {
   INITIAL_MENU_ITEMS,
   INITIAL_INGREDIENTS,
@@ -201,9 +200,10 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     let active = true;
     isLoadedRef.current = false;
 
-    let channel: any = null;
-    let supabase: any = null;
-    let interval: any = null;
+    let ws: WebSocket | null = null;
+    let reconnectTimer: any = null;
+    let pingInterval: any = null;
+    let pollingInterval: any = null;
 
     const fetchSyncUpdates = async () => {
       try {
@@ -325,12 +325,12 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
           }
 
           const initialPayload = {
-            menuItems: INITIAL_MENU_ITEMS,
-            ingredients: INITIAL_INGREDIENTS,
+            menuItems: INITIAL_MENU_ITEMS.map(m => ({ ...m, version: m.version ?? 1 })),
+            ingredients: INITIAL_INGREDIENTS.map(i => ({ ...i, version: (i as any).version ?? 1 })),
             recipes: INITIAL_RECIPES,
-            staffList: initialStaffList,
-            orders: INITIAL_ORDERS,
-            customers: INITIAL_CUSTOMERS,
+            staffList: initialStaffList.map(s => ({ ...s, version: s.version ?? 1 })),
+            orders: INITIAL_ORDERS.map(o => ({ ...o, version: o.version ?? 1 })),
+            customers: INITIAL_CUSTOMERS.map(c => ({ ...c, version: (c as any).version ?? 1 })),
             purchases: [],
             shifts: isMainTenant ? [
               {
@@ -339,7 +339,8 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
                 staffName: "Rahul Sharma",
                 role: "Owner" as const,
                 startTime: new Date(Date.now() - 3600000 * 4).toISOString(),
-                status: "Active" as const
+                status: "Active" as const,
+                version: 1
               }
             ] : [
               {
@@ -348,7 +349,8 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
                 staffName: activeTenantId === "veg-reetesh-dhaba" ? "Reetesh" : "Amit Verma",
                 role: "Owner" as const,
                 startTime: new Date(Date.now() - 3600000 * 4).toISOString(),
-                status: "Active" as const
+                status: "Active" as const,
+                version: 1
               }
             ],
             settings: {
@@ -405,8 +407,9 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     };
 
     const startPollingFallback = () => {
+      if (pollingInterval) return;
       console.log(`[Realtime] Fallback polling enabled (3.5s interval) for tenant: ${activeTenantId}`);
-      interval = setInterval(async () => {
+      pollingInterval = setInterval(async () => {
         if (hasPendingChangesRef.current || (Date.now() - lastSaveTimeRef.current < 2500)) {
           return;
         }
@@ -414,49 +417,93 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
       }, 3500);
     };
 
-    const setupRealtime = async () => {
+    const setupServerMediatedRealtime = () => {
+      if (!active) return;
       try {
-        const configRes = await ApiClient.getSupabaseConfig();
-        if (!active) return;
-
-        if (configRes.success && configRes.supabaseUrl && configRes.supabaseAnonKey &&
-            configRes.supabaseUrl !== "YOUR_SUPABASE_URL" && configRes.supabaseAnonKey !== "YOUR_SUPABASE_ANON_KEY") {
-          
-          supabase = createClient(configRes.supabaseUrl, configRes.supabaseAnonKey);
-          
-          channel = supabase
-            .channel(`public:tenant-${activeTenantId}`)
-            .on(
-              'postgres_changes',
-              {
-                event: '*',
-                schema: 'public'
-              },
-              (payload: any) => {
-                const payloadTenantId = payload.new?.tenant_id || payload.old?.tenant_id;
-                if (payloadTenantId && payloadTenantId !== activeTenantId) {
-                  return;
-                }
-                
-                // Do not fetch if we have local unsaved mutations
-                if (hasPendingChangesRef.current || (Date.now() - lastSaveTimeRef.current < 1500)) {
-                  return;
-                }
-
-                fetchSyncUpdates();
-              }
-            )
-            .subscribe((status: string) => {
-              if (status === 'SUBSCRIBED') {
-                console.log(`[Realtime] Successfully subscribed to live changes for tenant: ${activeTenantId}`);
-              }
-            });
-            
-        } else {
+        if (typeof window === "undefined" || !window.WebSocket) {
           startPollingFallback();
+          return;
         }
+
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const host = window.location.host;
+        const tokenQuery = currentSessionId ? `?token=${encodeURIComponent(currentSessionId)}` : "";
+        const wsUrl = `${protocol}//${host}/ws${tokenQuery}`;
+
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          if (!active) {
+            ws?.close();
+            return;
+          }
+          console.log(`[Realtime] Connected to server-mediated WebSocket for authenticated tenant.`);
+          
+          // Send server auth message with session token
+          if (currentSessionId && ws?.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "auth", token: currentSessionId }));
+          }
+
+          // Heartbeat ping every 25s
+          pingInterval = setInterval(() => {
+            if (ws?.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: "ping" }));
+            }
+          }, 25000);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === "pong" || msg.type === "connection:ready") {
+              return;
+            }
+
+            // Minimal payload event dispatched from server
+            if (
+              msg.type === "sync:updated" ||
+              msg.type === "order:completed" ||
+              msg.type === "inventory:updated" ||
+              msg.type === "payment:success"
+            ) {
+              // Ensure we don't overwrite if local unsaved mutations exist
+              if (hasPendingChangesRef.current || (Date.now() - lastSaveTimeRef.current < 1500)) {
+                return;
+              }
+              fetchSyncUpdates();
+            }
+          } catch (e) {
+            console.warn("[Realtime] Failed to parse WebSocket message:", e);
+          }
+        };
+
+        ws.onerror = (err) => {
+          console.warn("[Realtime] WebSocket encountered connection error. Enabling polling fallback.", err);
+          startPollingFallback();
+        };
+
+        ws.onclose = (event) => {
+          if (pingInterval) {
+            clearInterval(pingInterval);
+            pingInterval = null;
+          }
+          if (!active) return;
+
+          // If unauthorized (4401), do not reconnect continuously
+          if (event.code === 4401) {
+            console.warn("[Realtime] WebSocket closed with 4401 Unauthorized.");
+            return;
+          }
+
+          // Automatic resilient reconnect after 3s
+          reconnectTimer = setTimeout(() => {
+            if (active) {
+              setupServerMediatedRealtime();
+            }
+          }, 3000);
+        };
       } catch (err) {
-        console.warn("[Realtime] Failed to initialize Supabase Realtime subscriptions. Falling back to polling.", err);
+        console.warn("[Realtime] Failed to initialize server-mediated WebSocket. Falling back to polling.", err);
         startPollingFallback();
       }
     };
@@ -464,19 +511,29 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     // Execute Initial Load
     fetchSync().then(() => {
       if (active) {
-        // Setup Realtime connection (or fallback)
-        setupRealtime();
+        setupServerMediatedRealtime();
       }
     });
 
     return () => {
       active = false;
-      if (interval) {
-        clearInterval(interval);
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
       }
-      if (supabase && channel) {
-        supabase.removeChannel(channel);
-        console.log(`[Realtime] Cleaned up Supabase subscription channel for tenant: ${activeTenantId}`);
+      if (pingInterval) {
+        clearInterval(pingInterval);
+        pingInterval = null;
+      }
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+      }
+      if (ws) {
+        try {
+          ws.close();
+        } catch (e) {}
+        ws = null;
       }
     };
   }, [activeTenantId, currentStaff, currentSessionId]);
@@ -488,14 +545,35 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     }
 
     const currentState = {
-      menuItems,
-      ingredients,
+      menuItems: menuItems.map(item => ({
+        ...item,
+        version: typeof item.version === "number" ? item.version : 1
+      })),
+      ingredients: ingredients.map(item => ({
+        ...item,
+        version: typeof (item as any).version === "number" ? (item as any).version : 1
+      })),
       recipes,
-      staffList,
-      orders,
-      customers,
-      purchases,
-      shifts,
+      staffList: staffList.map(item => ({
+        ...item,
+        version: typeof item.version === "number" ? item.version : 1
+      })),
+      orders: orders.map(item => ({
+        ...item,
+        version: typeof item.version === "number" ? item.version : 1
+      })),
+      customers: customers.map(item => ({
+        ...item,
+        version: typeof (item as any).version === "number" ? (item as any).version : 1
+      })),
+      purchases: purchases.map(item => ({
+        ...item,
+        version: typeof (item as any).version === "number" ? (item as any).version : 1
+      })),
+      shifts: shifts.map(item => ({
+        ...item,
+        version: typeof (item as any).version === "number" ? (item as any).version : 1
+      })),
       settings
     };
 
@@ -513,22 +591,73 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
         if (res.success) {
           hasPendingChangesRef.current = false;
           lastSaveTimeRef.current = Date.now();
-          lastFetchedStateRef.current = currentStateStr;
+          if (res.data) {
+            if (res.data.menuItems) setMenuItems(res.data.menuItems);
+            if (res.data.staffList) setStaffList(res.data.staffList);
+            if (res.data.orders) setOrders(res.data.orders);
+            if (res.data.ingredients) setIngredients(res.data.ingredients);
+            if (res.data.customers) setCustomers(res.data.customers);
+            if (res.data.purchases) setPurchases(res.data.purchases);
+            if (res.data.shifts) setShifts(res.data.shifts);
+            if (res.data.settings) setSettings(res.data.settings);
+          }
+          const savedStateStr = JSON.stringify(res.data || currentState);
+          lastFetchedStateRef.current = savedStateStr;
           try {
-            localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}`, currentStateStr);
+            localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}`, savedStateStr);
+            localStorage.removeItem(`veggiepos_sync_cache_${activeTenantId}_stale`);
           } catch (e) {}
         } else {
-          console.warn("Server ignored state synchronization update:", res.error);
+          console.warn("Server rejected state synchronization update:", res.error);
+
+          if (res.error === "OPTIMISTIC_LOCK_CONFLICT") {
+            hasPendingChangesRef.current = false;
+            setToastMessage({
+              type: "error",
+              text: "Data Conflict (409 CONFLICT): Stale updates detected. Re-syncing latest data to prevent lost updates."
+            });
+            try {
+              const fresh = await ApiClient.getTenantSync(activeTenantId, currentSessionId || undefined);
+              if (fresh.success && fresh.data) {
+                const d = fresh.data;
+                if (d.menuItems) setMenuItems(d.menuItems);
+                if (d.staffList) setStaffList(d.staffList);
+                if (d.orders) setOrders(d.orders);
+                if (d.ingredients) setIngredients(d.ingredients);
+                if (d.customers) setCustomers(d.customers);
+                if (d.purchases) setPurchases(d.purchases);
+                if (d.shifts) setShifts(d.shifts);
+                if (d.settings) setSettings(d.settings);
+                const freshStr = JSON.stringify(d);
+                lastFetchedStateRef.current = freshStr;
+                localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}`, freshStr);
+              }
+            } catch (reErr) {
+              console.warn("Failed to reconcile state after 409 conflict:", reErr);
+            }
+            return;
+          }
+
+          try {
+            localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}_stale`, "true");
+          } catch (e) {}
+
+          const isDbUnavailable = res.error === "DATABASE_UNAVAILABLE";
           setToastMessage({
             type: "error",
-            text: `Data Sync Issue: ${res.error || "The server rejected the transaction packet."}`
+            text: isDbUnavailable
+              ? "Database Unavailable (503 DATABASE_UNAVAILABLE): In-memory fallback is disabled. Local cache marked as stale/readonly."
+              : `Data Sync Issue: ${res.message || res.error || "The server rejected the transaction packet."}`
           });
         }
       } catch (err: any) {
         console.warn("Failed to push synchronized update:", err);
+        try {
+          localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}_stale`, "true");
+        } catch (e) {}
         setToastMessage({
           type: "error",
-          text: `Database Connection Failed: ${err.message || "Network offline or access denied."}`
+          text: `Database Unavailable (503 DATABASE_UNAVAILABLE): ${err.message || "Write could not be committed. Local cache marked as stale/readonly."}`
         });
       }
     };
@@ -538,7 +667,11 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
 
   // Global order creation handler
   const handleOrderCreated = (newOrder: Order) => {
-    setOrders([newOrder, ...orders]);
+    const orderWithVersion: Order = {
+      ...newOrder,
+      version: typeof newOrder.version === "number" ? newOrder.version : 1
+    };
+    setOrders([orderWithVersion, ...orders]);
   };
 
   // Handle Kitchen KDS status change and payment settlement

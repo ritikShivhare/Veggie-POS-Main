@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { StaffMember, Shift } from "../types";
+import { ApiClient } from "../services/api";
 
 interface UseAuthSessionProps {
   activeTenantId: string;
@@ -35,11 +36,11 @@ export function useAuthSession({
   }, [currentStaff]);
 
   useEffect(() => {
-    if (currentSessionId) {
-      localStorage.setItem("veggiepos_current_session_id", currentSessionId);
-    } else {
+    // Purge any stale session tokens from localStorage to prevent XSS session theft (CWE-312 / CWE-922)
+    try {
       localStorage.removeItem("veggiepos_current_session_id");
-    }
+    } catch (e) {}
+    ApiClient.setSessionId(currentSessionId);
   }, [currentSessionId]);
 
   // Sync currentStaff details if staffList changes (e.g. owner edits PIN or permissions)
@@ -80,6 +81,7 @@ export function useAuthSession({
         fetch("/api/auth/validate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ sessionId: currentSessionId, tenantId: requestTenantId })
         }).catch(err => console.error(err));
       }
@@ -96,7 +98,7 @@ export function useAuthSession({
       headers["x-session-id"] = currentSessionId;
     }
 
-    fetch("/api/auth/sessions-data?tenantId=" + requestTenantId, { headers })
+    fetch("/api/auth/sessions-data?tenantId=" + requestTenantId, { headers, credentials: "include" })
       .then(res => res.json())
       .then(data => {
         if (data.success && data.securitySettings) {
@@ -121,6 +123,7 @@ export function useAuthSession({
         const res = await fetch("/api/auth/validate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ sessionId: currentSessionId, tenantId: requestTenantId })
         });
         const data = await res.json();
@@ -193,15 +196,16 @@ export function useAuthSession({
 
   // Handle Employee Logout / Terminal lock
   const handleLogout = () => {
-    if (currentSessionId) {
-      const isSaaS = (currentStaff?.role as string) === "SaaS Owner";
-      const requestTenantId = isSaaS ? "saas-admin" : activeTenantId;
-      fetch("/api/auth/logout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: currentSessionId, tenantId: requestTenantId })
-      }).catch(err => console.error("Logout propagation failed:", err));
-    }
+    const isSaaS = (currentStaff?.role as string) === "SaaS Owner";
+    const requestTenantId = isSaaS ? "saas-admin" : activeTenantId;
+    fetch("/api/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ sessionId: currentSessionId, tenantId: requestTenantId })
+    }).catch(err => console.error("Logout propagation failed:", err));
+    
+    ApiClient.setSessionId(null);
     setCurrentStaff(null);
     setCurrentSessionId(null);
   };

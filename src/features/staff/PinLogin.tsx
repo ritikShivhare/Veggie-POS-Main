@@ -17,6 +17,14 @@ import {
 } from "lucide-react";
 import QrScannerModal from "./components/QrScannerModal";
 
+function generateClientFallbackToken(): string {
+  const bytes = new Uint8Array(32);
+  if (typeof window !== "undefined" && window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  }
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 interface PinLoginProps {
   staffList?: StaffMember[];
   onLoginSuccess: (staff: StaffMember, sessionId: string, loggedInTenant?: RestaurantTenant) => void;
@@ -114,6 +122,7 @@ export default function PinLogin({
     fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ pin: enteredPin, tenantId, restaurantName, qrToken })
     })
       .then(async (res) => {
@@ -161,18 +170,18 @@ export default function PinLogin({
         const ownerId = isReetesh ? "s-reetesh-dhaba" : "s-owner";
         
         if (enteredPin === ownerPin) {
-          onLoginSuccess({ id: ownerId, name: ownerName, role: "Owner", pin: ownerPin, permissions: ["billing", "inventory", "reports", "settings"] }, `sess-local-${Date.now()}`);
+          onLoginSuccess({ id: ownerId, name: ownerName, role: "Owner", pin: ownerPin, permissions: ["billing", "inventory", "reports", "settings"] }, generateClientFallbackToken());
           setPin("");
         } else if (enteredPin === "2222") {
-          onLoginSuccess({ id: "s-manager", name: "Demo Manager", role: "Manager", pin: "2222", permissions: ["billing", "inventory", "reports"] }, `sess-local-${Date.now()}`);
+          onLoginSuccess({ id: "s-manager", name: "Demo Manager", role: "Manager", pin: "2222", permissions: ["billing", "inventory", "reports"] }, generateClientFallbackToken());
           setPin("");
         } else if (enteredPin === "3333") {
-          onLoginSuccess({ id: "s-cashier", name: "Demo Staff", role: "Staff", pin: "3333", permissions: ["billing"] }, `sess-local-${Date.now()}`);
+          onLoginSuccess({ id: "s-cashier", name: "Demo Staff", role: "Staff", pin: "3333", permissions: ["billing"] }, generateClientFallbackToken());
           setPin("");
         } else if (staffList) {
           const matchingStaff = staffList.find((s) => s.pin === enteredPin);
           if (matchingStaff) {
-            onLoginSuccess(matchingStaff, `sess-local-${Date.now()}`);
+            onLoginSuccess(matchingStaff, generateClientFallbackToken());
             setPin("");
           } else {
             setError("Incorrect PIN. Please try again.");

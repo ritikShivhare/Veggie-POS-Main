@@ -1,4 +1,4 @@
-import { Database } from "./database";
+import { Database, DatabaseTransaction } from "./database";
 import { InventorySettings } from "../../../src/features/shared/types";
 
 export class SettingsRepository {
@@ -12,7 +12,11 @@ export class SettingsRepository {
     return this.db.getObject<InventorySettings>(tenantId, "settings");
   }
 
-  async save(tenantId: string, settings: InventorySettings): Promise<void> {
-    await this.db.saveObject<InventorySettings>(tenantId, "settings", settings);
+  async save(tenantId: string, settings: InventorySettings, trx?: DatabaseTransaction): Promise<void> {
+    if (trx) {
+      await trx.saveObject<InventorySettings>("settings", settings);
+    } else {
+      await this.db.saveObject<InventorySettings>(tenantId, "settings", settings);
+    }
   }
 }

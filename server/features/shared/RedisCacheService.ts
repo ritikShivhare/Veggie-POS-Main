@@ -1,4 +1,5 @@
 import Redis from "ioredis";
+import { lookup } from "dns/promises";
 
 export class RedisCacheService {
   private static instance: RedisCacheService;
@@ -7,7 +8,10 @@ export class RedisCacheService {
   private hasInitialized: boolean = false;
 
   private constructor() {
-    this.init();
+    this.init().catch(() => {
+      this.isEnabled = false;
+      this.client = null;
+    });
   }
 
   public static getInstance(): RedisCacheService {
@@ -17,12 +21,12 @@ export class RedisCacheService {
     return RedisCacheService.instance;
   }
 
-  private init() {
+  private async init() {
     if (this.hasInitialized) return;
     this.hasInitialized = true;
 
     let redisUrl = process.env.REDIS_URL;
-    const redisHost = process.env.REDIS_HOST || "127.0.0.1";
+    const redisHost = process.env.REDIS_HOST;
     const redisPort = parseInt(process.env.REDIS_PORT || "6379", 10);
     const redisPassword = process.env.REDIS_PASSWORD;
 
@@ -49,65 +53,95 @@ export class RedisCacheService {
     }
 
     // Determine if Redis connection parameters are specified
-    if (!redisUrl && !process.env.REDIS_HOST) {
+    if (!redisUrl && !redisHost) {
       this.isEnabled = false;
       return;
     }
 
+    // Pre-flight host check to avoid unhandled DNS/socket connection errors
+    let targetHost: string | null = null;
+    if (redisUrl) {
+      try {
+        let clean = redisUrl;
+        if (!clean.includes("://")) clean = "redis://" + clean;
+        clean = clean.replace(/^https?:\/\//, "redis://").replace(/^rediss?:\/\//, "redis://");
+        const parsed = new URL(clean);
+        targetHost = parsed.hostname;
+      } catch {
+        targetHost = null;
+      }
+    } else if (redisHost) {
+      targetHost = redisHost;
+    }
+
+    if (targetHost && targetHost !== "localhost" && targetHost !== "127.0.0.1") {
+      try {
+        await Promise.race([
+          lookup(targetHost),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("DNS timeout")), 1500))
+        ]);
+      } catch (err: any) {
+        console.log(`[RedisCacheService] Host "${targetHost}" is unreachable (${err?.code || err?.message || "DNS error"}). Operating with resilient in-memory cache fallback.`);
+        this.isEnabled = false;
+        this.client = null;
+        return;
+      }
+    }
+
     try {
+      const commonOptions = {
+        password: redisPassword,
+        maxRetriesPerRequest: 1,
+        connectTimeout: 2500,
+        lazyConnect: true,
+        enableOfflineQueue: false,
+        retryStrategy: () => null // Do not retry on initial failure
+      };
+
       if (redisUrl) {
-        console.log(`[RedisCacheService] Connecting to Redis via URL: ${redisUrl.replace(/:[^:@]+@/, ":****@")}`);
-        this.client = new Redis(redisUrl, {
-          password: redisPassword,
-          maxRetriesPerRequest: 1,
-          connectTimeout: 3000,
-          retryStrategy(times) {
-            if (times > 2) {
-              console.warn("[RedisCacheService] Redis connection attempts failed. Disabling Redis caching.");
-              return null; // Stop retrying
-            }
-            return Math.min(times * 500, 2000);
-          }
-        });
+        this.client = new Redis(redisUrl, commonOptions);
       } else {
-        console.log(`[RedisCacheService] Attempting connection to Redis at ${redisHost}:${redisPort}`);
         this.client = new Redis({
-          host: redisHost,
+          host: redisHost || "127.0.0.1",
           port: redisPort,
-          password: redisPassword,
-          maxRetriesPerRequest: 1,
-          connectTimeout: 3000,
-          retryStrategy(times) {
-            if (times > 2) {
-              console.warn("[RedisCacheService] Redis connection attempts failed. Disabling Redis caching.");
-              return null; // Stop retrying
-            }
-            return Math.min(times * 500, 2000);
-          }
+          ...commonOptions
         });
       }
 
       this.client.on("connect", () => {
-        console.log("[RedisCacheService] Redis connection established successfully.");
         this.isEnabled = true;
       });
 
+      this.client.on("ready", () => {
+        this.isEnabled = true;
+        console.log("[RedisCacheService] Redis connection established successfully.");
+      });
+
       this.client.on("error", (err) => {
-        console.warn(`[RedisCacheService] Redis encountered an error: ${err.message}`);
-        // If not yet connected, disable caching gracefully to prevent request blockage
-        if (!this.isEnabled) {
-          console.warn("[RedisCacheService] Redis caching is now DISABLED. All operations will fall back to direct database reads.");
+        if (this.isEnabled) {
+          console.log(`[RedisCacheService] Redis connection interrupted: ${err.message}. Falling back to in-memory cache.`);
+          this.isEnabled = false;
         }
       });
 
-      this.client.on("end", () => {
-        console.warn("[RedisCacheService] Redis connection closed. Disabling Redis caching.");
+      this.client.on("close", () => {
         this.isEnabled = false;
       });
 
+      this.client.on("end", () => {
+        this.isEnabled = false;
+      });
+
+      await this.client.connect();
     } catch (err: any) {
-      console.error("[RedisCacheService] Critical error initializing Redis client:", err.message);
       this.isEnabled = false;
+      if (this.client) {
+        try {
+          this.client.disconnect(false);
+        } catch {}
+        this.client = null;
+      }
+      console.log(`[RedisCacheService] Redis unavailable (${err?.message || "connection error"}). Operating with resilient in-memory cache fallback.`);
     }
   }
 
@@ -115,7 +149,7 @@ export class RedisCacheService {
    * Helper to check if Redis is active and usable.
    */
   public isActive(): boolean {
-    return this.isEnabled && this.client !== null;
+    return this.isEnabled && this.client !== null && this.client.status === "ready";
   }
 
   /**

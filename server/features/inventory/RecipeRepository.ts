@@ -1,4 +1,4 @@
-import { Database } from "../shared/database";
+import { Database, DatabaseTransaction } from "../shared/database";
 import { Recipe } from "../../../src/features/shared/types";
 
 export class RecipeRepository {
@@ -12,8 +12,12 @@ export class RecipeRepository {
     return this.db.getSlice<Recipe>(tenantId, "recipes");
   }
 
-  async saveAll(tenantId: string, items: Recipe[]): Promise<void> {
-    await this.db.saveSlice<Recipe>(tenantId, "recipes", items);
+  async saveAll(tenantId: string, items: Recipe[], trx?: DatabaseTransaction): Promise<void> {
+    if (trx) {
+      await trx.saveSlice<Recipe>("recipes", items);
+    } else {
+      await this.db.saveSlice<Recipe>(tenantId, "recipes", items);
+    }
   }
 
   async getByMenuItemId(tenantId: string, menuItemId: string): Promise<Recipe | null> {

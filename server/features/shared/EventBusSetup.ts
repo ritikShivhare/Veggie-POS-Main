@@ -2,6 +2,7 @@ import { EventBus, AppEvent } from "./EventBus";
 import { NotificationService } from "../notifications/NotificationService";
 import { AuditLogService } from "./AuditLogService";
 import { Database } from "./database";
+import { realtimeService } from "./RealtimeService";
 
 export interface EventAnalytics {
   totalEventsProcessed: number;
@@ -148,5 +149,30 @@ export function initializeEventSubscribers(): void {
   eventBus.subscribe("PAYMENT_SUCCESS", async (event: AppEvent) => {
     const { amount } = event.payload;
     await updateAnalytics(event.tenantId, "PAYMENT", Number(amount) || 0);
+  });
+
+  // ==========================================
+  // 4. SERVER-MEDIATED REALTIME NOTIFICATION SUBSCRIBER
+  // Broadcasts minimal payloads exclusively to clients of the verified tenant
+  // ==========================================
+  eventBus.subscribe("INVENTORY_UPDATE", (event: AppEvent) => {
+    realtimeService.broadcastToTenant(event.tenantId, "inventory:updated", {
+      slice: "ingredients",
+      metadata: { itemName: event.payload?.itemName }
+    });
+  });
+
+  eventBus.subscribe("ORDER_COMPLETE", (event: AppEvent) => {
+    realtimeService.broadcastToTenant(event.tenantId, "order:completed", {
+      slice: "orders",
+      entityId: event.payload?.orderId
+    });
+  });
+
+  eventBus.subscribe("PAYMENT_SUCCESS", (event: AppEvent) => {
+    realtimeService.broadcastToTenant(event.tenantId, "payment:success", {
+      slice: "orders",
+      entityId: event.payload?.orderId
+    });
   });
 }

@@ -7,6 +7,9 @@ export interface MenuItem {
   imageUrl?: string;
   isVegetarian: boolean;
   isAvailable: boolean;
+  version?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Ingredient {
@@ -16,6 +19,9 @@ export interface Ingredient {
   currentStock: number;
   minStock: number;
   costPerUnit: number;
+  version?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Recipe {
@@ -24,6 +30,9 @@ export interface Recipe {
     ingredientId: string;
     quantity: number; // deduction amount when 1 portion of menuItem is ordered
   }[];
+  version?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Purchase {
@@ -35,6 +44,9 @@ export interface Purchase {
   cost: number;
   supplier: string;
   invoiceNumber?: string;
+  version?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type StaffRole = 'Owner' | 'Manager' | 'Cashier' | 'Waiter' | 'Chef' | 'Staff' | string;
@@ -45,6 +57,9 @@ export interface StaffMember {
   role: StaffRole;
   pin: string; // 4 to 6 digit PIN
   permissions: ('billing' | 'inventory' | 'reports' | 'settings' | string)[];
+  version?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Shift {
@@ -55,6 +70,9 @@ export interface Shift {
   startTime: string;
   endTime?: string;
   status: 'Active' | 'Completed';
+  version?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CartItem {
@@ -82,6 +100,52 @@ export interface Order {
   paidAt?: string;
   cashierId: string;
   cashierName: string;
+  version?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface OrderItem {
+  id: string;
+  orderId: string;
+  menuItemId?: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  tax?: number;
+  notes?: string;
+  version?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Payment {
+  id: string;
+  orderId: string;
+  amount: number;
+  paymentMethod: 'Cash' | 'UPI' | 'Card' | 'Due' | string;
+  status: 'Pending' | 'Completed' | 'Failed' | 'Refunded' | string;
+  transactionReference?: string;
+  cashierId?: string;
+  version?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface InventoryMovement {
+  id: string;
+  ingredientId: string;
+  movementType: 'PURCHASE' | 'SALE_DEDUCTION' | 'WASTAGE' | 'MANUAL_ADJUSTMENT' | 'RETURN';
+  quantityDelta: number;
+  previousStock: number;
+  newStock: number;
+  referenceId?: string;
+  reason?: string;
+  performedBy?: string;
+  version?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Customer {
@@ -99,6 +163,9 @@ export interface Customer {
   totalSpend: number;
   maxBillAmount: number;
   minBillAmount: number;
+  version?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface RestaurantTenant {

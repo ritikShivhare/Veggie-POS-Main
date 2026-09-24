@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { CreditCard, CheckCircle, AlertTriangle, Zap, ArrowRight, Shield, Crown } from "lucide-react";
+import { ApiClient } from "../services/api";
 
 interface BillingSettingsProps {
   tenantId: string;
@@ -27,11 +28,12 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
   const fetchSubscription = async () => {
     setLoading(true);
     try {
-      const sessId = localStorage.getItem("veggiepos_current_session_id");
+      const sessId = ApiClient.getSessionId();
       const res = await fetch(`/api/billing/subscription?tenantId=${tenantId}`, {
         headers: {
           "x-session-id": sessId || "",
-        }
+        },
+        credentials: "include"
       });
       const json = await res.json();
       if (json.success) {
@@ -47,13 +49,16 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
   const handleCheckout = async (plan: string) => {
     setActionLoading(plan);
     try {
-      const sessId = localStorage.getItem("veggiepos_current_session_id");
+      const sessId = ApiClient.getSessionId();
+      const idempotencyKey = ApiClient.generateIdempotencyKey(`checkout_${tenantId}_${plan}`);
       const res = await fetch(`/api/billing/create-checkout-session`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "x-session-id": sessId || ""
+          "x-session-id": sessId || "",
+          "Idempotency-Key": idempotencyKey
         },
+        credentials: "include",
         body: JSON.stringify({ tenantId, plan })
       });
       const json = await res.json();
@@ -72,13 +77,16 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
   const handlePortal = async () => {
     setActionLoading("portal");
     try {
-      const sessId = localStorage.getItem("veggiepos_current_session_id");
+      const sessId = ApiClient.getSessionId();
+      const idempotencyKey = ApiClient.generateIdempotencyKey(`portal_${tenantId}`);
       const res = await fetch(`/api/billing/create-portal-session`, {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "x-session-id": sessId || ""
+          "x-session-id": sessId || "",
+          "Idempotency-Key": idempotencyKey
         },
+        credentials: "include",
         body: JSON.stringify({ tenantId })
       });
       const json = await res.json();

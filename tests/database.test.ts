@@ -60,4 +60,35 @@ describe("Database State Slice Engine Tests", () => {
     const result = await db.getObject(mockTenantId, mockObjectKey);
     expect(result).toBeNull();
   });
+
+  it("should reject writes with 503 DATABASE_UNAVAILABLE and mark cache as stale in production without DB commit confirmation", async () => {
+    const db = Database.getInstance();
+    const mockTenantId = "prod-tenant-reliability";
+    const mockSliceKey = "orders";
+    const mockData = [{ id: "order-999", totalAmount: 450 }];
+
+    const originalNodeEnv = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = "production";
+
+      // Should fail loudly and throw DatabaseUnavailableError
+      await expect(db.saveSlice(mockTenantId, mockSliceKey, mockData)).rejects.toMatchObject({
+        code: "DATABASE_UNAVAILABLE",
+        status: 503
+      });
+
+      // Slice should be marked as STALE / READONLY
+      expect(db.isSliceStale(mockTenantId, mockSliceKey)).toBe(true);
+
+      // saveObject should also fail loudly with 503 in production
+      await expect(db.saveObject(mockTenantId, "custom_key", { key: "val" })).rejects.toMatchObject({
+        code: "DATABASE_UNAVAILABLE",
+        status: 503
+      });
+
+      expect(db.isObjectStale(mockTenantId, "custom_key")).toBe(true);
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+  });
 });

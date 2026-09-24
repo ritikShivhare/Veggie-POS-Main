@@ -5,6 +5,7 @@ import {
   staffRepo,
   orderRepo,
   authMiddleware,
+  idempotencyMiddleware,
   getSubscription,
   saveSubscription,
   PLAN_LIMITS
@@ -56,7 +57,7 @@ router.get("/billing/subscription", authMiddleware, async (req, res) => {
 });
 
 // 2. Create Stripe Checkout Session
-router.post("/billing/create-checkout-session", authMiddleware, async (req, res) => {
+router.post("/billing/create-checkout-session", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { plan } = req.body; // pro or enterprise
   const origin = req.headers.origin || "http://localhost:3000";
@@ -130,7 +131,7 @@ router.post("/billing/create-checkout-session", authMiddleware, async (req, res)
 });
 
 // 3. Create Stripe Customer Portal Session
-router.post("/billing/create-portal-session", authMiddleware, async (req, res) => {
+router.post("/billing/create-portal-session", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const origin = req.headers.origin || "http://localhost:3000";
   const stripe = getStripeClient();
@@ -265,7 +266,10 @@ router.post("/webhooks/stripe", express.raw({ type: "application/json" }), async
 
 // 5. Serve HTML Mock Checkout Page
 router.get("/billing/mock-checkout", async (req, res) => {
-  const tenantId = req.query.tenantId as string || "veg-main-001";
+  const tenantId = req.query.tenantId as string;
+  if (!tenantId) {
+    return res.status(400).send("Tenant identifier is required for mock checkout.");
+  }
   const plan = req.query.plan as string || "pro";
   const origin = req.query.origin as string || "http://localhost:3000";
 
@@ -413,8 +417,11 @@ router.get("/billing/mock-checkout", async (req, res) => {
 });
 
 // 6. Mock Success Payment Handler
-router.post("/billing/mock-payment-success", async (req, res) => {
+router.post("/billing/mock-payment-success", idempotencyMiddleware, async (req, res) => {
   const { tenantId, plan, email } = req.body;
+  if (!tenantId) {
+    return res.status(400).json({ success: false, error: "MISSING_TENANT", message: "Tenant ID is required." });
+  }
   try {
     await saveSubscription(tenantId, {
       plan: plan || "pro",
@@ -431,8 +438,11 @@ router.post("/billing/mock-payment-success", async (req, res) => {
 });
 
 // 7. Mock Failed Payment Handler
-router.post("/billing/mock-payment-fail", async (req, res) => {
+router.post("/billing/mock-payment-fail", idempotencyMiddleware, async (req, res) => {
   const { tenantId } = req.body;
+  if (!tenantId) {
+    return res.status(400).json({ success: false, error: "MISSING_TENANT", message: "Tenant ID is required." });
+  }
   try {
     const current = await getSubscription(tenantId);
     await saveSubscription(tenantId, {
@@ -449,7 +459,10 @@ router.post("/billing/mock-payment-fail", async (req, res) => {
 
 // 8. Serve HTML Mock Billing Portal
 router.get("/billing/mock-portal", async (req, res) => {
-  const tenantId = req.query.tenantId as string || "veg-main-001";
+  const tenantId = req.query.tenantId as string;
+  if (!tenantId) {
+    return res.status(400).send("Tenant identifier is required for mock portal.");
+  }
   const origin = req.query.origin as string || "http://localhost:3000";
 
   const sub = await getSubscription(tenantId);
