@@ -2,7 +2,40 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import { ErrorBoundary } from './features/shared/components/ErrorBoundary.tsx';
+import { ApiClient } from './features/shared/services/api.ts';
 import './index.css';
+
+// Global Fetch Interceptor for Anti-CSRF Protection:
+// Automatically attaches client-controlled 'x-session-id' header to all internal API requests.
+// External websites in other browser tabs cannot access this in-memory session or header.
+const originalFetch = window.fetch;
+window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  let url = "";
+  if (typeof input === "string") {
+    url = input;
+  } else if (input instanceof URL) {
+    url = input.toString();
+  } else if (input && typeof (input as Request).url === "string") {
+    url = (input as Request).url;
+  }
+
+  const sessionId = ApiClient.getSessionId();
+  if (sessionId && url && (url.startsWith("/api/") || url.startsWith("/api?") || url === "/api")) {
+    if (input instanceof Request) {
+      if (!input.headers.has("x-session-id")) {
+        input.headers.set("x-session-id", sessionId);
+      }
+    } else {
+      init = init ? { ...init } : {};
+      const headers = new Headers(init.headers || {});
+      if (!headers.has("x-session-id")) {
+        headers.set("x-session-id", sessionId);
+      }
+      init.headers = headers;
+    }
+  }
+  return originalFetch(input, init);
+};
 
 // Client-Side Centralized Sentry-like Telemetry listeners
 window.addEventListener("error", (event) => {

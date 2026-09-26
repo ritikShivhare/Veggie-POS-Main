@@ -219,4 +219,86 @@ describe("Express authMiddleware Unit Tests", () => {
       })
     );
   });
+
+  describe("Anti-CSRF Protection & Double-Submit Validation", () => {
+    it("should reject a request that only sends cookie without mandatory x-session-id header (CSRF attack prevention)", async () => {
+      mockRequest.path = "/api/orders";
+      mockRequest.method = "POST";
+      mockRequest.cookies = {
+        veggiepos_session: "cashier-cookie-session-token"
+      };
+      mockRequest.headers = {
+        "x-tenant-id": "veg-main-001"
+        // Note: x-session-id header is missing (simulating cross-site request from malicious origin)
+      };
+
+      await authMiddleware(mockRequest, mockResponse, nextFunction);
+
+      expect(nextFunction).not.toHaveBeenCalled();
+      expect(mockResponse.status).toHaveBeenCalledWith(401);
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: "UNAUTHORIZED",
+          message: expect.stringContaining("Anti-CSRF Protection")
+        })
+      );
+    });
+
+    it("should reject a request where cookie session and x-session-id header mismatch (Double-submit violation)", async () => {
+      mockRequest.path = "/api/orders";
+      mockRequest.method = "POST";
+      mockRequest.cookies = {
+        veggiepos_session: "session-cookie-real"
+      };
+      mockRequest.headers = {
+        "x-session-id": "session-header-forged",
+        "x-tenant-id": "veg-main-001"
+      };
+
+      await authMiddleware(mockRequest, mockResponse, nextFunction);
+
+      expect(nextFunction).not.toHaveBeenCalled();
+      expect(mockResponse.status).toHaveBeenCalledWith(401);
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: "UNAUTHORIZED",
+          message: expect.stringContaining("Security violation")
+        })
+      );
+    });
+
+    it("should grant access when both cookie and x-session-id header are present and match", async () => {
+      mockRequest.path = "/api/orders";
+      mockRequest.method = "POST";
+      mockRequest.cookies = {
+        veggiepos_session: "session-matching-123"
+      };
+      mockRequest.headers = {
+        "x-session-id": "session-matching-123",
+        "x-tenant-id": "veg-main-001"
+      };
+
+      SessionService.getInstance().registerSessionTenant("session-matching-123", "veg-main-001");
+
+      const dummySession: any = {
+        sessionId: "session-matching-123",
+        userId: "u-cashier-1",
+        userName: "Cashier Mohan",
+        role: "Cashier",
+        tenantId: "veg-main-001"
+      };
+
+      vi.spyOn(SessionService.getInstance(), "validateAndTouchSession")
+        .mockResolvedValue(dummySession);
+
+      await authMiddleware(mockRequest, mockResponse, nextFunction);
+
+      expect(nextFunction).toHaveBeenCalled();
+      expect(mockResponse.status).not.toHaveBeenCalled();
+      expect(mockRequest.session).toEqual(dummySession);
+      expect(mockRequest.tenantId).toBe("veg-main-001");
+    });
+  });
 });

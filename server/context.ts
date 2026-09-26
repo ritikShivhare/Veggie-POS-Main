@@ -176,28 +176,45 @@ export function isPublicRoute(req: express.Request): boolean {
 
 // Authentication & Tenant Isolation Middleware
 // Enforces: Tenant is ALWAYS derived from verified session. Client-sent tenantId is never authoritative.
+// Anti-CSRF Protection: Requires mandatory client-sent custom header 'x-session-id' (or 'authorization: Bearer <sessionId>').
+// Cookie-only requests are strictly rejected to prevent Cross-Site Request Forgery (CSRF) vulnerabilities.
 export const authMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (isPublicRoute(req)) {
     // Public routes proceed without setting an authoritative session-derived tenant
     return next();
   }
 
-  const sessionId =
-    (req.cookies?.[SESSION_COOKIE_NAME] as string) ||
+  const headerSessionId =
     (req.headers["x-session-id"] as string) ||
     (typeof req.headers["authorization"] === "string" && req.headers["authorization"].startsWith("Bearer ")
       ? req.headers["authorization"].substring(7).trim()
-      : undefined) ||
-    (req.query?.sessionId as string) ||
-    (req.body?.sessionId as string);
+      : undefined);
 
-  if (!sessionId) {
+  const cookieSessionId = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
+
+  // 1. Mandatory Header Requirement (Anti-CSRF Defense)
+  // Cross-origin phishing/malicious websites cannot read or set custom headers due to browser CORS policies.
+  // Rejecting requests that lack this custom header protects against CSRF attacks even if a browser cookie is attached.
+  if (!headerSessionId) {
     return res.status(401).json({
       success: false,
       error: "UNAUTHORIZED",
-      message: "A valid active security session is required to access this resource."
+      message: cookieSessionId
+        ? "Anti-CSRF Protection: 'x-session-id' custom header is required. Cookie-only authentication is rejected."
+        : "A valid active security session is required to access this resource."
     });
   }
+
+  // 2. Double-Submit Defense: If session cookie is also present, it must match the custom header session ID
+  if (cookieSessionId && cookieSessionId !== headerSessionId) {
+    return res.status(401).json({
+      success: false,
+      error: "UNAUTHORIZED",
+      message: "Security violation: 'x-session-id' header does not match active session cookie."
+    });
+  }
+
+  const sessionId = headerSessionId;
 
   // Resolve the tenantId strictly from session
   let session: any = null;
@@ -354,21 +371,36 @@ export const requirePermission = (...requiredPermissions: string[]) => {
   };
 };
 
-// SaaS Super-Admin Management Middleware
+// SaaS Super-Admin Management Middleware with Anti-CSRF
 export const adminAuthMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const sessionId =
-    (req.cookies?.[SESSION_COOKIE_NAME] as string) ||
+  const headerSessionId =
     (req.headers["x-session-id"] as string) ||
     (typeof req.headers["authorization"] === "string" && req.headers["authorization"].startsWith("Bearer ")
       ? req.headers["authorization"].substring(7).trim()
-      : undefined) ||
-    (req.query?.sessionId as string) ||
-    (req.body?.sessionId as string);
-  
-  if (!sessionId) {
-    return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Super-Admin session ID required." });
+      : undefined);
+
+  const cookieSessionId = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
+
+  if (!headerSessionId) {
+    return res.status(401).json({
+      success: false,
+      error: "UNAUTHORIZED",
+      message: cookieSessionId
+        ? "Anti-CSRF Protection: 'x-session-id' header is mandatory for admin endpoints."
+        : "Super-Admin session ID required."
+    });
   }
 
+  if (cookieSessionId && cookieSessionId !== headerSessionId) {
+    return res.status(401).json({
+      success: false,
+      error: "UNAUTHORIZED",
+      message: "Security violation: 'x-session-id' header does not match active admin cookie."
+    });
+  }
+
+  const sessionId = headerSessionId;
+  
   try {
     const session = await sessionService.validateAndTouchSession("saas-admin", sessionId);
     if (!session || session.role !== "SaaS Owner") {

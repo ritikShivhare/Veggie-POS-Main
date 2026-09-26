@@ -91,4 +91,70 @@ describe("Database State Slice Engine Tests", () => {
       process.env.NODE_ENV = originalNodeEnv;
     }
   });
+
+  describe("Database RLS & Defense-in-Depth Tenant Policy Validation", () => {
+    it("should reject saveSlice with 403 CROSS_TENANT_VIOLATION if an item contains an alien tenant_id", async () => {
+      const db = Database.getInstance();
+      const legitimateTenant = "tenant-alpha";
+      const alienData = [
+        { id: "item-1", name: "Paneer Tikka", tenant_id: "tenant-alpha" },
+        { id: "item-2", name: "Malicious Thali", tenant_id: "tenant-victim-beta" } // Alien tenant_id!
+      ];
+
+      await expect(
+        db.saveSlice(legitimateTenant, "menuItems", alienData)
+      ).rejects.toMatchObject({
+        code: "CROSS_TENANT_VIOLATION",
+        status: 403
+      });
+    });
+
+    it("should reject updateItem with 403 CROSS_TENANT_VIOLATION if updated item specifies another tenant_id", async () => {
+      const db = Database.getInstance();
+      const legitimateTenant = "tenant-alpha";
+      const initialItem = { id: "item-101", name: "Dal Makhani", price: 180, tenant_id: legitimateTenant };
+      await db.saveSlice(legitimateTenant, "menuItems", [initialItem]);
+
+      const alienUpdate = { id: "item-101", name: "Dal Makhani", price: 200, tenant_id: "tenant-hacker" };
+
+      await expect(
+        db.updateItem(legitimateTenant, "menuItems", "item-101", alienUpdate)
+      ).rejects.toMatchObject({
+        code: "CROSS_TENANT_VIOLATION",
+        status: 403
+      });
+    });
+
+    it("should reject runTransaction with 403 CROSS_TENANT_VIOLATION if any staged slice has alien tenant_id", async () => {
+      const db = Database.getInstance();
+      const legitimateTenant = "tenant-gamma";
+
+      await expect(
+        db.runTransaction(legitimateTenant, async (trx) => {
+          await trx.saveSlice("orders", [
+            { id: "ord-1", total: 500, tenant_id: "tenant-victim-omega" }
+          ]);
+        })
+      ).rejects.toMatchObject({
+        code: "CROSS_TENANT_VIOLATION",
+        status: 403
+      });
+    });
+
+    it("should reject saveObject with 403 CROSS_TENANT_VIOLATION if object specifies another tenant_id", async () => {
+      const db = Database.getInstance();
+      const legitimateTenant = "tenant-alpha";
+      const alienConfig = {
+        tenant_id: "tenant-beta",
+        taxRate: 18
+      };
+
+      await expect(
+        db.saveObject(legitimateTenant, "custom_tax_setting", alienConfig)
+      ).rejects.toMatchObject({
+        code: "CROSS_TENANT_VIOLATION",
+        status: 403
+      });
+    });
+  });
 });

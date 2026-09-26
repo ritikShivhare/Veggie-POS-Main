@@ -368,6 +368,21 @@ export class TransactionRollbackError extends Error {
   }
 }
 
+export class CrossTenantViolationError extends Error {
+  public code = "CROSS_TENANT_VIOLATION";
+  public status = 403;
+  public statusCode = 403;
+
+  constructor(message: string = "Database security violation: cross-tenant access forbidden by database policy.") {
+    super(message);
+    this.name = "CrossTenantViolationError";
+    this.status = 403;
+    this.statusCode = 403;
+    this.code = "CROSS_TENANT_VIOLATION";
+    Object.setPrototypeOf(this, CrossTenantViolationError.prototype);
+  }
+}
+
 export interface DatabaseTransaction {
   tenantId: string;
   saveSlice<T>(sliceKey: string, data: T[]): Promise<void>;
@@ -376,6 +391,18 @@ export interface DatabaseTransaction {
 }
 
 export function handleApiError(res: any, error: any, defaultMessage?: string) {
+  if (
+    error?.code === "CROSS_TENANT_VIOLATION" ||
+    error?.status === 403 ||
+    error?.statusCode === 403 ||
+    error instanceof CrossTenantViolationError
+  ) {
+    return res.status(403).json({
+      success: false,
+      error: "CROSS_TENANT_VIOLATION",
+      message: error.message || defaultMessage || "Database security violation: cross-tenant access forbidden by database policy."
+    });
+  }
   if (
     error?.code === "TRANSACTION_ROLLBACK" ||
     error?.status === 400 ||
@@ -435,6 +462,7 @@ export class Database {
   private staleObjects: Set<string> = new Set();
 
   private supabase: any = null;
+  private tenantClients: Map<string, any> = new Map();
 
   private constructor() {
     // Persistent file backup removed for security compliance
@@ -489,7 +517,7 @@ export class Database {
     return this.dbStopped;
   }
 
-  private getSupabaseClient() {
+  public getSupabaseClient(tenantId?: string) {
     if (process.env.VITEST) {
       return null;
     }
@@ -507,6 +535,27 @@ export class Database {
     }
 
     if (isConfigured) {
+      // Return a tenant-scoped Supabase client that sends 'x-tenant-id' header
+      // PostgREST attaches this header into PostgreSQL session, satisfying RLS tenant_isolation_policy
+      if (tenantId) {
+        let tenantClient = this.tenantClients.get(tenantId);
+        if (!tenantClient) {
+          try {
+            tenantClient = createClient(supabaseUrl!, supabaseKey!, {
+              global: {
+                headers: {
+                  "x-tenant-id": tenantId
+                }
+              }
+            });
+            this.tenantClients.set(tenantId, tenantClient);
+          } catch (err) {
+            console.error(`Error creating Supabase client for tenant ${tenantId}:`, err);
+          }
+        }
+        return tenantClient || this.supabase;
+      }
+
       if (!this.supabase) {
         try {
           this.supabase = createClient(supabaseUrl!, supabaseKey!);
@@ -535,7 +584,7 @@ export class Database {
       }
     }
 
-    const client = this.getSupabaseClient();
+    const client = this.getSupabaseClient(tenantId);
 
     if (!client) {
       if (process.env.NODE_ENV === "production") {
@@ -592,9 +641,19 @@ export class Database {
    */
   public async saveSlice<T>(tenantId: string, sliceKey: string, data: T[]): Promise<void> {
     const tableName = TABLE_MAP[sliceKey] || sliceKey;
-    const client = this.getSupabaseClient();
+    const client = this.getSupabaseClient(tenantId);
     const isVitest = Boolean(process.env.VITEST);
     const isProduction = process.env.NODE_ENV === "production";
+
+    // Defense-in-depth: Database-level policy check to ensure no row belongs to another tenant
+    for (const item of data) {
+      const rowTenantId = (item as any)?.tenant_id;
+      if (rowTenantId && rowTenantId !== tenantId) {
+        throw new CrossTenantViolationError(
+          `Database RLS Policy Violation: Staging row with conflicting tenant_id '${rowTenantId}' under tenant boundary '${tenantId}'. Write rejected.`
+        );
+      }
+    }
 
     if (this.dbStopped) {
       this.markSliceStale(tenantId, sliceKey);
@@ -708,9 +767,17 @@ export class Database {
     expectedVersion?: number
   ): Promise<T> {
     const tableName = TABLE_MAP[sliceKey] || sliceKey;
-    const client = this.getSupabaseClient();
+    const client = this.getSupabaseClient(tenantId);
     const isVitest = Boolean(process.env.VITEST);
     const isProduction = process.env.NODE_ENV === "production";
+
+    // Defense-in-depth: Ensure updated record does not contradict tenant boundary
+    const updateTenantId = (item as any)?.tenant_id;
+    if (updateTenantId && updateTenantId !== tenantId) {
+      throw new CrossTenantViolationError(
+        `Database RLS Policy Violation: Cannot update record with conflicting tenant_id '${updateTenantId}' under active tenant '${tenantId}'.`
+      );
+    }
 
     if (this.dbStopped) {
       this.markSliceStale(tenantId, sliceKey);
@@ -834,7 +901,7 @@ export class Database {
   ): Promise<R> {
     const isVitest = Boolean(process.env.VITEST);
     const isProduction = process.env.NODE_ENV === "production";
-    const client = this.getSupabaseClient();
+    const client = this.getSupabaseClient(tenantId);
 
     if (this.dbStopped) {
       this.markSliceStale(tenantId, "transaction");
@@ -900,6 +967,15 @@ export class Database {
           if (explicitRollback) {
             throw new TransactionRollbackError("Transaction has been rolled back. Further operations rejected.");
           }
+          // Defense-in-depth: Ensure items in transaction do not belong to another tenant
+          for (const item of data) {
+            const rowTenantId = (item as any)?.tenant_id;
+            if (rowTenantId && rowTenantId !== tenantId) {
+              throw new CrossTenantViolationError(
+                `Database RLS Policy Violation in Transaction: Staging row with conflicting tenant_id '${rowTenantId}' under tenant boundary '${tenantId}'.`
+              );
+            }
+          }
           const tableName = TABLE_MAP[sliceKey] || sliceKey;
           stagedSlices.set(sliceKey, data);
           touchedSlices.add(tableName);
@@ -907,6 +983,12 @@ export class Database {
         saveObject: async <T>(key: string, data: T): Promise<void> => {
           if (explicitRollback) {
             throw new TransactionRollbackError("Transaction has been rolled back. Further operations rejected.");
+          }
+          const objTenantId = (data as any)?.tenant_id;
+          if (objTenantId && objTenantId !== tenantId && tenantId !== "global" && tenantId !== "saas-admin") {
+            throw new CrossTenantViolationError(
+              `Database RLS Policy Violation in Transaction: Object contains conflicting tenant_id '${objTenantId}' under active tenant '${tenantId}'.`
+            );
           }
           stagedObjects.set(key, data);
           touchedObjects.add(key);
@@ -1116,7 +1198,7 @@ export class Database {
       }
     }
 
-    const client = this.getSupabaseClient();
+    const client = this.getSupabaseClient(tenantId);
     const tableName = TABLE_MAP[sliceKey];
 
     // If it's a dedicated settings table, select it
@@ -1242,9 +1324,17 @@ export class Database {
    */
   public async saveObject<T>(tenantId: string, sliceKey: string, data: T): Promise<void> {
     const tableName = TABLE_MAP[sliceKey];
-    const client = this.getSupabaseClient();
+    const client = this.getSupabaseClient(tenantId);
     const isVitest = Boolean(process.env.VITEST);
     const isProduction = process.env.NODE_ENV === "production";
+
+    // Defense-in-depth: Ensure object does not contain conflicting tenant_id
+    const objTenantId = (data as any)?.tenant_id;
+    if (objTenantId && objTenantId !== tenantId && tenantId !== "global" && tenantId !== "saas-admin") {
+      throw new CrossTenantViolationError(
+        `Database RLS Policy Violation: Object contains conflicting tenant_id '${objTenantId}' under active tenant '${tenantId}'.`
+      );
+    }
 
     if (this.dbStopped) {
       this.markObjectStale(tenantId, sliceKey);
