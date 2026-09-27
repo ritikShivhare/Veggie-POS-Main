@@ -489,10 +489,14 @@ export default function POSBilling({
       note: itemNotes[item.menuItem.id] || undefined
     }));
 
-    // 3. Create the order
+    // 3. Create the order with client-generated UUID
     const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const orderUuid = (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+      ? crypto.randomUUID()
+      : `ord_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
     const newOrder: Order = {
-      id: `ord-${Date.now()}`,
+      id: orderUuid,
       orderNumber: `${randomNum}`,
       date: new Date().toISOString(),
       type: orderType,

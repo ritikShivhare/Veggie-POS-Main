@@ -59,7 +59,7 @@ router.get("/sync", authMiddleware, async (req, res) => {
 });
 
 // Backward compatibility wrapper route: bulk saves everything via separate tables
-router.post("/sync", authMiddleware, requireRole("Owner", "Manager"), idempotencyMiddleware, async (req, res) => {
+router.post("/sync", authMiddleware, requireRole("Owner", "Manager", "Staff", "Cashier", "Waiter", "Chef"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     const data = await syncService.saveFullState(tenantId, req.body);

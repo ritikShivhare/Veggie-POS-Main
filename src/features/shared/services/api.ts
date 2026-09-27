@@ -105,7 +105,8 @@ export class ApiClient {
 
   private static getHeaders(tenantId?: string, sessionId?: string, idempotencyKey?: string): Record<string, string> {
     const headers: Record<string, string> = {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "Accept": "application/json"
     };
     if (tenantId) {
       headers["x-tenant-id"] = tenantId;
@@ -143,7 +144,12 @@ export class ApiClient {
   }
 
   private static logApiError(context: string, error: any): void {
-    const isNetworkOrAuth = error?.message && (error.message.includes("status 401") || error.message.includes("Failed to fetch") || error.name === "TypeError");
+    const isNetworkOrAuth = error?.message && (
+      error.message.includes("status 401") ||
+      error.message.includes("UNAUTHORIZED") ||
+      error.message.includes("Failed to fetch") ||
+      error.name === "TypeError"
+    );
     if (isNetworkOrAuth) {
       console.warn(`${context}:`, error.message);
     } else {
@@ -151,7 +157,7 @@ export class ApiClient {
     }
 
     // Dispatch custom event to trigger global visual Toast notifications for actual application errors
-    if (typeof window !== "undefined" && error?.message && !error.message.includes("Failed to fetch")) {
+    if (typeof window !== "undefined" && error?.message && !error.message.includes("Failed to fetch") && !isNetworkOrAuth) {
       const errMsg = error?.message || "Unknown communication failure";
       window.dispatchEvent(new CustomEvent("veggiepos_api_error", {
         detail: {
@@ -171,7 +177,26 @@ export class ApiClient {
         headers: this.getHeaders(tenantId, sessionId),
         credentials: "include"
       });
-      this.handleHttpError(response, "Fetch sync state failed");
+      if (!response.ok) {
+        if (response.status === 401) {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("veggiepos_session_expired"));
+          }
+          return {
+            success: false,
+            initialized: false,
+            error: "UNAUTHORIZED",
+            message: "Active security session required."
+          };
+        }
+        this.handleHttpError(response, "Fetch sync state failed");
+      }
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        const snippet = text.slice(0, 100).replace(/\s+/g, " ").trim();
+        throw new Error(`Expected JSON response but received ${contentType || "unknown"}: ${snippet}`);
+      }
       const data: SyncResponse = await response.json();
       return this.handleApiResponse(`ApiClient.getTenantSync for tenant ${tenantId}`, data);
     } catch (error: any) {
@@ -198,9 +223,33 @@ export class ApiClient {
       });
       if (!response.ok) {
         let errJson: any = null;
-        try {
-          errJson = await response.json();
-        } catch (e) {}
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          try {
+            errJson = await response.json();
+          } catch (e) {}
+        }
+
+        if (response.status === 401) {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("veggiepos_session_expired"));
+          }
+          return {
+            success: false,
+            initialized: false,
+            error: "UNAUTHORIZED",
+            message: errJson?.message || "Active security session required."
+          };
+        }
+
+        if (response.status === 403) {
+          return {
+            success: false,
+            initialized: true,
+            error: errJson?.error || "FORBIDDEN",
+            message: errJson?.message || "Access denied."
+          };
+        }
 
         if (response.status === 409 || errJson?.error === "OPTIMISTIC_LOCK_CONFLICT") {
           const errMsg = errJson?.message || "Optimistic lock conflict: stale updates rejected.";
@@ -223,6 +272,13 @@ export class ApiClient {
           };
         }
         this.handleHttpError(response, "Save sync state failed");
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        const snippet = text.slice(0, 100).replace(/\s+/g, " ").trim();
+        throw new Error(`Expected JSON response but received ${contentType || "unknown"}: ${snippet}`);
       }
       const data: SyncResponse = await response.json();
       return this.handleApiResponse(`ApiClient.saveTenantSync for tenant ${tenantId}`, data);

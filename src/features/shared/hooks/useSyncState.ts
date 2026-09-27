@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { MenuItem, Ingredient, Recipe, Purchase, StaffMember, Shift, Order, InventorySettings, Customer } from "../types";
 import { ApiClient } from "../services/api";
+import { offlineRepository, OutboxProcessor } from "../services/offline";
 import {
   INITIAL_MENU_ITEMS,
   INITIAL_INGREDIENTS,
@@ -105,21 +106,34 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   const lastSaveTimeRef = useRef(0);
   const lastFetchedStateRef = useRef<string>("");
 
-  // Reset or load cached states synchronously when activeTenantId changes
+  // Reset or load cached states from IndexedDB offline database when activeTenantId changes
   useEffect(() => {
-    const cached = getCachedTenantData(activeTenantId);
-    if (cached) {
-      if (cached.menuItems) setMenuItems(cached.menuItems);
-      if (cached.ingredients) setIngredients(cached.ingredients);
-      if (cached.recipes) setRecipes(cached.recipes);
-      if (cached.staffList && cached.staffList.length > 0) setStaffList(cached.staffList);
-      if (cached.orders) setOrders(cached.orders);
-      if (cached.customers) setCustomers(cached.customers);
-      if (cached.purchases) setPurchases(cached.purchases);
-      if (cached.shifts) setShifts(cached.shifts);
-      if (cached.settings) setSettings(cached.settings);
-      setIsInitialSyncLoading(false);
-    } else {
+    let cancelled = false;
+
+    async function loadFromIndexedDB() {
+      try {
+        const localData = await offlineRepository.getFullTenantState(activeTenantId);
+        if (cancelled) return;
+
+        if (localData.menuItems && localData.menuItems.length > 0) {
+          setMenuItems(localData.menuItems);
+          if (localData.ingredients && localData.ingredients.length > 0) setIngredients(localData.ingredients);
+          if (localData.recipes && localData.recipes.length > 0) setRecipes(localData.recipes);
+          if (localData.staffList && localData.staffList.length > 0) setStaffList(localData.staffList as any);
+          if (localData.orders && localData.orders.length > 0) setOrders(localData.orders as any);
+          if (localData.customers && localData.customers.length > 0) setCustomers(localData.customers as any);
+          if (localData.shifts && localData.shifts.length > 0) setShifts(localData.shifts as any);
+          if (localData.settings && Object.keys(localData.settings).length > 0) {
+            setSettings(prev => ({ ...prev, ...localData.settings }));
+          }
+          setIsInitialSyncLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("[useSyncState] Error loading initial tenant state from IndexedDB:", err);
+      }
+
+      if (cancelled) return;
       setIsInitialSyncLoading(true);
       const isMain = activeTenantId === "veg-main-001";
       setMenuItems(INITIAL_MENU_ITEMS);
@@ -177,9 +191,15 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
       });
     }
 
+    loadFromIndexedDB();
+
     isLoadedRef.current = false;
     loadedTenantIdRef.current = "";
     lastFetchedStateRef.current = "";
+
+    return () => {
+      cancelled = true;
+    };
   }, [activeTenantId]);
 
   // Toast Auto-dismiss Timer Effect
@@ -245,7 +265,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
             if (d.settings) setSettings(d.settings);
 
             try {
-              localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}`, JSON.stringify(d));
+              offlineRepository.saveFullTenantState(activeTenantId, d).catch(e => console.warn(e));
             } catch (e) {}
           }
         }
@@ -286,7 +306,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
           if (d.settings) setSettings(d.settings);
           
           try {
-            localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}`, JSON.stringify(d));
+            offlineRepository.saveFullTenantState(activeTenantId, d).catch(e => console.warn(e));
           } catch (e) {}
 
           loadedTenantIdRef.current = activeTenantId;
@@ -363,9 +383,11 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
             }
           };
 
-          const saveRes = await ApiClient.saveTenantSync(activeTenantId, initialPayload, currentSessionId || undefined);
+          if (currentSessionId) {
+            await ApiClient.saveTenantSync(activeTenantId, initialPayload, currentSessionId);
+          }
           
-          if (active && saveRes.success) {
+          if (active) {
             const serverStateStr = JSON.stringify({
               menuItems: initialPayload.menuItems,
               ingredients: initialPayload.ingredients,
@@ -390,7 +412,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
             setSettings(initialPayload.settings);
             
             try {
-              localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}`, JSON.stringify(initialPayload));
+              offlineRepository.saveFullTenantState(activeTenantId, initialPayload).catch(e => console.warn(e));
             } catch (e) {}
 
             loadedTenantIdRef.current = activeTenantId;
@@ -443,6 +465,11 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
           if (currentSessionId && ws?.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: "auth", token: currentSessionId }));
           }
+
+          // Trigger outbox drain on WebSocket connect/reconnect
+          OutboxProcessor.triggerDrain(activeTenantId).catch(err => {
+            console.warn("[Realtime] Outbox drain on WS connect error:", err);
+          });
 
           // Heartbeat ping every 25s
           pingInterval = setInterval(() => {
@@ -578,6 +605,11 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     };
 
     const currentStateStr = JSON.stringify(currentState);
+ 
+    // Guard: Do not attempt to sync before local state is loaded, or if user has no active session
+    if (!isLoadedRef.current || !currentSessionId) {
+      return;
+    }
 
     if (currentStateStr === lastFetchedStateRef.current) {
       return;
@@ -587,7 +619,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
 
     const saveSync = async () => {
       try {
-        const res = await ApiClient.saveTenantSync(activeTenantId, currentState, currentSessionId || undefined);
+        const res = await ApiClient.saveTenantSync(activeTenantId, currentState, currentSessionId);
         if (res.success) {
           hasPendingChangesRef.current = false;
           lastSaveTimeRef.current = Date.now();
@@ -604,8 +636,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
           const savedStateStr = JSON.stringify(res.data || currentState);
           lastFetchedStateRef.current = savedStateStr;
           try {
-            localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}`, savedStateStr);
-            localStorage.removeItem(`veggiepos_sync_cache_${activeTenantId}_stale`);
+            offlineRepository.saveFullTenantState(activeTenantId, res.data || currentState).catch(e => console.warn(e));
           } catch (e) {}
         } else {
           console.warn("Server rejected state synchronization update:", res.error);
@@ -630,7 +661,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
                 if (d.settings) setSettings(d.settings);
                 const freshStr = JSON.stringify(d);
                 lastFetchedStateRef.current = freshStr;
-                localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}`, freshStr);
+                offlineRepository.saveFullTenantState(activeTenantId, d).catch(e => console.warn(e));
               }
             } catch (reErr) {
               console.warn("Failed to reconcile state after 409 conflict:", reErr);
@@ -639,7 +670,16 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
           }
 
           try {
-            localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}_stale`, "true");
+            // Persist locally in IndexedDB and enqueue in outbox for offline sync
+            offlineRepository.saveFullTenantState(activeTenantId, currentState).catch(e => console.warn(e));
+            offlineRepository.enqueueOutbox(
+              activeTenantId,
+              "SYNC_FULL_STATE",
+              `/api/sync?tenantId=${encodeURIComponent(activeTenantId)}`,
+              "POST",
+              currentState,
+              ApiClient.generateIdempotencyKey("sync_state")
+            ).catch(e => console.warn(e));
           } catch (e) {}
 
           const isDbUnavailable = res.error === "DATABASE_UNAVAILABLE";
@@ -653,7 +693,16 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
       } catch (err: any) {
         console.warn("Failed to push synchronized update:", err);
         try {
-          localStorage.setItem(`veggiepos_sync_cache_${activeTenantId}_stale`, "true");
+          // Persist locally in IndexedDB and enqueue in outbox for offline sync
+          offlineRepository.saveFullTenantState(activeTenantId, currentState).catch(e => console.warn(e));
+          offlineRepository.enqueueOutbox(
+            activeTenantId,
+            "SYNC_FULL_STATE",
+            `/api/sync?tenantId=${encodeURIComponent(activeTenantId)}`,
+            "POST",
+            currentState,
+            ApiClient.generateIdempotencyKey("sync_state")
+          ).catch(e => console.warn(e));
         } catch (e) {}
         setToastMessage({
           type: "error",
@@ -666,16 +715,28 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   }, [menuItems, ingredients, recipes, staffList, orders, customers, purchases, shifts, settings, activeTenantId, currentSessionId]);
 
   // Global order creation handler
+  // POS write operations commit to IndexedDB first; UI does NOT wait for cloud API
   const handleOrderCreated = (newOrder: Order) => {
     const orderWithVersion: Order = {
       ...newOrder,
       version: typeof newOrder.version === "number" ? newOrder.version : 1
     };
+    // 1. Instantaneous UI state update
     setOrders([orderWithVersion, ...orders]);
+
+    // 2. Commit to IndexedDB first & queue in durable outbox
+    offlineRepository.recordOrderOffline(activeTenantId, orderWithVersion).then(() => {
+      // Fire-and-forget outbox drain in background
+      OutboxProcessor.triggerDrain(activeTenantId);
+    }).catch(err => {
+      console.warn("[useSyncState] Error recording order offline:", err);
+    });
   };
 
   // Handle Kitchen KDS status change and payment settlement
+  // Commits to IndexedDB first; non-blocking UI
   const handleUpdateOrderStatus = (orderId: string, nextStatus: any, paymentMethod?: 'Cash' | 'UPI', paidAt?: string) => {
+    // 1. Instantaneous UI state update
     setOrders((prev) =>
       prev.map((o) => {
         if (o.id === orderId) {
@@ -687,26 +748,53 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
         return o;
       })
     );
+
+    // 2. Commit to IndexedDB first & queue in durable outbox
+    offlineRepository.recordPaymentOffline(activeTenantId, orderId, {
+      status: nextStatus,
+      paymentMethod,
+      paidAt
+    }).then(() => {
+      OutboxProcessor.triggerDrain(activeTenantId);
+    }).catch(err => {
+      console.warn("[useSyncState] Error recording payment/order status offline:", err);
+    });
   };
 
   // Handle Ingredient stock updates
   const handleUpdateIngredients = (updated: Ingredient[]) => {
     setIngredients(updated);
+    offlineRepository.recordInventoryOffline(activeTenantId, updated).then(() => {
+      OutboxProcessor.triggerDrain(activeTenantId);
+    }).catch(err => {
+      console.warn("[useSyncState] Error recording inventory offline:", err);
+    });
   };
 
   // Handle Recipe updates
   const handleUpdateRecipes = (updated: Recipe[]) => {
     setRecipes(updated);
+    offlineRepository.saveRecipes(activeTenantId, updated).catch(err => {
+      console.warn("[useSyncState] Error recording recipes offline:", err);
+    });
   };
 
   // Handle Menu Item updates
   const handleUpdateMenuItems = (updated: MenuItem[]) => {
     setMenuItems(updated);
+    offlineRepository.saveMenuItems(activeTenantId, updated).catch(err => {
+      console.warn("[useSyncState] Error recording menu items offline:", err);
+    });
   };
 
   // Handle Purchase log creation
   const handleAddPurchase = (purchase: Purchase) => {
     setPurchases([purchase, ...purchases]);
+    offlineRepository.recordPurchaseOffline(activeTenantId, purchase).then(() => {
+      OutboxProcessor.triggerDrain(activeTenantId);
+    }).catch(err => {
+      console.warn("[useSyncState] Error recording purchase offline:", err);
+    });
   };
 
   // Calculate Real-Time Stats for Dashboard Bento Grid

@@ -5,7 +5,9 @@ import {
   purchaseRepo,
   recipeRepo,
   authMiddleware,
-  requirePermission
+  requirePermission,
+  idempotencyMiddleware,
+  realtimeService
 } from "../server/context";
 import { handleApiError } from "../server/features/shared/database";
 
@@ -24,21 +26,28 @@ router.get("/ingredients", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/ingredients", authMiddleware, requirePermission("inventory"), async (req, res) => {
+router.post("/ingredients", authMiddleware, idempotencyMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await ingredientRepo.add(tenantId, req.body);
-    res.json({ success: true, message: "Ingredient logged successfully." });
+    const saved = await ingredientRepo.getById(tenantId, req.body.id);
+    try {
+      realtimeService.broadcastToTenant(tenantId, "inventory:updated", { entityId: req.body.id, slice: "ingredients" });
+    } catch {}
+    res.json({ success: true, message: "Ingredient logged successfully.", data: saved || req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
-router.post("/ingredients/bulk", authMiddleware, requirePermission("inventory"), async (req, res) => {
+router.post("/ingredients/bulk", authMiddleware, idempotencyMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await ingredientRepo.saveAll(tenantId, req.body);
-    res.json({ success: true, message: "Ingredients synchronized successfully." });
+    try {
+      realtimeService.broadcastSyncUpdate(tenantId, "ingredients");
+    } catch {}
+    res.json({ success: true, message: "Ingredients synchronized successfully.", data: req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -47,8 +56,11 @@ router.post("/ingredients/bulk", authMiddleware, requirePermission("inventory"),
 router.put("/ingredients/:id", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await ingredientRepo.update(tenantId, req.body);
-    res.json({ success: true, message: "Ingredient updated successfully." });
+    const updated = await ingredientRepo.update(tenantId, req.body);
+    try {
+      realtimeService.broadcastToTenant(tenantId, "inventory:updated", { entityId: req.params.id, slice: "ingredients" });
+    } catch {}
+    res.json({ success: true, message: "Ingredient updated successfully.", data: updated || req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -130,21 +142,28 @@ router.get("/purchases", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/purchases", authMiddleware, requirePermission("inventory"), async (req, res) => {
+router.post("/purchases", authMiddleware, idempotencyMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await purchaseRepo.add(tenantId, req.body);
-    res.json({ success: true, message: "Purchase invoice registered." });
+    const saved = await purchaseRepo.getById(tenantId, req.body.id);
+    try {
+      realtimeService.broadcastToTenant(tenantId, "purchase:created", { entityId: req.body.id, slice: "purchases" });
+    } catch {}
+    res.json({ success: true, message: "Purchase invoice registered.", data: saved || req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
-router.post("/purchases/bulk", authMiddleware, requirePermission("inventory"), async (req, res) => {
+router.post("/purchases/bulk", authMiddleware, idempotencyMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await purchaseRepo.saveAll(tenantId, req.body);
-    res.json({ success: true, message: "Purchases synchronized successfully." });
+    try {
+      realtimeService.broadcastSyncUpdate(tenantId, "purchases");
+    } catch {}
+    res.json({ success: true, message: "Purchases synchronized successfully.", data: req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -153,8 +172,11 @@ router.post("/purchases/bulk", authMiddleware, requirePermission("inventory"), a
 router.put("/purchases/:id", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await purchaseRepo.update(tenantId, req.body);
-    res.json({ success: true, message: "Purchase updated successfully." });
+    const updated = await purchaseRepo.update(tenantId, req.body);
+    try {
+      realtimeService.broadcastToTenant(tenantId, "purchase:updated", { entityId: req.params.id, slice: "purchases" });
+    } catch {}
+    res.json({ success: true, message: "Purchase updated successfully.", data: updated || req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }

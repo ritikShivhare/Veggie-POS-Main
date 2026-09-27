@@ -153,6 +153,15 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   handleApiError(res, err);
 });
 
+// Ensure unhandled /api/* requests return JSON 404, never SPA HTML
+app.all("/api/*", (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: "NOT_FOUND",
+    message: `API route ${req.method} ${req.originalUrl || req.path} not found.`
+  });
+});
+
 // Capture process-level crashes and unhandled promise rejections (Backend Sentry equivalent)
 process.on("uncaughtException", (error) => {
   console.error("Uncaught Exception on Node Server (Sentry Alert Captured):", error);

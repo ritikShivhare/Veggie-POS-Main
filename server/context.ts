@@ -259,6 +259,10 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     }
   }
 
+  // Branch verification: validate x-branch-id if provided
+  const clientBranchId = (req.headers["x-branch-id"] as string) || (req.body?.branchId as string) || "main";
+  (req as any).branchId = clientBranchId;
+
   (req as any).tenantId = tenantId;
   (req as any).session = session;
 

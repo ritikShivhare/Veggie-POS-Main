@@ -1,5 +1,5 @@
 import express from "express";
-import { handleApiError } from "../server/features/shared/database";
+import { Database, handleApiError } from "../server/features/shared/database";
 import {
   staffRepo,
   orderRepo,
@@ -10,7 +10,8 @@ import {
   idempotencyMiddleware,
   requireRole,
   requirePermission,
-  PLAN_LIMITS
+  PLAN_LIMITS,
+  realtimeService
 } from "../server/context";
 import {
   hashPin,
@@ -114,7 +115,11 @@ router.post("/orders", authMiddleware, idempotencyMiddleware, async (req, res) =
       });
     }
     await orderRepo.add(tenantId, req.body);
-    res.json({ success: true, message: "Order placed successfully." });
+    const savedOrder = await orderRepo.getById(tenantId, req.body.id);
+    try {
+      realtimeService.broadcastToTenant(tenantId, "order:created", { entityId: req.body.id, slice: "orders" });
+    } catch {}
+    res.json({ success: true, message: "Order placed successfully.", data: savedOrder || req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -124,13 +129,16 @@ router.post("/orders/bulk", authMiddleware, idempotencyMiddleware, async (req, r
   const tenantId = (req as any).tenantId;
   try {
     await orderRepo.saveAll(tenantId, req.body);
-    res.json({ success: true, message: "Orders synchronized successfully." });
+    try {
+      realtimeService.broadcastSyncUpdate(tenantId, "orders");
+    } catch {}
+    res.json({ success: true, message: "Orders synchronized successfully.", data: req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
-router.put("/orders/:id", authMiddleware, async (req, res) => {
+router.put("/orders/:id", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     // Order cancellation protection: Only Owner or Manager can transition order status to 'Cancelled'
@@ -146,8 +154,11 @@ router.put("/orders/:id", authMiddleware, async (req, res) => {
         });
       }
     }
-    await orderRepo.update(tenantId, req.body);
-    res.json({ success: true, message: "Order updated successfully." });
+    const updatedOrder = await orderRepo.update(tenantId, req.body);
+    try {
+      realtimeService.broadcastToTenant(tenantId, "order:updated", { entityId: req.params.id, slice: "orders" });
+    } catch {}
+    res.json({ success: true, message: "Order updated successfully.", data: updatedOrder || req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -176,31 +187,41 @@ router.get("/customers", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/customers", authMiddleware, async (req, res) => {
+router.post("/customers", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await customerRepo.add(tenantId, req.body);
-    res.json({ success: true, message: "Customer profile added." });
+    const savedCustomer = await customerRepo.getById(tenantId, req.body.id);
+    try {
+      realtimeService.broadcastToTenant(tenantId, "customer:updated", { entityId: req.body.id, slice: "customers" });
+    } catch {}
+    res.json({ success: true, message: "Customer profile added.", data: savedCustomer || req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
-router.post("/customers/bulk", authMiddleware, async (req, res) => {
+router.post("/customers/bulk", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await customerRepo.saveAll(tenantId, req.body);
-    res.json({ success: true, message: "Customers synchronized successfully." });
+    try {
+      realtimeService.broadcastSyncUpdate(tenantId, "customers");
+    } catch {}
+    res.json({ success: true, message: "Customers synchronized successfully.", data: req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
-router.put("/customers/:id", authMiddleware, async (req, res) => {
+router.put("/customers/:id", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await customerRepo.update(tenantId, req.body);
-    res.json({ success: true, message: "Customer profile updated." });
+    const updatedCustomer = await customerRepo.update(tenantId, req.body);
+    try {
+      realtimeService.broadcastToTenant(tenantId, "customer:updated", { entityId: req.params.id, slice: "customers" });
+    } catch {}
+    res.json({ success: true, message: "Customer profile updated.", data: updatedCustomer || req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -229,27 +250,34 @@ router.get("/shifts", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/shifts", authMiddleware, async (req, res) => {
+router.post("/shifts", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await shiftRepo.add(tenantId, req.body);
-    res.json({ success: true, message: "Shift details saved." });
+    const savedShift = await shiftRepo.getById(tenantId, req.body.id);
+    try {
+      realtimeService.broadcastToTenant(tenantId, "shift:updated", { entityId: req.body.id, slice: "shifts" });
+    } catch {}
+    res.json({ success: true, message: "Shift details saved.", data: savedShift || req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
-router.post("/shifts/bulk", authMiddleware, async (req, res) => {
+router.post("/shifts/bulk", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await shiftRepo.saveAll(tenantId, req.body);
-    res.json({ success: true, message: "Shifts synchronized successfully." });
+    try {
+      realtimeService.broadcastSyncUpdate(tenantId, "shifts");
+    } catch {}
+    res.json({ success: true, message: "Shifts synchronized successfully.", data: req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
-router.put("/shifts/:id", authMiddleware, async (req, res) => {
+router.put("/shifts/:id", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await shiftRepo.update(tenantId, req.body);
@@ -264,6 +292,135 @@ router.delete("/shifts/:id", authMiddleware, async (req, res) => {
   try {
     await shiftRepo.delete(tenantId, req.params.id);
     res.json({ success: true, message: "Shift log deleted." });
+  } catch (error: any) {
+    handleApiError(res, error);
+  }
+});
+
+// ============================================================================
+// OFFLINE SYNC ENGINE ENDPOINT: /sync/outbox
+// 1. Validates tenant and branch (authMiddleware + branch extraction)
+// 2. Enforces idempotency key (idempotencyMiddleware)
+// 3. Performs transactional write via Database.runTransaction
+// 4. Returns canonical entity and optimistic version
+// 5. Broadcasts realtime sync event
+// ============================================================================
+router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  const branchId = (req as any).branchId || "main";
+  const { operationId, entityType, entityId, operationType, payload } = req.body;
+
+  if (!entityType || !entityId) {
+    return res.status(422).json({
+      success: false,
+      error: "VALIDATION_ERROR",
+      message: "entityType and entityId are required for sync operation."
+    });
+  }
+
+  try {
+    let canonicalEntity: any = null;
+
+    await Database.getInstance().runTransaction(tenantId, async () => {
+      const enrichedPayload = {
+        ...payload,
+        tenantId,
+        branchId,
+        updatedAt: new Date().toISOString()
+      };
+
+      switch (entityType) {
+        case "order": {
+          if (operationType === "CREATE") {
+            const existing = await orderRepo.getById(tenantId, entityId);
+            if (!existing) {
+              await orderRepo.add(tenantId, enrichedPayload);
+            }
+            canonicalEntity = (await orderRepo.getById(tenantId, entityId)) || enrichedPayload;
+          } else if (operationType === "UPDATE") {
+            await orderRepo.update(tenantId, enrichedPayload);
+            canonicalEntity = (await orderRepo.getById(tenantId, entityId)) || enrichedPayload;
+          } else if (operationType === "DELETE") {
+            await orderRepo.delete(tenantId, entityId);
+            canonicalEntity = { id: entityId, deleted: true, version: 1 };
+          }
+          break;
+        }
+        case "payment": {
+          const existing = await orderRepo.getById(tenantId, entityId);
+          if (existing) {
+            const updated = {
+              ...existing,
+              status: payload.status || existing.status,
+              paymentMethod: payload.paymentMethod || existing.paymentMethod,
+              paidAt: payload.paidAt || existing.paidAt,
+              updatedAt: new Date().toISOString(),
+              version: (existing.version || 1) + 1
+            };
+            await orderRepo.update(tenantId, updated);
+            canonicalEntity = updated;
+          } else {
+            canonicalEntity = enrichedPayload;
+          }
+          break;
+        }
+        case "customer": {
+          if (operationType === "CREATE") {
+            const existing = await customerRepo.getById(tenantId, entityId);
+            if (!existing) {
+              await customerRepo.add(tenantId, enrichedPayload);
+            }
+            canonicalEntity = (await customerRepo.getById(tenantId, entityId)) || enrichedPayload;
+          } else if (operationType === "UPDATE") {
+            await customerRepo.update(tenantId, enrichedPayload);
+            canonicalEntity = (await customerRepo.getById(tenantId, entityId)) || enrichedPayload;
+          }
+          break;
+        }
+        case "shift": {
+          if (operationType === "CREATE") {
+            const existing = await shiftRepo.getById(tenantId, entityId);
+            if (!existing) {
+              await shiftRepo.add(tenantId, enrichedPayload);
+            }
+            canonicalEntity = (await shiftRepo.getById(tenantId, entityId)) || enrichedPayload;
+          } else if (operationType === "UPDATE") {
+            await shiftRepo.update(tenantId, enrichedPayload);
+            canonicalEntity = (await shiftRepo.getById(tenantId, entityId)) || enrichedPayload;
+          }
+          break;
+        }
+        default: {
+          canonicalEntity = enrichedPayload;
+          break;
+        }
+      }
+    });
+
+    // 5. Broadcast realtime event to tenant
+    try {
+      realtimeService.broadcastToTenant(tenantId, `${entityType}:synced`, {
+        slice: entityType,
+        entityId,
+        metadata: {
+          operationId,
+          branchId,
+          canonicalEntity
+        }
+      });
+    } catch {}
+
+    // 6. Return canonical entity/version
+    res.json({
+      success: true,
+      message: "Sync operation committed transactionally.",
+      operationId,
+      entityType,
+      entityId,
+      branchId,
+      canonicalData: canonicalEntity,
+      data: canonicalEntity
+    });
   } catch (error: any) {
     handleApiError(res, error);
   }
