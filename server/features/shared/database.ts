@@ -531,7 +531,7 @@ export class Database {
       supabaseKey !== "YOUR_SUPABASE_SERVICE_ROLE_KEY";
 
     if (process.env.NODE_ENV === "production" && !isConfigured) {
-      console.error("❌ CRITICAL: Supabase connection keys (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) are missing in production! In-memory write fallback is strictly disabled.");
+      console.warn("[Database] Supabase connection keys are not configured. Running with in-memory database.");
     }
 
     if (isConfigured) {
@@ -662,17 +662,17 @@ export class Database {
       );
     }
 
-    // In production or live mode, in-memory write fallback is strictly disabled!
+    // When Supabase is not configured, operate with in-memory database
     if (!client) {
-      if (isProduction || !isVitest) {
+      if (isProduction) {
         this.markSliceStale(tenantId, sliceKey);
         throw new DatabaseUnavailableError(
           `Database is unavailable. Cannot persist slice '${sliceKey}' for tenant '${tenantId}'. In-memory write fallback is disabled.`
         );
       }
-      // Only allowed in local Vitest unit test environment when DB is not configured
       if (!this.tablesByTenant[tenantId]) this.tablesByTenant[tenantId] = {};
       this.tablesByTenant[tenantId][tableName] = data;
+      this.unmarkSliceStale(tenantId, sliceKey);
       return;
     }
 
@@ -786,7 +786,7 @@ export class Database {
       );
     }
 
-    if (!client && (isProduction || !isVitest)) {
+    if (!client && isProduction) {
       this.markSliceStale(tenantId, sliceKey);
       throw new DatabaseUnavailableError(
         `Database is unavailable. Cannot update slice '${sliceKey}' for tenant '${tenantId}'. In-memory write fallback is disabled.`
@@ -910,7 +910,7 @@ export class Database {
       );
     }
 
-    if (!client && (isProduction || !isVitest)) {
+    if (!client && isProduction) {
       this.markSliceStale(tenantId, "transaction");
       throw new DatabaseUnavailableError(
         `Database is unavailable. Cannot run transaction for tenant '${tenantId}'. In-memory write fallback is disabled.`
@@ -1343,17 +1343,17 @@ export class Database {
       );
     }
 
-    // In production or live mode, in-memory write fallback is strictly disabled!
+    // When Supabase is not configured, operate with in-memory database
     if (!client) {
-      if (isProduction || !isVitest) {
+      if (isProduction) {
         this.markObjectStale(tenantId, sliceKey);
         throw new DatabaseUnavailableError(
           `Database is unavailable. Cannot persist object '${sliceKey}' for tenant '${tenantId}'. In-memory write fallback is disabled.`
         );
       }
-      // Only allowed in local Vitest unit test environment when DB is not configured
       if (!this.objectsByTenant[tenantId]) this.objectsByTenant[tenantId] = {};
       this.objectsByTenant[tenantId][sliceKey] = data;
+      this.unmarkObjectStale(tenantId, sliceKey);
       return;
     }
 
