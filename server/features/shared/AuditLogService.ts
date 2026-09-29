@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { Database } from "./database";
+import { Database, DatabaseTransaction } from "./database";
 import { NotificationService } from "../notifications/NotificationService";
 
 export interface AuditLogEntry {
@@ -61,7 +61,8 @@ export class AuditLogService {
     eventType: string,
     actor: string,
     description: string,
-    details: any = {}
+    details: any = {},
+    trx?: DatabaseTransaction
   ): Promise<string> {
     const logs = await this.getLogs(tenantId);
     const lastEntry = logs[0]; // logs stored in reverse-chronological order (newest first)
@@ -96,7 +97,11 @@ export class AuditLogService {
 
     logs.unshift(newEntry);
     // Keep last 300 entries for audit trail
-    await this.db.saveObject(tenantId, "system_audit_logs", logs.slice(0, 300));
+    if (trx) {
+      await trx.saveObject("system_audit_logs", logs.slice(0, 300));
+    } else {
+      await this.db.saveObject(tenantId, "system_audit_logs", logs.slice(0, 300));
+    }
 
     // Problem 6 Solution 3: Trigger real-time notifications for critical security events
     const criticalEvents = [

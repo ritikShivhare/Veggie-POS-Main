@@ -457,8 +457,6 @@ export function handleApiError(res: any, error: any, defaultMessage?: string) {
   }
   if (
     error?.code === "TRANSACTION_ROLLBACK" ||
-    error?.status === 400 ||
-    error?.statusCode === 400 ||
     error instanceof TransactionRollbackError
   ) {
     return res.status(400).json({
@@ -480,6 +478,26 @@ export function handleApiError(res: any, error: any, defaultMessage?: string) {
       entityId: error.entityId,
       expectedVersion: error.expectedVersion,
       currentVersion: error.currentVersion
+    });
+  }
+  if (
+    error?.code === "IDEMPOTENCY_KEY_PAYLOAD_MISMATCH" ||
+    error?.status === 422 ||
+    error?.statusCode === 422
+  ) {
+    return res.status(422).json({
+      success: false,
+      error: "IDEMPOTENCY_KEY_PAYLOAD_MISMATCH",
+      message: error.message || defaultMessage || "Idempotency key was previously used with a different request payload."
+    });
+  }
+  if (
+    error?.code === "IDEMPOTENCY_CONFLICT"
+  ) {
+    return res.status(409).json({
+      success: false,
+      error: "IDEMPOTENCY_CONFLICT",
+      message: error.message || defaultMessage || "A concurrent request with the same idempotency key is currently processing."
     });
   }
   if (

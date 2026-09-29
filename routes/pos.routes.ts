@@ -11,7 +11,8 @@ import {
   requireRole,
   requirePermission,
   PLAN_LIMITS,
-  realtimeService
+  realtimeService,
+  financialTransactionService
 } from "../server/context";
 import {
   hashPin,
@@ -80,8 +81,8 @@ router.post("/staff/bulk", authMiddleware, requireRole("Owner", "Manager"), asyn
 router.put("/staff/:id", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await staffRepo.update(tenantId, req.body);
-    res.json({ success: true, message: "Staff updated successfully." });
+    const updated = await staffRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
+    res.json({ success: true, message: "Staff updated successfully.", data: updated });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -126,6 +127,17 @@ router.get("/orders/:id", authMiddleware, async (req, res) => {
 router.post("/orders", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const sub = (req as any).subscription;
+  const user = (req as any).user;
+  const session = (req as any).session;
+
+  if (Database.getInstance().isDatabaseStopped()) {
+    return res.status(503).json({
+      success: false,
+      error: "DATABASE_UNAVAILABLE",
+      message: "Database is unavailable (database is stopped). Cannot persist order."
+    });
+  }
+
   try {
     const now = new Date();
     const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -140,12 +152,71 @@ router.post("/orders", authMiddleware, idempotencyMiddleware, async (req, res) =
         message: `Your current subscription plan (${sub.plan.toUpperCase()}) only supports up to ${limit} orders per month. You have placed ${monthlyCount} orders this month. Please upgrade your plan in settings to continue placing orders.`
       });
     }
-    await orderRepo.add(tenantId, req.body);
-    const savedOrder = await orderRepo.getById(tenantId, req.body.id);
+
+    const userContext = {
+      role: session?.role || user?.role,
+      permissions: user?.permissions,
+      staffId: user?.id || session?.userId,
+      staffName: user?.name || session?.name
+    };
+
+    const result = await financialTransactionService.executeOrderPlacement(tenantId, req.body, userContext);
+
     try {
-      realtimeService.broadcastToTenant(tenantId, "order:created", { entityId: req.body.id, slice: "orders" });
+      realtimeService.broadcastToTenant(tenantId, "order:created", { entityId: result.order.id, slice: "orders" });
+      if (result.payment) {
+        realtimeService.broadcastToTenant(tenantId, "payment:success", { entityId: result.payment.id, slice: "payments" });
+      }
     } catch {}
-    res.json({ success: true, message: "Order placed successfully.", data: savedOrder || req.body });
+
+    res.json({
+      success: true,
+      message: "Order placed successfully.",
+      data: result.order,
+      order: result.order,
+      items: result.items,
+      payment: result.payment
+    });
+  } catch (error: any) {
+    handleApiError(res, error);
+  }
+});
+
+// Dedicated Payment Endpoint: Validates and atomically commits order payment
+router.post("/orders/:id/pay", authMiddleware, idempotencyMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  const user = (req as any).user;
+  const session = (req as any).session;
+  const orderId = req.params.id;
+
+  try {
+    const { amount, paymentMethod = "Cash", transactionReference } = req.body;
+    const cashierId = user?.id || session?.userId || (req.body && req.body.cashierId);
+    const cashierName = user?.name || session?.name || (req.body && req.body.cashierName) || "Cashier";
+
+    const { order, payment } = await financialTransactionService.executeOrderPayment(
+      tenantId,
+      orderId,
+      {
+        amount: Number(amount),
+        paymentMethod,
+        transactionReference,
+        cashierId,
+        cashierName
+      }
+    );
+
+    try {
+      realtimeService.broadcastToTenant(tenantId, "order:updated", { entityId: order.id, slice: "orders" });
+      realtimeService.broadcastToTenant(tenantId, "payment:success", { entityId: payment.id, slice: "payments" });
+    } catch {}
+
+    res.json({
+      success: true,
+      message: `Payment of ₹${payment.amount} recorded successfully.`,
+      order,
+      payment
+    });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -166,11 +237,14 @@ router.post("/orders/bulk", authMiddleware, idempotencyMiddleware, async (req, r
 
 router.put("/orders/:id", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
+  const session = (req as any).session;
+  const user = (req as any).user;
+
   try {
-    // Order cancellation protection: Only Owner or Manager can transition order status to 'Cancelled'
+    // 1. Order cancellation protection & atomic execution:
+    // Only Owner or Manager can transition order status to 'Cancelled'
     if (req.body && req.body.status === "Cancelled") {
-      const session = (req as any).session;
-      const role = session?.role;
+      const role = session?.role || user?.role;
       const isOwnerOrManager = role === "Owner" || role === "Manager" || role === "SaaS Owner";
       if (!isOwnerOrManager) {
         return res.status(403).json({
@@ -179,8 +253,35 @@ router.put("/orders/:id", authMiddleware, idempotencyMiddleware, async (req, res
           message: "Cancelling an order requires Owner or Manager role authorization."
         });
       }
+
+      const cancelledOrder = await financialTransactionService.executeOrderCancellation(
+        tenantId,
+        req.params.id,
+        {
+          cancelledBy: session?.name || user?.name || "Manager",
+          reason: req.body.cancellationReason || req.body.reason || "Cancelled via POS",
+          expectedVersion: req.body.version
+        }
+      );
+
+      try {
+        realtimeService.broadcastToTenant(tenantId, "order:updated", { entityId: req.params.id, slice: "orders" });
+      } catch {}
+
+      return res.json({ success: true, message: "Order cancelled successfully.", data: cancelledOrder });
     }
-    const updatedOrder = await orderRepo.update(tenantId, req.body);
+
+    // 2. Prevent modifying items or totals on already completed and paid orders
+    const existing = await orderRepo.getById(tenantId, req.params.id);
+    if (existing && existing.status === "Completed" && existing.paidAt && req.body.status && req.body.status !== "Completed") {
+      return res.status(400).json({
+        success: false,
+        error: "ORDER_SEALED",
+        message: "Completed and paid orders cannot have their status reversed or items modified."
+      });
+    }
+
+    const updatedOrder = await orderRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
     try {
       realtimeService.broadcastToTenant(tenantId, "order:updated", { entityId: req.params.id, slice: "orders" });
     } catch {}
@@ -256,7 +357,7 @@ router.post("/customers/bulk", authMiddleware, idempotencyMiddleware, async (req
 router.put("/customers/:id", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    const updatedCustomer = await customerRepo.update(tenantId, req.body);
+    const updatedCustomer = await customerRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
     try {
       realtimeService.broadcastToTenant(tenantId, "customer:updated", { entityId: req.params.id, slice: "customers" });
     } catch {}
@@ -319,8 +420,8 @@ router.post("/shifts/bulk", authMiddleware, idempotencyMiddleware, async (req, r
 router.put("/shifts/:id", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await shiftRepo.update(tenantId, req.body);
-    res.json({ success: true, message: "Shift updated." });
+    const updated = await shiftRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
+    res.json({ success: true, message: "Shift updated.", data: updated || req.body });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -346,14 +447,32 @@ router.delete("/shifts/:id", authMiddleware, async (req, res) => {
 // ============================================================================
 router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
-  const branchId = (req as any).branchId || "main";
-  const { operationId, entityType, entityId, operationType, payload } = req.body;
+  const branchId = (req as any).branchId || (req.headers["x-branch-id"] as string) || req.body.branchId || "main";
+  const deviceId = (req.headers["x-device-id"] as string) || req.body.deviceId || "unknown-device";
+  const idempotencyKey = (req.headers["idempotency-key"] || req.headers["x-idempotency-key"] || req.body.idempotencyKey) as string;
+  const { operationId, entityType, entityId, operationType, payload, createdAt, retryCount } = req.body;
 
-  if (!entityType || !entityId) {
+  // Step 6 Validation: Cross-tenant isolation protection
+  if (req.body.tenantId && req.body.tenantId !== tenantId) {
+    return res.status(403).json({
+      success: false,
+      error: "CROSS_TENANT_VIOLATION",
+      message: "Client-supplied tenantId does not match authenticated session tenant."
+    });
+  }
+  if (payload && payload.tenantId && payload.tenantId !== tenantId) {
+    return res.status(403).json({
+      success: false,
+      error: "CROSS_TENANT_VIOLATION",
+      message: "Outbox payload tenantId does not match authenticated session tenant."
+    });
+  }
+
+  if (!operationId || !entityType || !entityId || !operationType || !payload) {
     return res.status(422).json({
       success: false,
       error: "VALIDATION_ERROR",
-      message: "entityType and entityId are required for sync operation."
+      message: "operationId, entityType, entityId, operationType, and payload are required for sync operation."
     });
   }
 
@@ -373,12 +492,17 @@ router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, r
           if (operationType === "CREATE") {
             const existing = await orderRepo.getById(tenantId, entityId);
             if (!existing) {
-              await orderRepo.add(tenantId, enrichedPayload);
+              const res = await financialTransactionService.executeOrderPlacement(
+                tenantId,
+                { ...enrichedPayload, id: entityId },
+                { role: "Cashier", staffName: "Offline Outbox" }
+              );
+              canonicalEntity = res.order;
+            } else {
+              canonicalEntity = existing;
             }
-            canonicalEntity = (await orderRepo.getById(tenantId, entityId)) || enrichedPayload;
           } else if (operationType === "UPDATE") {
-            await orderRepo.update(tenantId, enrichedPayload);
-            canonicalEntity = (await orderRepo.getById(tenantId, entityId)) || enrichedPayload;
+            canonicalEntity = await orderRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version);
           } else if (operationType === "DELETE") {
             await orderRepo.delete(tenantId, entityId);
             canonicalEntity = { id: entityId, deleted: true, version: 1 };
@@ -388,16 +512,22 @@ router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, r
         case "payment": {
           const existing = await orderRepo.getById(tenantId, entityId);
           if (existing) {
-            const updated = {
-              ...existing,
-              status: payload.status || existing.status,
-              paymentMethod: payload.paymentMethod || existing.paymentMethod,
-              paidAt: payload.paidAt || existing.paidAt,
-              updatedAt: new Date().toISOString(),
-              version: (existing.version || 1) + 1
-            };
-            await orderRepo.update(tenantId, updated);
-            canonicalEntity = updated;
+            if (existing.status !== "Completed" || !existing.paidAt) {
+              const res = await financialTransactionService.executeOrderPayment(
+                tenantId,
+                entityId,
+                {
+                  amount: payload.amount !== undefined ? Number(payload.amount) : existing.total,
+                  paymentMethod: payload.paymentMethod || "Cash",
+                  transactionReference: payload.transactionReference,
+                  cashierId: payload.cashierId,
+                  cashierName: payload.cashierName
+                }
+              );
+              canonicalEntity = res.order;
+            } else {
+              canonicalEntity = existing;
+            }
           } else {
             canonicalEntity = enrichedPayload;
           }
@@ -411,8 +541,10 @@ router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, r
             }
             canonicalEntity = (await customerRepo.getById(tenantId, entityId)) || enrichedPayload;
           } else if (operationType === "UPDATE") {
-            await customerRepo.update(tenantId, enrichedPayload);
-            canonicalEntity = (await customerRepo.getById(tenantId, entityId)) || enrichedPayload;
+            canonicalEntity = await customerRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version);
+          } else if (operationType === "DELETE") {
+            await customerRepo.delete(tenantId, entityId);
+            canonicalEntity = { id: entityId, deleted: true, version: 1 };
           }
           break;
         }
@@ -424,8 +556,10 @@ router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, r
             }
             canonicalEntity = (await shiftRepo.getById(tenantId, entityId)) || enrichedPayload;
           } else if (operationType === "UPDATE") {
-            await shiftRepo.update(tenantId, enrichedPayload);
-            canonicalEntity = (await shiftRepo.getById(tenantId, entityId)) || enrichedPayload;
+            canonicalEntity = await shiftRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version);
+          } else if (operationType === "DELETE") {
+            await shiftRepo.delete(tenantId, entityId);
+            canonicalEntity = { id: entityId, deleted: true, version: 1 };
           }
           break;
         }
@@ -449,16 +583,24 @@ router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, r
       });
     } catch {}
 
-    // 6. Return canonical entity/version
+    // 6. Return canonical entity/version and verified outbox command structure
     res.json({
       success: true,
       message: "Sync operation committed transactionally.",
       operationId,
+      idempotencyKey: idempotencyKey || operationId,
+      tenantId,
+      branchId,
+      deviceId,
       entityType,
       entityId,
-      branchId,
+      operationType,
       canonicalData: canonicalEntity,
-      data: canonicalEntity
+      data: canonicalEntity,
+      status: "SYNCED",
+      createdAt: createdAt || new Date().toISOString(),
+      retryCount: typeof retryCount === "number" ? retryCount : 0,
+      lastError: null
     });
   } catch (error: any) {
     handleApiError(res, error);
@@ -529,40 +671,23 @@ router.post("/orders/:id/cancel", authMiddleware, requireRole("Owner", "Manager"
       return res.status(403).json({ success: false, error: "UNAUTHORIZED_PIN", message: "Invalid Manager PIN or insufficient authorization for order cancellation." });
     }
 
-    const orders = (await orderRepo.getAll(tenantId)) || [];
-    const targetOrder = orders.find((o) => o.id === orderId);
-
-    if (!targetOrder) {
-      return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Order not found." });
-    }
-
-    targetOrder.status = "Cancelled";
-    (targetOrder as any).cancellationReason = reason.trim();
-    (targetOrder as any).cancelledBy = manager.name;
-    (targetOrder as any).cancelledAt = new Date().toISOString();
-
-    await orderRepo.update(tenantId, targetOrder);
-
-    // Append cryptographic immutable audit log entry
-    await auditLogService.log(
+    const targetOrder = await financialTransactionService.executeOrderCancellation(
       tenantId,
-      "ORDER_CANCELLED",
-      manager.name,
-      `Order #${targetOrder.orderNumber} (Value: INR ${targetOrder.total}) cancelled by Manager ${manager.name}. Reason: "${reason.trim()}"`,
+      orderId,
       {
-        orderId: targetOrder.id,
-        orderNumber: targetOrder.orderNumber,
-        totalAmount: targetOrder.total,
-        reason: reason.trim(),
-        authorizerId: manager.id,
-        authorizerName: manager.name,
-        initiatedBy: staffName
+        cancelledBy: manager.name,
+        reason: reason.trim()
       }
     );
 
+    try {
+      realtimeService.broadcastToTenant(tenantId, "order:updated", { entityId: targetOrder.id, slice: "orders" });
+      realtimeService.broadcastToTenant(tenantId, "inventory:updated", { slice: "ingredients" });
+    } catch {}
+
     res.json({
       success: true,
-      message: `Order #${targetOrder.orderNumber} successfully cancelled. Audit entry recorded.`,
+      message: `Order #${targetOrder.orderNumber} successfully cancelled. Audit entry recorded and stock returned.`,
       order: targetOrder
     });
   } catch (error: any) {

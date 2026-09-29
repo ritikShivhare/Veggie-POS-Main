@@ -285,6 +285,46 @@ describe("Optimistic Locking and Versioning Concurrency Engine", () => {
       // Version remains 1 since no changes were made
       expect(state2.staffList[0].version).toBe(1);
     });
+
+    it("CRITICAL DATA-LOSS TEST: stale client snapshot with A + B must NOT delete Order C created concurrently", async () => {
+      // Initial server state: Order A, Order B
+      await syncService.saveFullState(tenantId, {
+        orders: [
+          { id: "order-A", orderNumber: "#A", total: 100, status: "Completed", version: 1 },
+          { id: "order-B", orderNumber: "#B", total: 200, status: "Completed", version: 1 }
+        ]
+      });
+
+      // Device 1 downloads snapshot containing A + B
+      const device1Snapshot = await syncService.getFullState(tenantId);
+      expect(device1Snapshot.orders).toHaveLength(2);
+
+      // Device 2 creates Order C concurrently on server
+      await syncService.saveFullState(tenantId, {
+        orders: [
+          ...device1Snapshot.orders,
+          { id: "order-C", orderNumber: "#C", total: 300, status: "Completed", version: 1 }
+        ]
+      });
+
+      // Server now has A + B + C
+      const serverCurrent = await syncService.getFullState(tenantId);
+      expect(serverCurrent.orders.map((o: any) => o.id).sort()).toEqual(["order-A", "order-B", "order-C"]);
+
+      // Device 1 still has old snapshot (A + B) and submits its old full snapshot
+      await syncService.saveFullState(tenantId, {
+        orders: device1Snapshot.orders
+      });
+
+      // EXPECTED: C MUST REMAIN! Server must retain Order C
+      const finalState = await syncService.getFullState(tenantId);
+      const finalOrderIds = finalState.orders.map((o: any) => o.id);
+
+      expect(finalOrderIds).toContain("order-C");
+      expect(finalOrderIds).toContain("order-A");
+      expect(finalOrderIds).toContain("order-B");
+      expect(finalState.orders).toHaveLength(3);
+    });
   });
 
   describe("API Error Handler Response Formatting", () => {

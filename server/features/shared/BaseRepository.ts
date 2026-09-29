@@ -29,7 +29,7 @@ export abstract class BaseRepository<T, KeyType = string> {
     return items.find(item => (item[this.idKey] as any) === id) || null;
   }
 
-  async add(tenantId: string, item: T): Promise<void> {
+  async add(tenantId: string, item: T, trx?: DatabaseTransaction): Promise<void> {
     const existing = (await this.getAll(tenantId)) || [];
     const items = [...existing];
     const record = { ...item } as any;
@@ -40,7 +40,7 @@ export abstract class BaseRepository<T, KeyType = string> {
       record.updated_at = new Date().toISOString();
     }
     items.push(record);
-    await this.saveAll(tenantId, items);
+    await this.saveAll(tenantId, items, trx);
   }
 
   /**
@@ -49,7 +49,32 @@ export abstract class BaseRepository<T, KeyType = string> {
    * If version mismatch or record changed concurrently, rejects with 409 CONFLICT.
    * Increments version on confirmed update.
    */
-  async update(tenantId: string, item: T, expectedVersion?: number): Promise<T> {
+  async update(tenantId: string, item: T, expectedVersion?: number, trx?: DatabaseTransaction): Promise<T> {
+    if (trx) {
+      const existing = (await this.getAll(tenantId)) || [];
+      const items = [...existing];
+      const idVal = item[this.idKey];
+      const index = items.findIndex(i => (i[this.idKey] as any) === idVal);
+      if (index === -1) {
+        throw new NotFoundError(`Resource with ${String(this.idKey)} '${String(idVal)}' not found in table '${this.sliceKey}' for tenant '${tenantId}'.`);
+      }
+      const currentVer = typeof (items[index] as any).version === "number" ? (items[index] as any).version : 1;
+      const targetExpectedVer = expectedVersion !== undefined ? expectedVersion : (item as any).version;
+      if (targetExpectedVer !== undefined && targetExpectedVer !== currentVer) {
+        throw new OptimisticLockConflictError(
+          `Optimistic lock conflict on table '${this.sliceKey}' for ${String(this.idKey)} '${String(idVal)}': expected version was ${targetExpectedVer}, but current version is ${currentVer}.`,
+          { entityId: String(idVal), expectedVersion: targetExpectedVer, currentVersion: currentVer }
+        );
+      }
+      const updatedRecord = {
+        ...item,
+        version: currentVer + 1,
+        updated_at: new Date().toISOString()
+      };
+      items[index] = updatedRecord;
+      await trx.saveSlice<T>(this.sliceKey, items);
+      return updatedRecord;
+    }
     const idVal = item[this.idKey];
     return await this.db.updateItem<T>(tenantId, this.sliceKey, idVal, item, expectedVersion);
   }
@@ -57,21 +82,21 @@ export abstract class BaseRepository<T, KeyType = string> {
   /**
    * Helper method to perform conditional update by id and expected version
    */
-  async updateConditional(tenantId: string, id: KeyType, updates: Partial<T>, expectedVersion: number): Promise<T> {
+  async updateConditional(tenantId: string, id: KeyType, updates: Partial<T>, expectedVersion: number, trx?: DatabaseTransaction): Promise<T> {
     const current = await this.getById(tenantId, id);
     if (!current) {
       throw new Error(`Item not found for id '${String(id)}' in '${this.sliceKey}'`);
     }
-    return await this.update(tenantId, { ...current, ...updates } as T, expectedVersion);
+    return await this.update(tenantId, { ...current, ...updates } as T, expectedVersion, trx);
   }
 
-  async delete(tenantId: string, id: KeyType): Promise<void> {
+  async delete(tenantId: string, id: KeyType, trx?: DatabaseTransaction): Promise<void> {
     const existing = (await this.getAll(tenantId)) || [];
     const exists = existing.some(i => (i[this.idKey] as any) === id);
     if (!exists) {
       throw new NotFoundError(`Resource with ${String(this.idKey)} '${String(id)}' not found in table '${this.sliceKey}' for tenant '${tenantId}'.`);
     }
     const filtered = existing.filter(i => (i[this.idKey] as any) !== id);
-    await this.saveAll(tenantId, filtered);
+    await this.saveAll(tenantId, filtered, trx);
   }
 }

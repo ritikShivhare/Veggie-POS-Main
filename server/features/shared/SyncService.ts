@@ -9,6 +9,7 @@ import { ShiftRepository } from "../staff/ShiftRepository";
 import { SettingsRepository } from "./SettingsRepository";
 import { Database, OptimisticLockConflictError } from "./database";
 import { realtimeService } from "./RealtimeService";
+import { posPricingEngine } from "../pos/POSPricingEngine";
 import bcrypt from "bcryptjs";
 import { isBcryptHash } from "../auth/PinSecurityService";
 import {
@@ -100,9 +101,11 @@ export class SyncService {
       if (key) existingMap.set(key, item);
     }
 
+    const processedKeys = new Set<string>();
     const result: T[] = [];
     for (const incoming of incomingItems) {
       const key = String(incoming[idKey]);
+      if (key) processedKeys.add(key);
       const existing = existingMap.get(key);
 
       if (!existing) {
@@ -142,6 +145,15 @@ export class SyncService {
           version: currentVersion,
           updated_at: existing.updated_at || new Date().toISOString()
         });
+      }
+    }
+
+    // CRITICAL DATA-LOSS PREVENTION:
+    // Retain all existing server records that were NOT included in the incoming snapshot.
+    // A stale client snapshot must NEVER delete newer or unmentioned server records.
+    for (const [key, existing] of existingMap.entries()) {
+      if (!processedKeys.has(key)) {
+        result.push(existing);
       }
     }
 
@@ -228,8 +240,45 @@ export class SyncService {
       ? this.applyOptimisticLocking<StaffMember>("staff", (existingStaff || []) as StaffMember[], payload.staffList, "id")
       : undefined;
 
-    const validatedOrders = payload.orders !== undefined
-      ? this.applyOptimisticLocking<Order>("orders", (existingOrders || []) as Order[], payload.orders, "id")
+    // Validate orders authoritatively against tenant menu
+    let ordersToStage = payload.orders;
+    if (ordersToStage !== undefined && Array.isArray(ordersToStage)) {
+      const sanitizedOrders: Order[] = [];
+      for (const ord of ordersToStage) {
+        if (!ord.items || ord.items.length === 0) {
+          sanitizedOrders.push(ord);
+          continue;
+        }
+        const existingOrd = (existingOrders || []).find((eo: any) => eo.id === ord.id);
+        if (!existingOrd) {
+          try {
+            const effectiveMenu = payload.menuItems || existingMenu || undefined;
+            const calc = await posPricingEngine.validateAndCalculateOrder(tenantId, ord, undefined, effectiveMenu);
+            sanitizedOrders.push({
+              ...ord,
+              subtotal: calc.subtotal,
+              tax: calc.tax,
+              discount: calc.discount,
+              total: calc.total
+            });
+          } catch (err: any) {
+            if (err?.code === "CROSS_TENANT_VIOLATION" || err?.name === "CrossTenantViolationError") {
+              throw err;
+            }
+            if (err?.name === "FinancialValidationError" || err?.code === "PRICE_TAMPERING_DETECTED") {
+              throw err;
+            }
+            sanitizedOrders.push(ord);
+          }
+        } else {
+          sanitizedOrders.push(ord);
+        }
+      }
+      ordersToStage = sanitizedOrders;
+    }
+
+    const validatedOrders = ordersToStage !== undefined
+      ? this.applyOptimisticLocking<Order>("orders", (existingOrders || []) as Order[], ordersToStage, "id")
       : undefined;
 
     const validatedCustomers = payload.customers !== undefined

@@ -9,6 +9,10 @@ import { CustomerRepository } from "./features/crm/CustomerRepository";
 import { PurchaseRepository } from "./features/inventory/PurchaseRepository";
 import { ShiftRepository } from "./features/staff/ShiftRepository";
 import { SettingsRepository } from "./features/shared/SettingsRepository";
+import { OrderItemRepository } from "./features/pos/OrderItemRepository";
+import { PaymentRepository } from "./features/pos/PaymentRepository";
+import { InventoryMovementRepository } from "./features/inventory/InventoryMovementRepository";
+import { financialTransactionService, FinancialTransactionService } from "./features/pos/FinancialTransactionService";
 
 // Import Services
 import { SyncService } from "./features/shared/SyncService";
@@ -25,7 +29,15 @@ import { IdempotencyService } from "./features/shared/IdempotencyService";
 import { idempotencyMiddleware } from "./middleware/idempotency.middleware";
 import { realtimeService, RealtimeService } from "./features/shared/RealtimeService";
 import { getSubscription, saveSubscription, PLAN_LIMITS } from "./features/shared/subscription";
-export { getSubscription, saveSubscription, PLAN_LIMITS, realtimeService, RealtimeService };
+export {
+  getSubscription,
+  saveSubscription,
+  PLAN_LIMITS,
+  realtimeService,
+  RealtimeService,
+  financialTransactionService,
+  FinancialTransactionService
+};
 
 // Instantiate Repositories
 export const menuRepo = new MenuRepository();
@@ -37,6 +49,9 @@ export const customerRepo = new CustomerRepository();
 export const purchaseRepo = new PurchaseRepository();
 export const shiftRepo = new ShiftRepository();
 export const settingsRepo = new SettingsRepository();
+export const orderItemRepo = new OrderItemRepository();
+export const paymentRepo = new PaymentRepository();
+export const inventoryMovementRepo = new InventoryMovementRepository();
 
 // Instantiate Services and inject Repositories
 export const syncService = new SyncService(

@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     response_body JSONB NOT NULL,
     request_path VARCHAR,
     request_method VARCHAR,
+    request_hash VARCHAR,
+    status VARCHAR DEFAULT 'COMPLETED',
+    expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now(),
     CONSTRAINT unique_tenant_idempotency_key UNIQUE (tenant_id, idempotency_key)
 );

@@ -253,4 +253,82 @@ describe("Express idempotencyMiddleware Unit Tests", () => {
     expect(mockResponse.json).toHaveBeenCalledWith({ success: true, paymentStatus: "paid" });
     expect(capturedHeaders["idempotent-replayed"]).toBe("true");
   });
+
+  it("should deterministically reject with 422 IDEMPOTENCY_KEY_PAYLOAD_MISMATCH when same key is sent with different payload", async () => {
+    const service = IdempotencyService.getInstance();
+    const idKey = "ik-payload-test-1";
+
+    // 1st request with payload { orderId: "ord-1", total: 500 }
+    mockRequest.headers["idempotency-key"] = idKey;
+    mockRequest.body = { orderId: "ord-1", total: 500 };
+
+    nextFunction = vi.fn(() => {
+      mockResponse.status(201);
+      mockResponse.json({ success: true, orderId: "ord-1", total: 500 });
+    });
+
+    await idempotencyMiddleware(mockRequest, mockResponse, nextFunction);
+
+    expect(nextFunction).toHaveBeenCalledTimes(1);
+    expect(mockResponse.statusCode).toBe(201);
+
+    // 2nd request with SAME idempotency key, but DIFFERENT payload { orderId: "ord-1", total: 999 }
+    const mockRes2: any = {
+      statusCode: 200,
+      status: vi.fn(function (code: number) {
+        mockRes2.statusCode = code;
+        return mockRes2;
+      }),
+      setHeader: vi.fn(),
+      json: vi.fn(function (body: any) {
+        mockRes2.body = body;
+        return mockRes2;
+      })
+    };
+    const next2 = vi.fn();
+    const mockReq2 = {
+      ...mockRequest,
+      body: { orderId: "ord-1", total: 999 } // Different payload!
+    };
+
+    await idempotencyMiddleware(mockReq2, mockRes2, next2);
+
+    // MUST NOT execute route handler
+    expect(next2).not.toHaveBeenCalled();
+    // MUST return HTTP 422
+    expect(mockRes2.status).toHaveBeenCalledWith(422);
+    expect(mockRes2.body.error).toBe("IDEMPOTENCY_KEY_PAYLOAD_MISMATCH");
+  });
+
+  it("should safely re-claim reservation if a previous worker crashed and lease expired", async () => {
+    const service = IdempotencyService.getInstance();
+    const idKey = "ik-expired-lease";
+
+    // Simulate an expired lease in PROCESSING status from 2 minutes ago
+    const pastDate = new Date(Date.now() - 120 * 1000).toISOString();
+    await service.saveRecord({
+      tenant_id: "tenant-pos-1",
+      idempotency_key: idKey,
+      status_code: 0,
+      response_body: null,
+      status: "PROCESSING",
+      expires_at: pastDate,
+      request_hash: "dummy-hash"
+    });
+
+    // New request with lease duration arrives
+    const reservation = await service.reserveOrGetRecord({
+      tenantId: "tenant-pos-1",
+      idempotencyKey: idKey,
+      requestPath: "/api/orders",
+      requestMethod: "POST",
+      requestHash: "new-request-hash",
+      leaseDurationMs: 30000
+    });
+
+    // Should have re-claimed reservation because previous expired
+    expect(reservation.isNewReservation).toBe(true);
+    expect(reservation.record.status).toBe("PROCESSING");
+    expect(reservation.record.request_hash).toBe("new-request-hash");
+  });
 });

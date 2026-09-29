@@ -4,12 +4,13 @@ import {
   menuRepo,
   purchaseRepo,
   recipeRepo,
+  inventoryMovementRepo,
   authMiddleware,
   requirePermission,
   idempotencyMiddleware,
   realtimeService
 } from "../server/context";
-import { handleApiError } from "../server/features/shared/database";
+import { Database, handleApiError } from "../server/features/shared/database";
 
 const router = express.Router();
 
@@ -69,7 +70,7 @@ router.post("/ingredients/bulk", authMiddleware, idempotencyMiddleware, requireP
 router.put("/ingredients/:id", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    const updated = await ingredientRepo.update(tenantId, req.body);
+    const updated = await ingredientRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
     try {
       realtimeService.broadcastToTenant(tenantId, "inventory:updated", { entityId: req.params.id, slice: "ingredients" });
     } catch {}
@@ -138,8 +139,8 @@ router.post("/menu-items/bulk", authMiddleware, requirePermission("inventory", "
 router.put("/menu-items/:id", authMiddleware, requirePermission("inventory", "settings"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await menuRepo.update(tenantId, req.body);
-    res.json({ success: true, message: "Menu item updated successfully." });
+    const updated = await menuRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
+    res.json({ success: true, message: "Menu item updated successfully.", data: updated });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -183,13 +184,85 @@ router.get("/purchases/:id", authMiddleware, async (req, res) => {
 
 router.post("/purchases", authMiddleware, idempotencyMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
+  const user = (req as any).user;
+  const session = (req as any).session;
+
   try {
-    await purchaseRepo.add(tenantId, req.body);
-    const saved = await purchaseRepo.getById(tenantId, req.body.id);
+    const purchase = req.body;
+    const ingredientId = purchase.ingredientId;
+    const quantity = Number(purchase.quantity);
+    const cost = Number(purchase.cost);
+
+    if (!ingredientId || isNaN(quantity) || quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "INVALID_PURCHASE",
+        message: "Valid ingredientId and positive quantity are required."
+      });
+    }
+
+    const ingredient = await ingredientRepo.getById(tenantId, ingredientId);
+    if (!ingredient) {
+      return res.status(404).json({
+        success: false,
+        error: "NOT_FOUND",
+        message: `Ingredient '${ingredientId}' not found.`
+      });
+    }
+
+    const purchaseId = purchase.id || `pur-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const nowIso = new Date().toISOString();
+    const purchaseRecord = {
+      ...purchase,
+      id: purchaseId,
+      date: purchase.date || nowIso,
+      ingredientName: ingredient.name,
+      quantity,
+      cost: isNaN(cost) || cost < 0 ? 0 : cost,
+      created_at: nowIso,
+      updated_at: nowIso,
+      version: 1
+    };
+
+    const previousStock = ingredient.currentStock;
+    const newStock = Number((previousStock + quantity).toFixed(3));
+    const updatedIngredient = {
+      ...ingredient,
+      currentStock: newStock,
+      costPerUnit: quantity > 0 && cost > 0 ? Number((cost / quantity).toFixed(2)) : ingredient.costPerUnit,
+      updated_at: nowIso,
+      version: (ingredient.version || 1) + 1
+    };
+
+    const movementRecord = {
+      id: `mov-pur-${purchaseId}`,
+      ingredientId,
+      movementType: "PURCHASE" as const,
+      quantityDelta: quantity,
+      previousStock,
+      newStock,
+      referenceId: purchaseId,
+      reason: `Vendor purchase invoice #${purchase.invoiceNumber || purchaseId}`,
+      performedBy: user?.name || session?.name || "Inventory Manager",
+      created_at: nowIso,
+      updated_at: nowIso,
+      version: 1
+    };
+
+    const db = Database.getInstance();
+    await db.runTransaction(tenantId, async (trx) => {
+      await purchaseRepo.add(tenantId, purchaseRecord, trx);
+      await ingredientRepo.update(tenantId, updatedIngredient, ingredient.version, trx);
+      const existingMovements = (await inventoryMovementRepo.getAll(tenantId)) || [];
+      await inventoryMovementRepo.saveAll(tenantId, [...existingMovements, movementRecord], trx);
+    });
+
     try {
-      realtimeService.broadcastToTenant(tenantId, "purchase:created", { entityId: req.body.id, slice: "purchases" });
+      realtimeService.broadcastToTenant(tenantId, "purchase:created", { entityId: purchaseId, slice: "purchases" });
+      realtimeService.broadcastToTenant(tenantId, "inventory:updated", { entityId: ingredientId, slice: "ingredients" });
     } catch {}
-    res.json({ success: true, message: "Purchase invoice registered.", data: saved || req.body });
+
+    res.json({ success: true, message: "Purchase invoice registered and stock updated.", data: purchaseRecord });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -211,7 +284,7 @@ router.post("/purchases/bulk", authMiddleware, idempotencyMiddleware, requirePer
 router.put("/purchases/:id", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    const updated = await purchaseRepo.update(tenantId, req.body);
+    const updated = await purchaseRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
     try {
       realtimeService.broadcastToTenant(tenantId, "purchase:updated", { entityId: req.params.id, slice: "purchases" });
     } catch {}

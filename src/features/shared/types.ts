@@ -115,6 +115,7 @@ export interface OrderItem {
   name: string;
   quantity: number;
   unitPrice: number;
+  price?: number;
   subtotal: number;
   tax?: number;
   notes?: string;
