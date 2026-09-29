@@ -79,6 +79,8 @@ export interface CartItem {
   menuItem: MenuItem;
   quantity: number;
   note?: string;
+  notes?: string;
+  menuItemId?: string;
 }
 
 export type OrderStatus = 'Pending' | 'Preparing' | 'Ready' | 'Completed' | 'Cancelled';
@@ -89,6 +91,7 @@ export interface Order {
   date: string; // ISO String
   type: 'Dine-In' | 'Takeaway';
   tableNo?: string;
+  customerId?: string;
   customerName?: string;
   items: CartItem[];
   subtotal: number;
