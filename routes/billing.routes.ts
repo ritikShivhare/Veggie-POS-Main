@@ -6,12 +6,19 @@ import {
   orderRepo,
   authMiddleware,
   idempotencyMiddleware,
+  requireRole,
   getSubscription,
   saveSubscription,
   PLAN_LIMITS
 } from "../server/context";
 
 const router = express.Router();
+
+function isProductionEnvironment(): boolean {
+  const env = (process.env.NODE_ENV || "").trim().toLowerCase();
+  const appEnv = (process.env.APP_ENV || "").trim().toLowerCase();
+  return env === "production" || appEnv === "production";
+}
 
 // Lazy initialization function
 let stripeInstance: Stripe | null = null;
@@ -28,8 +35,8 @@ function getStripeClient(): Stripe | null {
   return stripeInstance;
 }
 
-// 1. Get current billing subscription status & stats
-router.get("/billing/subscription", authMiddleware, async (req, res) => {
+// 1. Get current billing subscription status & stats (Owner & Manager authorized)
+router.get("/billing/subscription", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   const sub = (req as any).subscription; // loaded in authMiddleware
   try {
@@ -56,8 +63,8 @@ router.get("/billing/subscription", authMiddleware, async (req, res) => {
   }
 });
 
-// 2. Create Stripe Checkout Session
-router.post("/billing/create-checkout-session", authMiddleware, idempotencyMiddleware, async (req, res) => {
+// 2. Create Stripe Checkout Session (Owner-only operation)
+router.post("/billing/create-checkout-session", authMiddleware, requireRole("Owner"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { plan } = req.body; // pro or enterprise
   const origin = req.headers.origin || "http://localhost:3000";
@@ -67,9 +74,17 @@ router.post("/billing/create-checkout-session", authMiddleware, idempotencyMiddl
   }
 
   const stripe = getStripeClient();
+  const isProduction = isProductionEnvironment();
 
-  // If no Stripe key is configured, fall back to our premium interactive simulator
+  // If no Stripe key is configured, fall back to our interactive simulator ONLY in non-production
   if (!stripe) {
+    if (isProduction) {
+      return res.status(503).json({
+        success: false,
+        error: "PAYMENT_GATEWAY_UNAVAILABLE",
+        message: "Production payment gateway is not configured. Real payment credentials required."
+      });
+    }
     console.log(`[Stripe Billing] No Stripe API key configured. Redirecting to custom interactive Checkout Simulator for tenant ${tenantId}.`);
     return res.json({
       success: true,
@@ -130,13 +145,21 @@ router.post("/billing/create-checkout-session", authMiddleware, idempotencyMiddl
   }
 });
 
-// 3. Create Stripe Customer Portal Session
-router.post("/billing/create-portal-session", authMiddleware, idempotencyMiddleware, async (req, res) => {
+// 3. Create Stripe Customer Portal Session (Owner-only operation)
+router.post("/billing/create-portal-session", authMiddleware, requireRole("Owner"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const origin = req.headers.origin || "http://localhost:3000";
   const stripe = getStripeClient();
+  const isProduction = isProductionEnvironment();
 
   if (!stripe) {
+    if (isProduction) {
+      return res.status(503).json({
+        success: false,
+        error: "PAYMENT_GATEWAY_UNAVAILABLE",
+        message: "Production billing portal gateway is not configured."
+      });
+    }
     console.log(`[Stripe Billing] No Stripe API key configured. Redirecting to custom interactive Billing Portal Simulator for tenant ${tenantId}.`);
     return res.json({
       success: true,
@@ -266,6 +289,9 @@ router.post("/webhooks/stripe", express.raw({ type: "application/json" }), async
 
 // 5. Serve HTML Mock Checkout Page
 router.get("/billing/mock-checkout", async (req, res) => {
+  if (isProductionEnvironment()) {
+    return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Mock billing is disabled in production." });
+  }
   const tenantId = req.query.tenantId as string;
   if (!tenantId) {
     return res.status(400).send("Tenant identifier is required for mock checkout.");
@@ -418,6 +444,9 @@ router.get("/billing/mock-checkout", async (req, res) => {
 
 // 6. Mock Success Payment Handler
 router.post("/billing/mock-payment-success", idempotencyMiddleware, async (req, res) => {
+  if (isProductionEnvironment()) {
+    return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Mock billing is disabled in production." });
+  }
   const { tenantId, plan, email } = req.body;
   if (!tenantId) {
     return res.status(400).json({ success: false, error: "MISSING_TENANT", message: "Tenant ID is required." });
@@ -439,6 +468,9 @@ router.post("/billing/mock-payment-success", idempotencyMiddleware, async (req, 
 
 // 7. Mock Failed Payment Handler
 router.post("/billing/mock-payment-fail", idempotencyMiddleware, async (req, res) => {
+  if (isProductionEnvironment()) {
+    return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Mock billing is disabled in production." });
+  }
   const { tenantId } = req.body;
   if (!tenantId) {
     return res.status(400).json({ success: false, error: "MISSING_TENANT", message: "Tenant ID is required." });
@@ -459,6 +491,9 @@ router.post("/billing/mock-payment-fail", idempotencyMiddleware, async (req, res
 
 // 8. Serve HTML Mock Billing Portal
 router.get("/billing/mock-portal", async (req, res) => {
+  if (isProductionEnvironment()) {
+    return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Mock billing is disabled in production." });
+  }
   const tenantId = req.query.tenantId as string;
   if (!tenantId) {
     return res.status(400).send("Tenant identifier is required for mock portal.");

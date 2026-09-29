@@ -1,5 +1,5 @@
-import { Database, OptimisticLockConflictError, DatabaseTransaction, TransactionRollbackError } from "./database";
-export { OptimisticLockConflictError, TransactionRollbackError };
+import { Database, OptimisticLockConflictError, DatabaseTransaction, TransactionRollbackError, NotFoundError } from "./database";
+export { OptimisticLockConflictError, TransactionRollbackError, NotFoundError };
 export type { DatabaseTransaction };
 
 export abstract class BaseRepository<T, KeyType = string> {
@@ -67,6 +67,10 @@ export abstract class BaseRepository<T, KeyType = string> {
 
   async delete(tenantId: string, id: KeyType): Promise<void> {
     const existing = (await this.getAll(tenantId)) || [];
+    const exists = existing.some(i => (i[this.idKey] as any) === id);
+    if (!exists) {
+      throw new NotFoundError(`Resource with ${String(this.idKey)} '${String(id)}' not found in table '${this.sliceKey}' for tenant '${tenantId}'.`);
+    }
     const filtered = existing.filter(i => (i[this.idKey] as any) !== id);
     await this.saveAll(tenantId, filtered);
   }

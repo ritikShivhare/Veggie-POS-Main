@@ -31,13 +31,8 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
     });
   }
 
-  // Determine tenantId scope
-  const tenantId = 
-    (req as any).tenantId ||
-    (req.headers["x-tenant-id"] as string) ||
-    req.body?.tenantId ||
-    (req.query?.tenantId as string) ||
-    "default";
+  // Determine tenantId scope strictly from authenticated session identity
+  const tenantId = (req as any).tenantId || "default";
 
   try {
     // 1. Check if a previously completed request exists for (tenant_id, idempotency_key)

@@ -78,16 +78,22 @@ export class EventBus {
   }
 
   /**
-   * Fetch all recorded events in memory
+   * Fetch recorded events in memory (strictly tenant-scoped)
    */
-  public getHistory(): AppEvent[] {
-    return this.eventHistory;
+  public getHistory(tenantId?: string): AppEvent[] {
+    if (!tenantId) {
+      return [];
+    }
+    return this.eventHistory.filter((e) => e.tenantId === tenantId);
   }
 
   /**
-   * Clear all event logs
+   * Clear event logs (strictly tenant-scoped)
    */
-  public clearHistory(): void {
-    this.eventHistory = [];
+  public clearHistory(tenantId?: string): void {
+    if (!tenantId) {
+      return;
+    }
+    this.eventHistory = this.eventHistory.filter((e) => e.tenantId !== tenantId);
   }
 }

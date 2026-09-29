@@ -14,7 +14,10 @@ import {
   authMiddleware,
   idempotencyMiddleware,
   requirePermission,
-  requireRole
+  requireRole,
+  orderRepo,
+  ingredientRepo,
+  shiftRepo
 } from "../server/context";
 
 const router = express.Router();
@@ -84,8 +87,39 @@ router.get("/supabase-config", authMiddleware, (req, res) => {
   });
 });
 
-// Report generation endpoint
-router.post("/reports/generate", authMiddleware, async (req, res) => {
+// Report generation & retrieval endpoints (Tenant Scoped & Protected)
+router.get("/reports", authMiddleware, requirePermission("reports"), async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  try {
+    const orders = (await orderRepo.getAll(tenantId)) || [];
+    const ingredients = (await ingredientRepo.getAll(tenantId)) || [];
+    const shifts = (await shiftRepo.getAll(tenantId)) || [];
+
+    const completedOrders = orders.filter((o) => o.status === "Completed" || o.status === "Ready");
+    const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
+    const cashRevenue = completedOrders.filter((o) => o.paymentMethod === "Cash").reduce((sum, o) => sum + o.total, 0);
+    const upiRevenue = completedOrders.filter((o) => o.paymentMethod === "UPI").reduce((sum, o) => sum + o.total, 0);
+
+    res.json({
+      success: true,
+      tenantId,
+      report: {
+        totalOrders: orders.length,
+        completedOrders: completedOrders.length,
+        totalRevenue,
+        cashRevenue,
+        upiRevenue,
+        ingredientCount: ingredients.length,
+        lowStockCount: ingredients.filter((i) => i.currentStock <= i.minStock).length,
+        activeStaffCount: shifts.filter((s) => s.status === "Active").length
+      }
+    });
+  } catch (error: any) {
+    handleApiError(res, error);
+  }
+});
+
+router.post("/reports/generate", authMiddleware, requirePermission("reports"), async (req, res) => {
   const { salesData, inventoryData, shiftsData, language } = req.body;
   try {
     const result = await reportService.generateReport(salesData, inventoryData, shiftsData, language || "hindi");
@@ -125,8 +159,8 @@ router.post("/copilot-chat", async (req, res) => {
   }
 });
 
-// Background Jobs System Endpoints
-router.get("/jobs", authMiddleware, (req, res) => {
+// Background Jobs System Endpoints (Administrative: Only Owner/Manager can inspect, Owner can mutate)
+router.get("/jobs", authMiddleware, requireRole("Owner", "Manager"), (req, res) => {
   try {
     res.json({
       success: true,
@@ -138,7 +172,7 @@ router.get("/jobs", authMiddleware, (req, res) => {
   }
 });
 
-router.post("/jobs/trigger", authMiddleware, async (req, res) => {
+router.post("/jobs/trigger", authMiddleware, requireRole("Owner"), async (req, res) => {
   const { jobId } = req.body;
   try {
     const triggered = await jobsService.runJob(jobId);
@@ -151,7 +185,7 @@ router.post("/jobs/trigger", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/jobs/toggle", authMiddleware, (req, res) => {
+router.post("/jobs/toggle", authMiddleware, requireRole("Owner"), (req, res) => {
   const { jobId, enabled } = req.body;
   try {
     const success = jobsService.toggleJobEnabled(jobId, enabled);
@@ -164,7 +198,7 @@ router.post("/jobs/toggle", authMiddleware, (req, res) => {
   }
 });
 
-router.post("/jobs/clear-logs", authMiddleware, (req, res) => {
+router.post("/jobs/clear-logs", authMiddleware, requireRole("Owner"), (req, res) => {
   try {
     jobsService.clearLogs();
     res.json({ success: true, message: "Job logs cleared successfully" });
@@ -259,14 +293,14 @@ router.post("/notifications/clear-logs", authMiddleware, async (req, res) => {
   }
 });
 
-// Central Event-Driven Architecture Endpoints
-router.get("/events", authMiddleware, async (req, res) => {
+// Central Event-Driven Architecture Endpoints (Owner & Manager authorized, strictly tenant-scoped)
+router.get("/events", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
   }
   try {
-    const history = eventBus.getHistory();
+    const history = eventBus.getHistory(tenantId);
     const logs = await auditLogService.getLogs(tenantId);
     const db = Database.getInstance();
     const analytics = await db.getObject(tenantId, "system_event_analytics") || {
@@ -288,7 +322,7 @@ router.get("/events", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/events/publish", authMiddleware, async (req, res) => {
+router.post("/events/publish", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
@@ -302,13 +336,13 @@ router.post("/events/publish", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/events/clear", authMiddleware, async (req, res) => {
+router.post("/events/clear", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
   }
   try {
-    eventBus.clearHistory();
+    eventBus.clearHistory(tenantId);
     try {
       await auditLogService.clearLogs(tenantId);
     } catch (auditErr: any) {
@@ -329,7 +363,7 @@ router.post("/events/clear", authMiddleware, async (req, res) => {
   }
 });
 
-// Real-Time Logging & Monitoring Dashboard API Endpoints
+// Real-Time Logging & Monitoring Dashboard API Endpoints (Owner-only operations)
 router.post("/monitoring/report-error", async (req, res) => {
   const { message, stack, level, component, tenantId, userId, url, userAgent } = req.body;
   try {
@@ -353,7 +387,7 @@ router.post("/monitoring/report-error", async (req, res) => {
   }
 });
 
-router.get("/monitoring/telemetry", authMiddleware, async (req, res) => {
+router.get("/monitoring/telemetry", authMiddleware, requireRole("Owner"), async (req, res) => {
   try {
     const logs = await monitoringService.getLogs();
     const metrics = await monitoringService.getMetrics();
@@ -367,7 +401,7 @@ router.get("/monitoring/telemetry", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/monitoring/clear", authMiddleware, async (req, res) => {
+router.post("/monitoring/clear", authMiddleware, requireRole("Owner"), async (req, res) => {
   try {
     await monitoringService.clearLogs();
     await monitoringService.info("SYSTEM", "Centralized telemetry logs cleared by administrator.");
@@ -377,7 +411,7 @@ router.post("/monitoring/clear", authMiddleware, async (req, res) => {
   }
 });
 
-router.get("/monitoring/redis-status", authMiddleware, async (req, res) => {
+router.get("/monitoring/redis-status", authMiddleware, requireRole("Owner"), async (req, res) => {
   try {
     const active = redisCacheService.isActive();
     const redisHost = process.env.REDIS_HOST || "127.0.0.1";
@@ -397,7 +431,7 @@ router.get("/monitoring/redis-status", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/monitoring/redis-flush", authMiddleware, async (req, res) => {
+router.post("/monitoring/redis-flush", authMiddleware, requireRole("Owner"), async (req, res) => {
   try {
     await redisCacheService.clearAll();
     await monitoringService.info("SYSTEM", "Administrator flushed all Redis cache databases manually.");
@@ -407,7 +441,7 @@ router.post("/monitoring/redis-flush", authMiddleware, async (req, res) => {
   }
 });
 
-router.get("/monitoring/backups", authMiddleware, async (req, res) => {
+router.get("/monitoring/backups", authMiddleware, requireRole("Owner"), async (req, res) => {
   try {
     const db = Database.getInstance();
     
@@ -470,7 +504,7 @@ router.get("/monitoring/backups", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/monitoring/backups/trigger", authMiddleware, async (req, res) => {
+router.post("/monitoring/backups/trigger", authMiddleware, requireRole("Owner"), async (req, res) => {
   try {
     // Run the backup background job on-demand
     await jobsService.runJob("job-5");
@@ -481,7 +515,7 @@ router.post("/monitoring/backups/trigger", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/monitoring/backups/toggle-pitr", authMiddleware, async (req, res) => {
+router.post("/monitoring/backups/toggle-pitr", authMiddleware, requireRole("Owner"), async (req, res) => {
   try {
     const { enabled } = req.body;
     const db = Database.getInstance();
@@ -503,7 +537,7 @@ router.post("/monitoring/backups/toggle-pitr", authMiddleware, async (req, res) 
   }
 });
 
-router.post("/monitoring/test-alert", authMiddleware, async (req, res) => {
+router.post("/monitoring/test-alert", authMiddleware, requireRole("Owner"), async (req, res) => {
   const { sentryDsn, slackWebhookUrl, emailAlertAddress, type } = req.body;
   const tenantId = (req as any).tenantId;
   try {
@@ -541,7 +575,7 @@ router.post("/monitoring/test-alert", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/monitoring/simulate", authMiddleware, async (req, res) => {
+router.post("/monitoring/simulate", authMiddleware, requireRole("Owner"), async (req, res) => {
   const { type } = req.body;
   try {
     switch (type) {

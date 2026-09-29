@@ -34,6 +34,19 @@ router.get("/staff", authMiddleware, requirePermission("staff"), async (req, res
   }
 });
 
+router.get("/staff/:id", authMiddleware, requirePermission("staff"), async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  try {
+    const item = await staffRepo.getById(tenantId, req.params.id);
+    if (!item) {
+      return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Staff member not found." });
+    }
+    res.json({ success: true, data: item });
+  } catch (error: any) {
+    handleApiError(res, error);
+  }
+});
+
 router.post("/staff", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   const sub = (req as any).subscription;
@@ -92,6 +105,19 @@ router.get("/orders", authMiddleware, async (req, res) => {
   try {
     const data = await orderRepo.getAll(tenantId);
     res.json({ success: true, data });
+  } catch (error: any) {
+    handleApiError(res, error);
+  }
+});
+
+router.get("/orders/:id", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  try {
+    const item = await orderRepo.getById(tenantId, req.params.id);
+    if (!item) {
+      return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Order not found." });
+    }
+    res.json({ success: true, data: item });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -182,6 +208,19 @@ router.get("/customers", authMiddleware, async (req, res) => {
   try {
     const data = await customerRepo.getAll(tenantId);
     res.json({ success: true, data });
+  } catch (error: any) {
+    handleApiError(res, error);
+  }
+});
+
+router.get("/customers/:id", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  try {
+    const item = await customerRepo.getById(tenantId, req.params.id);
+    if (!item) {
+      return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Customer not found." });
+    }
+    res.json({ success: true, data: item });
   } catch (error: any) {
     handleApiError(res, error);
   }

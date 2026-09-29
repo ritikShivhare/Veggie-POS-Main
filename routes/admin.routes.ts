@@ -23,6 +23,7 @@ import {
   SESSION_COOKIE_NAME,
   getSessionCookieOptions
 } from "../server/features/auth/SessionService";
+import { hashPin } from "../server/features/auth/PinSecurityService";
 
 const router = express.Router();
 
@@ -123,9 +124,9 @@ router.get("/admin/tenants", adminAuthMiddleware, async (req, res) => {
         const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
         const monthlyCount = orders.filter(o => o.date && o.date.startsWith(currentYearMonth)).length;
 
-        // Find Owner PIN passcode
+        // Mask Owner PIN passcode completely
         const ownerMember = staffList.find(s => s.role === "Owner");
-        const ownerPin = ownerMember ? (ownerMember.pin?.startsWith("$2") ? "••••• (Hashed)" : ownerMember.pin) : "";
+        const ownerPin = ownerMember ? "•••••" : "";
 
         return {
           ...t,
@@ -225,11 +226,12 @@ router.post("/admin/tenants/register", adminAuthMiddleware, async (req, res) => 
     const tenantId = `veg-${cleanedName}-${randomSuffix}`;
 
     const newOwnerId = `s-${ownerName.toLowerCase().replace(/[^a-z0-9]/g, "")}-${randomSuffix}`;
+    const hashedPin = await hashPin(pin);
     const newOwner = {
       id: newOwnerId,
       name: ownerName,
       role: "Owner" as any,
-      pin,
+      pin: hashedPin,
       permissions: ["billing", "inventory", "reports", "settings"]
     };
 
@@ -438,7 +440,7 @@ router.post("/admin/tenants/register", adminAuthMiddleware, async (req, res) => 
       ownerName,
       email,
       ownerPhone: ownerPhone || "",
-      ownerPin: pin
+      ownerPin: hashedPin
     };
     list.push(newTenantRecord);
     await saveGlobalTenantsList(list);
@@ -450,11 +452,13 @@ router.post("/admin/tenants/register", adminAuthMiddleware, async (req, res) => 
       `SaaS Owner registered new tenant "${businessName}" successfully.`
     );
 
+    // Return sanitized tenant object without sensitive credentials
+    const { ownerPin: _omitPin, ...publicTenant } = newTenantRecord;
+
     res.json({
       success: true,
       tenantId,
-      ownerPin: pin,
-      tenant: newTenantRecord,
+      tenant: publicTenant,
       message: `Tenant "${businessName}" successfully registered by Super-Admin.`
     });
   } catch (error: any) {

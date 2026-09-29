@@ -34,6 +34,12 @@ import {
   getClearCookieOptions
 } from "../server/features/auth/SessionService";
 
+function isProductionEnvironment(): boolean {
+  const env = (process.env.NODE_ENV || "").trim().toLowerCase();
+  const appEnv = (process.env.APP_ENV || "").trim().toLowerCase();
+  return env === "production" || appEnv === "production";
+}
+
 const router = express.Router();
 
 interface PendingSignup {
@@ -86,19 +92,30 @@ router.post("/auth/signup", async (req, res) => {
       metadata: { verificationCode, tenantId }
     });
 
-    // Print/log the verification code ONLY on the secure server terminal/logs (4th Suggestion)
-    console.log(`\n===============================================\n[SECURITY LOG] REGISTRATION VERIFICATION CODE\nEmail: ${email}\nTenant ID: ${tenantId}\nCode: ${verificationCode}\n===============================================\n`);
+    const isProduction = isProductionEnvironment();
+    const allowDevOtp = !isProduction && process.env.ENABLE_DEV_OTP === "true";
 
-    res.json({
+    // Strictly forbid OTP logging in production
+    if (allowDevOtp && !isProduction) {
+      console.log(`\n===============================================\n[DEV LOG] REGISTRATION VERIFICATION CODE\nEmail: ${email}\nTenant ID: ${tenantId}\nCode: ${verificationCode}\n===============================================\n`);
+    }
+
+    const responsePayload: Record<string, any> = {
       success: true,
       pendingToken,
       tenantId,
       email,
-      devOtp: verificationCode,
       message: "Verification code sent to email."
-    });
+    };
+
+    // NEVER return devOtp or verificationCode in production under any circumstances
+    if (allowDevOtp && !isProduction) {
+      responsePayload.devOtp = verificationCode;
+    }
+
+    res.json(responsePayload);
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: "An error occurred while creating registration." });
   }
 });
 
@@ -505,24 +522,6 @@ router.post("/auth/login", async (req, res) => {
 
     let staff = effectiveTenantId ? ((await staffRepo.getAll(effectiveTenantId)) || []) : [];
     let matchingUser = pin ? await findStaffByPinConstantTime(staff, pin) : null;
-
-    // 2. UNIVERSAL AUTO-DETECT: If not found in effective tenant, search across all registered tenants (only if tenant wasn't strictly fixed)
-    if (!matchingUser && pin && !tenantId) {
-      for (const tenant of globalTenants) {
-        if (tenant.tenantId === effectiveTenantId) continue;
-        if (tenant.status === "suspended") continue;
-        
-        const tenantStaff = (await staffRepo.getAll(tenant.tenantId)) || [];
-        const found = await findStaffByPinConstantTime(tenantStaff, pin);
-        if (found) {
-          effectiveTenantId = tenant.tenantId;
-          targetTenant = tenant;
-          matchingUser = found;
-          staff = tenantStaff;
-          break;
-        }
-      }
-    }
 
     if (!effectiveTenantId) {
       return res.status(400).json({

@@ -40,28 +40,47 @@ app.use(
   })
 );
 
-// Enable CORS with secure dynamic allowlist
+// Enable CORS with secure dynamic allowlist and normalization
+const normalizeOrigin = (o: string) => o.trim().replace(/\/+$/, "").toLowerCase();
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+  ? process.env.ALLOWED_ORIGINS.split(",").map(normalizeOrigin).filter(Boolean)
   : [];
+
+const isProductionEnv =
+  (process.env.NODE_ENV || "").trim().toLowerCase() === "production" ||
+  (process.env.APP_ENV || "").trim().toLowerCase() === "production";
 
 app.use(
   cors({
     origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, server-to-server, curl)
       if (!origin) return callback(null, true);
-      const isAllowed =
-        allowedOrigins.includes(origin) ||
-        origin.includes("localhost") ||
-        origin.includes("127.0.0.1") ||
-        origin.includes(".run.app") ||
-        origin.includes(".google.com") ||
-        origin.includes(".onrender.com");
 
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
+      const normalizedRequestOrigin = normalizeOrigin(origin);
+
+      // In production, only allow strictly configured frontend origins
+      if (isProductionEnv) {
+        if (allowedOrigins.length > 0 && allowedOrigins.includes(normalizedRequestOrigin)) {
+          return callback(null, true);
+        }
+        return callback(null, false);
       }
+
+      // In non-production/development, support local testing and preview environments
+      try {
+        const parsed = new URL(origin);
+        const host = parsed.hostname.toLowerCase();
+        const isLocal = host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+        const isAISDev = host.endsWith(".run.app") || host.endsWith(".google.com");
+        const isConfigured = allowedOrigins.includes(normalizedRequestOrigin);
+
+        if (isLocal || isAISDev || isConfigured) {
+          return callback(null, true);
+        }
+      } catch {}
+
+      return callback(null, false);
     },
     credentials: true,
   })
@@ -98,10 +117,11 @@ const apiLimiter = rateLimit({
 app.use("/api/auth/login", loginLimiter);
 app.use("/api", apiLimiter);
 
-// Setup Request Parsing Middleware
+// Setup Request Parsing Middleware with safe limits (2MB global, isolated 10MB for bulk sync)
 app.use(cookieParser());
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use("/api/sync", express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ limit: "2mb", extended: true }));
 
 // Request performance & event telemetry middleware
 app.use((req, res, next) => {

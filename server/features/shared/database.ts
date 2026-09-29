@@ -383,6 +383,21 @@ export class CrossTenantViolationError extends Error {
   }
 }
 
+export class NotFoundError extends Error {
+  public code = "NOT_FOUND";
+  public status = 404;
+  public statusCode = 404;
+
+  constructor(message: string = "Requested resource not found.") {
+    super(message);
+    this.name = "NotFoundError";
+    this.status = 404;
+    this.statusCode = 404;
+    this.code = "NOT_FOUND";
+    Object.setPrototypeOf(this, NotFoundError.prototype);
+  }
+}
+
 export interface DatabaseTransaction {
   tenantId: string;
   saveSlice<T>(sliceKey: string, data: T[]): Promise<void>;
@@ -390,7 +405,44 @@ export interface DatabaseTransaction {
   rollback(): Promise<void>;
 }
 
+function isProductionEnvironment(): boolean {
+  const env = (process.env.NODE_ENV || "").trim().toLowerCase();
+  const appEnv = (process.env.APP_ENV || "").trim().toLowerCase();
+  return env === "production" || appEnv === "production";
+}
+
+function sanitizeErrorMessage(rawMessage: string | undefined, status: number): string {
+  const isProduction = isProductionEnvironment();
+  if (!rawMessage || typeof rawMessage !== "string") {
+    return isProduction && status >= 500 ? "An internal server error occurred." : "An unexpected error occurred.";
+  }
+  if (isProduction && status >= 500) {
+    return "An internal server error occurred.";
+  }
+  let cleaned = rawMessage
+    .replace(/postgres(?:ql)?:\/\/[^\s"']+/gi, "[REDACTED_DB_URI]")
+    .replace(/redis:\/\/[^\s"']+/gi, "[REDACTED_CACHE_URI]")
+    .replace(/(?:password|secret|token|apikey|anon_key|service_role)=['"]?[^'"\s&]+/gi, "$1=[REDACTED]")
+    .replace(/bearer\s+[A-Za-z0-9-_=.]+/gi, "Bearer [REDACTED]");
+  if (isProduction && (cleaned.includes("\n") || cleaned.includes("    at "))) {
+    cleaned = cleaned.split("\n")[0].trim();
+  }
+  return cleaned;
+}
+
 export function handleApiError(res: any, error: any, defaultMessage?: string) {
+  if (
+    error?.code === "NOT_FOUND" ||
+    error?.status === 404 ||
+    error?.statusCode === 404 ||
+    error instanceof NotFoundError
+  ) {
+    return res.status(404).json({
+      success: false,
+      error: "NOT_FOUND",
+      message: error.message || defaultMessage || "Requested resource not found."
+    });
+  }
   if (
     error?.code === "CROSS_TENANT_VIOLATION" ||
     error?.status === 403 ||
@@ -446,7 +498,7 @@ export function handleApiError(res: any, error: any, defaultMessage?: string) {
   return res.status(status).json({
     success: false,
     error: error?.code || error?.name || "INTERNAL_SERVER_ERROR",
-    message: error?.message || defaultMessage || "An unexpected error occurred."
+    message: sanitizeErrorMessage(error?.message || defaultMessage, status)
   });
 }
 
@@ -647,7 +699,7 @@ export class Database {
 
     // Defense-in-depth: Database-level policy check to ensure no row belongs to another tenant
     for (const item of data) {
-      const rowTenantId = (item as any)?.tenant_id;
+      const rowTenantId = (item as any)?.tenant_id || (item as any)?.tenantId;
       if (rowTenantId && rowTenantId !== tenantId) {
         throw new CrossTenantViolationError(
           `Database RLS Policy Violation: Staging row with conflicting tenant_id '${rowTenantId}' under tenant boundary '${tenantId}'. Write rejected.`
@@ -772,7 +824,7 @@ export class Database {
     const isProduction = process.env.NODE_ENV === "production";
 
     // Defense-in-depth: Ensure updated record does not contradict tenant boundary
-    const updateTenantId = (item as any)?.tenant_id;
+    const updateTenantId = (item as any)?.tenant_id || (item as any)?.tenantId;
     if (updateTenantId && updateTenantId !== tenantId) {
       throw new CrossTenantViolationError(
         `Database RLS Policy Violation: Cannot update record with conflicting tenant_id '${updateTenantId}' under active tenant '${tenantId}'.`
@@ -801,10 +853,14 @@ export class Database {
       const localSlice = (this.tablesByTenant[tenantId][tableName] as any[]) || [];
       const index = localSlice.findIndex((i: any) => String(i[keyField]) === String(id));
 
-      let currentVer = 1;
-      if (index !== -1) {
-        currentVer = typeof localSlice[index].version === "number" ? localSlice[index].version : 1;
+      if (index === -1) {
+        throw new NotFoundError(
+          `Item with ${keyField} '${String(id)}' not found in table '${tableName}' for tenant '${tenantId}'.`
+        );
       }
+
+      let currentVer = 1;
+      currentVer = typeof localSlice[index].version === "number" ? localSlice[index].version : 1;
 
       const incomingItem = item as any;
       const targetExpectedVer = expectedVersion !== undefined ? expectedVersion : incomingItem.version;
@@ -859,7 +915,7 @@ export class Database {
                 { entityId: String(id), expectedVersion: targetExpectedVer ?? currentVer, currentVersion: currentDbRow.version }
               );
             } else {
-              throw new Error(`Item with ${keyField} '${String(id)}' not found in table '${tableName}'.`);
+              throw new NotFoundError(`Item with ${keyField} '${String(id)}' not found in table '${tableName}' for tenant '${tenantId}'.`);
             }
           }
         } catch (err: any) {
@@ -872,11 +928,7 @@ export class Database {
       }
 
       // Update in-memory cache
-      if (index !== -1) {
-        localSlice[index] = updatedRecord;
-      } else {
-        localSlice.push(updatedRecord);
-      }
+      localSlice[index] = updatedRecord;
       this.tablesByTenant[tenantId][tableName] = localSlice;
       this.unmarkSliceStale(tenantId, sliceKey);
 
@@ -969,7 +1021,7 @@ export class Database {
           }
           // Defense-in-depth: Ensure items in transaction do not belong to another tenant
           for (const item of data) {
-            const rowTenantId = (item as any)?.tenant_id;
+            const rowTenantId = (item as any)?.tenant_id || (item as any)?.tenantId;
             if (rowTenantId && rowTenantId !== tenantId) {
               throw new CrossTenantViolationError(
                 `Database RLS Policy Violation in Transaction: Staging row with conflicting tenant_id '${rowTenantId}' under tenant boundary '${tenantId}'.`
@@ -984,7 +1036,7 @@ export class Database {
           if (explicitRollback) {
             throw new TransactionRollbackError("Transaction has been rolled back. Further operations rejected.");
           }
-          const objTenantId = (data as any)?.tenant_id;
+          const objTenantId = (data as any)?.tenant_id || (data as any)?.tenantId;
           if (objTenantId && objTenantId !== tenantId && tenantId !== "global" && tenantId !== "saas-admin") {
             throw new CrossTenantViolationError(
               `Database RLS Policy Violation in Transaction: Object contains conflicting tenant_id '${objTenantId}' under active tenant '${tenantId}'.`
@@ -1023,97 +1075,141 @@ export class Database {
 
       if (client) {
         try {
-          // Pre-fetch snapshots of original DB rows for touched tables
-          for (const [sliceKey] of stagedSlices) {
-            const tableName = TABLE_MAP[sliceKey] || sliceKey;
-            const { data: existingRows } = await client
-              .from(tableName)
-              .select("*")
-              .eq("tenant_id", tenantId);
-
-            if (existingRows) {
-              dbTableSnapshots[tableName] = existingRows;
-            }
-          }
-
-          // Pre-fetch snapshots of original DB objects
-          for (const [key] of stagedObjects) {
-            const { data: existingObj } = await client
-              .from("tenant_objects")
-              .select("*")
-              .eq("tenant_id", tenantId)
-              .eq("key", key)
-              .maybeSingle();
-
-            if (existingObj) {
-              dbObjectSnapshots[key] = existingObj;
-            }
-          }
-
-          // Execute slice writes
+          // Attempt native PostgreSQL atomic transaction via stored procedure (004_transactions.sql)
+          const slicesPayload: Record<string, any[]> = {};
           for (const [sliceKey, data] of stagedSlices) {
             const tableName = TABLE_MAP[sliceKey] || sliceKey;
-            if (data.length > 0) {
-              const rows = data.map((item: any) => {
-                const { tenant_id, ...rest } = item;
-                return {
-                  ...rest,
-                  tenant_id: tenantId
-                };
-              });
+            slicesPayload[tableName] = data.map((item: any) => ({
+              ...item,
+              tenant_id: tenantId
+            }));
+          }
 
-              const { error: upsertError } = await client
-                .from(tableName)
-                .upsert(rows);
+          const objectsPayload: Record<string, any> = {};
+          for (const [key, data] of stagedObjects) {
+            objectsPayload[key] = data;
+          }
 
-              if (upsertError) {
-                throw new DatabaseUnavailableError(`DB commit failed on table '${tableName}': ${upsertError.message}`);
+          let rpcSucceeded = false;
+          try {
+            const { data: rpcRes, error: rpcErr } = await client.rpc("save_multi_slice_transaction", {
+              p_tenant_id: tenantId,
+              p_slices: slicesPayload,
+              p_objects: objectsPayload
+            });
+
+            if (!rpcErr && rpcRes && rpcRes.success) {
+              rpcSucceeded = true;
+            } else if (rpcErr) {
+              const errMsg = rpcErr.message || String(rpcErr);
+              const lower = errMsg.toLowerCase();
+              if (
+                !lower.includes("does not exist") &&
+                !lower.includes("not found") &&
+                !lower.includes("could not find")
+              ) {
+                throw new DatabaseUnavailableError(`PostgreSQL atomic transaction rolled back: ${errMsg}`);
               }
+            }
+          } catch (rpcCallErr: any) {
+            if (rpcCallErr instanceof DatabaseUnavailableError || (rpcCallErr.message && rpcCallErr.message.includes("PostgreSQL atomic transaction"))) {
+              throw rpcCallErr;
+            }
+          }
 
-              const keyField = tableName === "recipes" ? "menuItemId" : "id";
-              const incomingKeys = data
-                .map((item: any) => item[keyField])
-                .filter((val) => val !== undefined && val !== null);
+          if (!rpcSucceeded) {
+            // Pre-fetch snapshots of original DB rows for touched tables
+            for (const [sliceKey] of stagedSlices) {
+              const tableName = TABLE_MAP[sliceKey] || sliceKey;
+              const { data: existingRows } = await client
+                .from(tableName)
+                .select("*")
+                .eq("tenant_id", tenantId);
 
-              if (incomingKeys.length > 0) {
+              if (existingRows) {
+                dbTableSnapshots[tableName] = existingRows;
+              }
+            }
+
+            // Pre-fetch snapshots of original DB objects
+            for (const [key] of stagedObjects) {
+              const { data: existingObj } = await client
+                .from("tenant_objects")
+                .select("*")
+                .eq("tenant_id", tenantId)
+                .eq("key", key)
+                .maybeSingle();
+
+              if (existingObj) {
+                dbObjectSnapshots[key] = existingObj;
+              }
+            }
+
+            // Execute slice writes
+            for (const [sliceKey, data] of stagedSlices) {
+              const tableName = TABLE_MAP[sliceKey] || sliceKey;
+              if (data.length > 0) {
+                const rows = data.map((item: any) => {
+                  const { tenant_id, ...rest } = item;
+                  return {
+                    ...rest,
+                    tenant_id: tenantId
+                  };
+                });
+
+                const { error: upsertError } = await client
+                  .from(tableName)
+                  .upsert(rows);
+
+                if (upsertError) {
+                  throw new DatabaseUnavailableError(`DB commit failed on table '${tableName}': ${upsertError.message}`);
+                }
+
+                const keyField = tableName === "recipes" ? "menuItemId" : "id";
+                const incomingKeys = data
+                  .map((item: any) => item[keyField])
+                  .filter((val) => val !== undefined && val !== null);
+
+                if (incomingKeys.length > 0) {
+                  const { error: deleteError } = await client
+                    .from(tableName)
+                    .delete()
+                    .eq("tenant_id", tenantId)
+                    .not(keyField, "in", `(${incomingKeys.join(",")})`);
+
+                  if (deleteError) {
+                    throw new DatabaseUnavailableError(`DB cleanup failed on table '${tableName}': ${deleteError.message}`);
+                  }
+                }
+              } else {
                 const { error: deleteError } = await client
                   .from(tableName)
                   .delete()
-                  .eq("tenant_id", tenantId)
-                  .not(keyField, "in", `(${incomingKeys.join(",")})`);
+                  .eq("tenant_id", tenantId);
 
                 if (deleteError) {
-                  throw new DatabaseUnavailableError(`DB cleanup failed on table '${tableName}': ${deleteError.message}`);
+                  throw new DatabaseUnavailableError(`DB deletion failed on table '${tableName}': ${deleteError.message}`);
                 }
               }
-            } else {
-              const { error: deleteError } = await client
-                .from(tableName)
-                .delete()
-                .eq("tenant_id", tenantId);
+              committedTables.push(tableName);
+            }
 
-              if (deleteError) {
-                throw new DatabaseUnavailableError(`DB deletion failed on table '${tableName}': ${deleteError.message}`);
+            // Execute object writes
+            for (const [key, data] of stagedObjects) {
+              const { error: objError } = await client
+                .from("tenant_objects")
+                .upsert({
+                  tenant_id: tenantId,
+                  key,
+                  value: data,
+                  updated_at: new Date().toISOString()
+                });
+
+              if (objError) {
+                throw new DatabaseUnavailableError(`DB commit failed on object '${key}': ${objError.message}`);
               }
+              committedObjects.push(key);
             }
-            committedTables.push(tableName);
-          }
-
-          // Execute object writes
-          for (const [key, data] of stagedObjects) {
-            const { error: objError } = await client
-              .from("tenant_objects")
-              .upsert({
-                tenant_id: tenantId,
-                key,
-                value: data,
-                updated_at: new Date().toISOString()
-              });
-
-            if (objError) {
-              throw new DatabaseUnavailableError(`DB commit failed on object '${key}': ${objError.message}`);
-            }
-            committedObjects.push(key);
           }
         } catch (dbErr: any) {
           console.error(`[Database] Rolling back DB transaction for tenant '${tenantId}':`, dbErr.message || dbErr);
@@ -1329,7 +1425,7 @@ export class Database {
     const isProduction = process.env.NODE_ENV === "production";
 
     // Defense-in-depth: Ensure object does not contain conflicting tenant_id
-    const objTenantId = (data as any)?.tenant_id;
+    const objTenantId = (data as any)?.tenant_id || (data as any)?.tenantId;
     if (objTenantId && objTenantId !== tenantId && tenantId !== "global" && tenantId !== "saas-admin") {
       throw new CrossTenantViolationError(
         `Database RLS Policy Violation: Object contains conflicting tenant_id '${objTenantId}' under active tenant '${tenantId}'.`

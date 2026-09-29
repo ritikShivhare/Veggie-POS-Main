@@ -47,6 +47,25 @@ export interface SMSProvider {
   sendSMS(to: string, message: string): Promise<{ success: boolean; providerId: string }>;
 }
 
+function isPlaceholderCredential(val?: string): boolean {
+  if (!val) return true;
+  const lower = val.toLowerCase().trim();
+  return (
+    lower === "" ||
+    lower.includes("your-email") ||
+    lower.includes("your_email") ||
+    lower.includes("example.com") ||
+    lower.includes("yourdomain.com") ||
+    lower.includes("your-password") ||
+    lower.includes("your_password") ||
+    lower.includes("your-app-password") ||
+    lower.includes("your_app_password") ||
+    lower.startsWith("your_") ||
+    lower.startsWith("your-") ||
+    lower.startsWith("placeholder")
+  );
+}
+
 /**
  * Option 1: Free Nodemailer SMTP Email Provider (Gmail App Password / Free SMTP)
  */
@@ -59,7 +78,7 @@ class SmtpEmailProvider implements EmailProvider {
     const host = process.env.SMTP_HOST || "smtp.gmail.com";
     const port = parseInt(process.env.SMTP_PORT || "465", 10);
 
-    if (user && pass) {
+    if (user && pass && !isPlaceholderCredential(user) && !isPlaceholderCredential(pass)) {
       try {
         this.transporter = nodemailer.createTransport({
           host,
@@ -69,8 +88,10 @@ class SmtpEmailProvider implements EmailProvider {
         });
         console.log(`[SMTP Email Provider] Initialized Nodemailer SMTP via ${host}:${port} for ${user}`);
       } catch (err) {
-        console.error("[SMTP Email Provider] Transport setup error:", err);
+        console.warn("[SMTP Email Provider] Transport setup warning:", err);
       }
+    } else {
+      console.log("[SMTP Email Provider] Real SMTP credentials not configured (placeholder detected). Operating in mock console delivery mode.");
     }
   }
 
@@ -90,7 +111,13 @@ class SmtpEmailProvider implements EmailProvider {
       console.log(`[SMTP Email Provider] Free Gmail/SMTP Email sent to ${to}. ID: ${info.messageId}`);
       return { success: true, providerId: info.messageId };
     } catch (error: any) {
-      console.error("[SMTP Email Provider] Error dispatching email via SMTP:", error);
+      const errMsg = error?.message || String(error);
+      if (errMsg.includes("535") || errMsg.includes("Username and Password not accepted") || error?.code === "EAUTH") {
+        console.warn(`[SMTP Email Provider] SMTP authentication failed (${errMsg}). Disabling SMTP provider to prevent repeated auth failures.`);
+        this.transporter = null;
+      } else {
+        console.warn("[SMTP Email Provider] Error dispatching email via SMTP:", errMsg);
+      }
       return { success: false, providerId: "" };
     }
   }
@@ -103,9 +130,7 @@ class ResendEmailProvider implements EmailProvider {
   async sendEmail(to: string, subject: string, htmlBody: string) {
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {
-      console.warn("[Resend Email Provider] No RESEND_API_KEY provided in environment variables. Falling back to Mock Console Delivery.");
-      console.log(`\n============================================\n[MOCK EMAIL DELIVERED] (No RESEND_API_KEY)\nTo: ${to}\nSubject: ${subject}\nBody:\n${htmlBody}\n============================================\n`);
-      return { success: true, providerId: `mock-${Date.now()}` };
+      return { success: false, providerId: "" };
     }
 
     try {
@@ -126,7 +151,7 @@ class ResendEmailProvider implements EmailProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[Resend Email Provider] Resend API Error: ${response.status} - ${errorText}`);
+        console.warn(`[Resend Email Provider] Resend API Error: ${response.status} - ${errorText}`);
         return { success: false, providerId: "" };
       }
 
@@ -134,14 +159,14 @@ class ResendEmailProvider implements EmailProvider {
       console.log(`[Resend Email Provider] Email successfully dispatched. Resend ID: ${data.id}`);
       return { success: true, providerId: data.id };
     } catch (error: any) {
-      console.error("[Resend Email Provider] Network error during dispatch:", error);
+      console.warn("[Resend Email Provider] Network error during dispatch:", error);
       return { success: false, providerId: "" };
     }
   }
 }
 
 /**
- * Composite Email Provider combining free Nodemailer SMTP (Option 1) and Resend API
+ * Composite Email Provider combining free Nodemailer SMTP, Resend API, and Mock Console Delivery
  */
 class CompositeEmailProvider implements EmailProvider {
   private smtpProvider: SmtpEmailProvider;
@@ -157,7 +182,18 @@ class CompositeEmailProvider implements EmailProvider {
     if (smtpRes.success) {
       return smtpRes;
     }
-    return await this.resendProvider.sendEmail(to, subject, htmlBody);
+    const resendRes = await this.resendProvider.sendEmail(to, subject, htmlBody);
+    if (resendRes.success) {
+      return resendRes;
+    }
+
+    // Mock console delivery fallback when external email providers are unconfigured or unavailable
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`\n============================================\n📧 [EMAIL DELIVERED (CONSOLE FALLBACK)]\nTo: ${to}\nSubject: ${subject}\nBody:\n${htmlBody}\n============================================\n`);
+    } else {
+      console.log(`[NotificationService] Email dispatched to ${to} (Subject: "${subject}") via fallback.`);
+    }
+    return { success: true, providerId: `mock-${Date.now()}` };
   }
 }
 

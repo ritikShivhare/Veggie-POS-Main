@@ -1,4 +1,4 @@
-import { Database, DatabaseTransaction } from "../shared/database";
+import { Database, DatabaseTransaction, NotFoundError } from "../shared/database";
 import { Recipe } from "../../../src/features/shared/types";
 
 export class RecipeRepository {
@@ -39,6 +39,10 @@ export class RecipeRepository {
 
   async delete(tenantId: string, menuItemId: string): Promise<void> {
     const items = (await this.getAll(tenantId)) || [];
+    const exists = items.some(i => i.menuItemId === menuItemId);
+    if (!exists) {
+      throw new NotFoundError(`Recipe for menuItemId '${menuItemId}' not found for tenant '${tenantId}'.`);
+    }
     const filtered = items.filter(i => i.menuItemId !== menuItemId);
     await this.saveAll(tenantId, filtered);
   }

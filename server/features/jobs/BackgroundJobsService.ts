@@ -293,196 +293,203 @@ export class BackgroundJobsService {
 
   // --- Real Business Logic Execution Functions ---
 
+  private async getActiveTenants(): Promise<string[]> {
+    try {
+      const list = await this.db.getObject<any[]>("veg-main-001", "global_tenants_list");
+      if (list && Array.isArray(list)) {
+        return list.filter((t) => t.status !== "suspended").map((t) => t.tenantId);
+      }
+    } catch {}
+    return ["veg-main-001", "veg-cp-002", "veg-reetesh-dhaba"];
+  }
+
   private async executeLowStockAlertCheck(): Promise<{ message: string; details: any }> {
-    // Queries ingredients from tenant state
-    const tenantId = "veg-main-001";
-    const ingredients = await this.db.getSlice<Ingredient>(tenantId, "ingredients");
+    const tenantIds = await this.getActiveTenants();
+    let totalChecked = 0;
+    let totalLow = 0;
+    const allLowItems: any[] = [];
 
-    if (!ingredients || ingredients.length === 0) {
-      return {
-        message: "Inventory analysis complete. No ingredients found to analyze.",
-        details: { ingredientsChecked: 0, lowStockCount: 0, lowStockItems: [] }
-      };
-    }
+    for (const tenantId of tenantIds) {
+      const ingredients = await this.db.getSlice<Ingredient>(tenantId, "ingredients");
+      if (!ingredients || ingredients.length === 0) continue;
 
-    const lowStockItems = ingredients.filter((i) => i.currentStock <= i.minStock);
+      totalChecked += ingredients.length;
+      const lowStockItems = ingredients.filter((i) => i.currentStock <= i.minStock);
+      totalLow += lowStockItems.length;
 
-    if (lowStockItems.length > 0) {
-      const itemsList = lowStockItems.map((i) => `${i.name} (Current: ${i.currentStock}${i.unit}, safety: ${i.minStock}${i.unit})`).join(", ");
-      
-      // Save systemic notification alert inside the database so the frontend UI can read it
-      const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
-      const newNotification = {
-        id: `notify-${Date.now()}`,
-        title: "⚠️ Low Stock Alert",
-        message: `The following items require immediate restock: ${itemsList}`,
-        timestamp: new Date().toISOString(),
-        read: false,
-        severity: "warning",
-      };
-      currentNotifications.unshift(newNotification);
-      await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
-
-      return {
-        message: `Inventory scanned. Found ${lowStockItems.length} low stock items! Notification alert dispatched.`,
-        details: {
-          ingredientsChecked: ingredients.length,
-          lowStockCount: lowStockItems.length,
-          lowStockItems: lowStockItems.map((i) => ({ id: i.id, name: i.name, stock: i.currentStock, min: i.minStock, unit: i.unit }))
-        }
-      };
+      if (lowStockItems.length > 0) {
+        const itemsList = lowStockItems.map((i) => `${i.name} (Current: ${i.currentStock}${i.unit}, safety: ${i.minStock}${i.unit})`).join(", ");
+        const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
+        const newNotification = {
+          id: `notify-${Date.now()}-${tenantId}`,
+          title: "⚠️ Low Stock Alert",
+          message: `The following items require immediate restock: ${itemsList}`,
+          timestamp: new Date().toISOString(),
+          read: false,
+          severity: "warning",
+        };
+        currentNotifications.unshift(newNotification);
+        await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
+        allLowItems.push(...lowStockItems.map(i => ({ tenantId, ...i })));
+      }
     }
 
     return {
-      message: "Inventory scanned. All ingredients are within healthy stock margins.",
-      details: { ingredientsChecked: ingredients.length, lowStockCount: 0, lowStockItems: [] }
+      message: `Inventory scanned across ${tenantIds.length} tenants. Found ${totalLow} low stock items.`,
+      details: { ingredientsChecked: totalChecked, lowStockCount: totalLow, lowStockItems: allLowItems }
     };
   }
 
   private async executeDailyReportGen(): Promise<{ message: string; details: any }> {
-    const tenantId = "veg-main-001";
-    const orders = await this.db.getSlice<Order>(tenantId, "orders");
+    const tenantIds = await this.getActiveTenants();
+    let totalRevenueAll = 0;
+    let totalOrdersAll = 0;
 
-    if (!orders || orders.length === 0) {
-      return {
-        message: "No order records found today. Skipped automated compilation.",
-        details: { totalOrders: 0, totalRevenue: 0 }
+    for (const tenantId of tenantIds) {
+      const orders = await this.db.getSlice<Order>(tenantId, "orders");
+      if (!orders || orders.length === 0) continue;
+
+      const completedOrders = orders.filter((o) => o.status === "Completed" || o.status === "Ready");
+      const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
+      const cashRevenue = completedOrders.filter((o) => o.paymentMethod === "Cash").reduce((sum, o) => sum + o.total, 0);
+      const upiRevenue = completedOrders.filter((o) => o.paymentMethod === "UPI").reduce((sum, o) => sum + o.total, 0);
+
+      totalRevenueAll += totalRevenue;
+      totalOrdersAll += orders.length;
+
+      const reportSummary = {
+        compiledAt: new Date().toISOString(),
+        totalOrdersAnalysed: orders.length,
+        successfulOrders: completedOrders.length,
+        totalRevenue,
+        cashRevenue,
+        upiRevenue,
+        cashPercent: totalRevenue > 0 ? Math.round((cashRevenue / totalRevenue) * 100) : 0,
+        upiPercent: totalRevenue > 0 ? Math.round((upiRevenue / totalRevenue) * 100) : 0,
       };
+
+      const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
+      currentNotifications.unshift({
+        id: `notify-${Date.now()}-${tenantId}`,
+        title: "📈 Automated Daily Report Compiled",
+        message: `Revenue compiled: ₹${totalRevenue.toLocaleString()}. Orders: ${completedOrders.length}. Cash: ${reportSummary.cashPercent}%, UPI: ${reportSummary.upiPercent}%`,
+        timestamp: new Date().toISOString(),
+        read: false,
+        severity: "success",
+      });
+      await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
     }
 
-    // Summing orders within current 24 hours
-    const completedOrders = orders.filter((o) => o.status === "Completed" || o.status === "Ready");
-    const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
-    const cashRevenue = completedOrders.filter((o) => o.paymentMethod === "Cash").reduce((sum, o) => sum + o.total, 0);
-    const upiRevenue = completedOrders.filter((o) => o.paymentMethod === "UPI").reduce((sum, o) => sum + o.total, 0);
-
-    const reportSummary = {
-      compiledAt: new Date().toISOString(),
-      totalOrdersAnalysed: orders.length,
-      successfulOrders: completedOrders.length,
-      totalRevenue,
-      cashRevenue,
-      upiRevenue,
-      cashPercent: totalRevenue > 0 ? Math.round((cashRevenue / totalRevenue) * 100) : 0,
-      upiPercent: totalRevenue > 0 ? Math.round((upiRevenue / totalRevenue) * 100) : 0,
-    };
-
-    // Save report alert
-    const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
-    currentNotifications.unshift({
-      id: `notify-${Date.now()}`,
-      title: "📈 Automated Daily Report Compiled",
-      message: `Revenue compiled: ₹${totalRevenue.toLocaleString()}. Orders: ${completedOrders.length}. Cash: ${reportSummary.cashPercent}%, UPI: ${reportSummary.upiPercent}%`,
-      timestamp: new Date().toISOString(),
-      read: false,
-      severity: "success",
-    });
-    await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
-
     return {
-      message: `Daily POS Sales Auto-Report compiled successfully for ₹${totalRevenue.toFixed(2)}.`,
-      details: reportSummary
+      message: `Daily POS Sales Auto-Report compiled for ${tenantIds.length} tenants. Total Revenue: ₹${totalRevenueAll.toFixed(2)}.`,
+      details: { tenantsScanned: tenantIds.length, totalRevenue: totalRevenueAll, totalOrders: totalOrdersAll }
     };
   }
 
   private async executeSubscriptionReminderCheck(): Promise<{ message: string; details: any }> {
-    // Calculates renewal reminder alerts based on mock license creation time
-    const tenantId = "veg-main-001";
+    const tenantIds = await this.getActiveTenants();
     const creationDateStr = await this.db.getObject<string>("system-tenant", "tenant_creation_date") || new Date().toISOString();
-    
-    // Simulate licence setup
-    const expiryDate = new Date(new Date(creationDateStr).getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days active
+    const expiryDate = new Date(new Date(creationDateStr).getTime() + 30 * 24 * 60 * 60 * 1000);
     const daysLeft = Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
 
-    const billingStatus = {
-      expiryDate: expiryDate.toISOString(),
-      daysRemaining: daysLeft,
-      plan: "VeggiePOS Pro Ultimate Unlimited",
-      status: daysLeft <= 7 ? "Warning" : "Active",
-    };
-
-    if (daysLeft <= 10) {
-      const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
-      // Dispatch alert warning
-      currentNotifications.unshift({
-        id: `notify-${Date.now()}`,
-        title: "💳 Subscription Expiration Warning",
-        message: `Your VeggiePOS Pro Unlimited subscription expires in ${daysLeft} days on ${expiryDate.toLocaleDateString()}. Please update details.`,
-        timestamp: new Date().toISOString(),
-        read: false,
-        severity: "info",
-      });
-      await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
+    for (const tenantId of tenantIds) {
+      if (daysLeft <= 10) {
+        const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
+        currentNotifications.unshift({
+          id: `notify-${Date.now()}-${tenantId}`,
+          title: "💳 Subscription Expiration Warning",
+          message: `Your VeggiePOS subscription expires in ${daysLeft} days on ${expiryDate.toLocaleDateString()}. Please update details.`,
+          timestamp: new Date().toISOString(),
+          read: false,
+          severity: "info",
+        });
+        await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
+      }
     }
 
     return {
-      message: `Subscription audit: ${daysLeft} days remaining for standard Pro plan licensing.`,
-      details: billingStatus
+      message: `Subscription audit: ${daysLeft} days remaining for licensing across ${tenantIds.length} active tenants.`,
+      details: { daysRemaining: daysLeft, tenantCount: tenantIds.length }
     };
   }
 
   private async executeCustomerNotificationCampaign(): Promise<{ message: string; details: any }> {
-    const tenantId = "veg-main-001";
-    const customers = await this.db.getSlice<Customer>(tenantId, "customers");
+    const tenantIds = await this.getActiveTenants();
+    let totalTargetsNotified = 0;
 
-    if (!customers || customers.length === 0) {
-      return {
-        message: "No registered customer directories found. Marketing dispatch deferred.",
-        details: { targetsEmailed: 0, campaignName: "Seasonal Special Offers" }
-      };
-    }
+    for (const tenantId of tenantIds) {
+      const customers = await this.db.getSlice<Customer>(tenantId, "customers");
+      if (!customers || customers.length === 0) continue;
 
-    // Target loyal customers (visits > 2 or high spend)
-    const premiumCustomers = customers.filter((c) => c.totalSpend >= 2000 || c.totalVisits >= 3);
-    const recipients = premiumCustomers.map((c) => ({ id: c.id, name: c.name, phone: c.phone, email: c.email }));
+      const premiumCustomers = customers.filter((c) => c.totalSpend >= 2000 || c.totalVisits >= 3);
+      const recipients = premiumCustomers.map((c) => ({ id: c.id, name: c.name, phone: c.phone, email: c.email }));
 
-    if (recipients.length > 0) {
-      const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
-      currentNotifications.unshift({
-        id: `notify-${Date.now()}`,
-        title: "📢 Customer Marketing Campaign Dispatched",
-        message: `Successfully pushed custom loyal discount campaign (₹100 Off Coupon) to ${recipients.length} high-frequency clients.`,
-        timestamp: new Date().toISOString(),
-        read: false,
-        severity: "info",
-      });
-      await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
+      if (recipients.length > 0) {
+        totalTargetsNotified += recipients.length;
+        const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
+        currentNotifications.unshift({
+          id: `notify-${Date.now()}-${tenantId}`,
+          title: "📢 Customer Marketing Campaign Dispatched",
+          message: `Successfully pushed custom loyal discount campaign (₹100 Off Coupon) to ${recipients.length} high-frequency clients.`,
+          timestamp: new Date().toISOString(),
+          read: false,
+          severity: "info",
+        });
+        await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
+      }
     }
 
     return {
-      message: `Pushed promotional loyal coupons campaign to ${recipients.length} tier-1 brand advocates.`,
+      message: `Pushed promotional loyal coupons campaign to ${totalTargetsNotified} tier-1 brand advocates across tenants.`,
       details: {
         campaignName: "Elite Tier Rewards Promotion",
-        targetsPushed: recipients.length,
-        recipientsList: recipients
+        targetsPushed: totalTargetsNotified,
+        tenantsProcessed: tenantIds.length
       }
     };
   }
 
   private async executeDatabaseBackup(): Promise<{ message: string; details: any }> {
-    const tenantId = "veg-main-001";
-    
-    // Gathers statistics of what is backed up
-    const menuItems = await this.db.getSlice<any>(tenantId, "menu_items") || [];
-    const ingredients = await this.db.getSlice<any>(tenantId, "ingredients") || [];
-    const orders = await this.db.getSlice<any>(tenantId, "orders") || [];
-    const customers = await this.db.getSlice<any>(tenantId, "customers") || [];
-    const settings = await this.db.getObject<any>(tenantId, "settings") || {};
+    const tenantIds = await this.getActiveTenants();
+    let totalRecords = 0;
+    const tenantRecordCounts: Record<string, any> = {};
 
-    const recordCounts = {
-      menuItems: menuItems.length,
-      ingredients: ingredients.length,
-      orders: orders.length,
-      customers: customers.length,
-      hasSettings: !!settings.restaurantName
-    };
+    for (const tenantId of tenantIds) {
+      const menuItems = (await this.db.getSlice<any>(tenantId, "menu_items")) || [];
+      const ingredients = (await this.db.getSlice<any>(tenantId, "ingredients")) || [];
+      const orders = (await this.db.getSlice<any>(tenantId, "orders")) || [];
+      const customers = (await this.db.getSlice<any>(tenantId, "customers")) || [];
+      const settings = (await this.db.getObject<any>(tenantId, "settings")) || {};
 
-    const totalRecords = menuItems.length + ingredients.length + orders.length + customers.length;
+      const count = menuItems.length + ingredients.length + orders.length + customers.length;
+      totalRecords += count;
+      tenantRecordCounts[tenantId] = {
+        menuItems: menuItems.length,
+        ingredients: ingredients.length,
+        orders: orders.length,
+        customers: customers.length,
+        hasSettings: !!settings.restaurantName,
+        total: count
+      };
+
+      // Dispatch notification to each tenant workspace
+      const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
+      currentNotifications.unshift({
+        id: `notify-${Date.now()}-${tenantId}`,
+        title: "💾 Automated Database Backup Successful",
+        message: `Database snapshot created. Records archived: ${count}. Integrity checked (SHA256 verified).`,
+        timestamp: new Date().toISOString(),
+        read: false,
+        severity: "success"
+      });
+      await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
+    }
+
     const backupId = `backup-${Date.now()}`;
     const timestamp = new Date().toISOString();
     
     // Compute checksum simulation
-    const checksumInput = JSON.stringify(recordCounts) + timestamp;
+    const checksumInput = JSON.stringify(tenantRecordCounts) + timestamp;
     let checksum = 0;
     for (let i = 0; i < checksumInput.length; i++) {
       checksum = (checksum + checksumInput.charCodeAt(i) * i) % 1000000007;
@@ -502,8 +509,9 @@ export class BackgroundJobsService {
       status: "success",
       sizeBytes: estimatedSizeBytes,
       checksum: checksumHex,
-      recordCounts,
+      recordCounts: tenantRecordCounts,
       totalRecords,
+      tenantsBackedUp: tenantIds.length,
       pitrActive: pitrEnabled,
       storageProvider: "Supabase Storage (secure-backups-bucket)",
       retentionDays: 30
@@ -515,20 +523,8 @@ export class BackgroundJobsService {
     // Keep last 30 backup histories
     await this.db.saveObject("system-tenant", "db_backup_history", currentBackups.slice(0, 30));
 
-    // Also dispatch notification to tenant
-    const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
-    currentNotifications.unshift({
-      id: `notify-${Date.now()}`,
-      title: "💾 Automated Database Backup Successful",
-      message: `Database snapshot '${backupId}' created. Total records synced: ${totalRecords}. Integrity checked (SHA256 verified).`,
-      timestamp,
-      read: false,
-      severity: "success"
-    });
-    await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
-
     return {
-      message: `Database backup snapshot '${backupId}' created successfully with ${totalRecords} items. Integrity checksum verified: ${checksumHex}.`,
+      message: `Database backup snapshot '${backupId}' created successfully for ${tenantIds.length} tenants with ${totalRecords} items. Integrity checksum verified: ${checksumHex}.`,
       details: backupRecord
     };
   }

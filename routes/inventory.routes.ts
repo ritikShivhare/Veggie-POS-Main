@@ -26,6 +26,19 @@ router.get("/ingredients", authMiddleware, async (req, res) => {
   }
 });
 
+router.get("/ingredients/:id", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  try {
+    const item = await ingredientRepo.getById(tenantId, req.params.id);
+    if (!item) {
+      return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Ingredient not found." });
+    }
+    res.json({ success: true, data: item });
+  } catch (error: any) {
+    handleApiError(res, error);
+  }
+});
+
 router.post("/ingredients", authMiddleware, idempotencyMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
@@ -89,6 +102,19 @@ router.get("/menu-items", authMiddleware, async (req, res) => {
   }
 });
 
+router.get("/menu-items/:id", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  try {
+    const item = await menuRepo.getById(tenantId, req.params.id);
+    if (!item) {
+      return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Menu item not found." });
+    }
+    res.json({ success: true, data: item });
+  } catch (error: any) {
+    handleApiError(res, error);
+  }
+});
+
 router.post("/menu-items", authMiddleware, requirePermission("inventory", "settings"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
@@ -137,6 +163,19 @@ router.get("/purchases", authMiddleware, async (req, res) => {
   try {
     const data = await purchaseRepo.getAll(tenantId);
     res.json({ success: true, data });
+  } catch (error: any) {
+    handleApiError(res, error);
+  }
+});
+
+router.get("/purchases/:id", authMiddleware, async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  try {
+    const item = await purchaseRepo.getById(tenantId, req.params.id);
+    if (!item) {
+      return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Purchase invoice not found." });
+    }
+    res.json({ success: true, data: item });
   } catch (error: any) {
     handleApiError(res, error);
   }
