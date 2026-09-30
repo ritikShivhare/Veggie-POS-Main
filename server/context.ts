@@ -268,9 +268,11 @@ export const authMiddleware = async (req: express.Request, res: express.Response
   if (clientProvidedTenant && clientProvidedTenant !== tenantId) {
     const isSaaSAdmin = session.role === "SaaS Owner" || tenantId === "saas-admin";
     if (!isSaaSAdmin) {
+      const isOutboxRoute = req.originalUrl?.includes("/sync/outbox") || req.path?.includes("/sync/outbox");
+      const error = isOutboxRoute ? "CROSS_TENANT_VIOLATION" : "TENANT_MISMATCH";
       return res.status(403).json({
         success: false,
-        error: "TENANT_MISMATCH",
+        error,
         message: `Tenant isolation violation: Client-provided tenantId (${clientProvidedTenant}) does not match authenticated session tenant (${tenantId}).`
       });
     }

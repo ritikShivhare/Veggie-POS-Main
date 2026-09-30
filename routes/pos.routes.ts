@@ -479,7 +479,7 @@ router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, r
   try {
     let canonicalEntity: any = null;
 
-    await Database.getInstance().runTransaction(tenantId, async () => {
+    await Database.getInstance().runTransaction(tenantId, async (trx) => {
       const enrichedPayload = {
         ...payload,
         tenantId,
@@ -502,9 +502,21 @@ router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, r
               canonicalEntity = existing;
             }
           } else if (operationType === "UPDATE") {
-            canonicalEntity = await orderRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version);
+            if (payload.status === "Cancelled") {
+              canonicalEntity = await financialTransactionService.executeOrderCancellation(
+                tenantId,
+                entityId,
+                {
+                  cancelledBy: payload.cancelledBy || "Offline Outbox",
+                  reason: payload.cancellationReason || "Cancelled via Outbox",
+                  expectedVersion: payload.version
+                }
+              );
+            } else {
+              canonicalEntity = await orderRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version, trx);
+            }
           } else if (operationType === "DELETE") {
-            await orderRepo.delete(tenantId, entityId);
+            await orderRepo.delete(tenantId, entityId, trx);
             canonicalEntity = { id: entityId, deleted: true, version: 1 };
           }
           break;
@@ -537,13 +549,13 @@ router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, r
           if (operationType === "CREATE") {
             const existing = await customerRepo.getById(tenantId, entityId);
             if (!existing) {
-              await customerRepo.add(tenantId, enrichedPayload);
+              await customerRepo.add(tenantId, enrichedPayload, trx);
             }
             canonicalEntity = (await customerRepo.getById(tenantId, entityId)) || enrichedPayload;
           } else if (operationType === "UPDATE") {
-            canonicalEntity = await customerRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version);
+            canonicalEntity = await customerRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version, trx);
           } else if (operationType === "DELETE") {
-            await customerRepo.delete(tenantId, entityId);
+            await customerRepo.delete(tenantId, entityId, trx);
             canonicalEntity = { id: entityId, deleted: true, version: 1 };
           }
           break;
@@ -552,13 +564,13 @@ router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, r
           if (operationType === "CREATE") {
             const existing = await shiftRepo.getById(tenantId, entityId);
             if (!existing) {
-              await shiftRepo.add(tenantId, enrichedPayload);
+              await shiftRepo.add(tenantId, enrichedPayload, trx);
             }
             canonicalEntity = (await shiftRepo.getById(tenantId, entityId)) || enrichedPayload;
           } else if (operationType === "UPDATE") {
-            canonicalEntity = await shiftRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version);
+            canonicalEntity = await shiftRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version, trx);
           } else if (operationType === "DELETE") {
-            await shiftRepo.delete(tenantId, entityId);
+            await shiftRepo.delete(tenantId, entityId, trx);
             canonicalEntity = { id: entityId, deleted: true, version: 1 };
           }
           break;

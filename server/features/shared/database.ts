@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { redisCacheService } from "./RedisCacheService";
 
 const TABLE_MAP: Record<string, string> = {
@@ -30,10 +31,13 @@ const isRlsErrorMessage = (msg: string): boolean => {
   );
 };
 
+const tenantLockStorage = new AsyncLocalStorage<Set<string>>();
+
 /**
  * Tenant Lock Manager to resolve concurrent write race conditions.
  * Forces sequential execution per tenant across multiple server instances.
  * Prioritizes a highly robust Supabase database lock and falls back to table-backed locking.
+ * Supports re-entrancy within the same asynchronous execution context to prevent self-deadlocks.
  */
 class TenantLockManager {
   private static locks: Record<string, Promise<any>> = {};
@@ -41,6 +45,12 @@ class TenantLockManager {
   private static isRpcLockAvailable = true;
 
   public static async acquire<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
+    // Re-entrancy check: if current async context already holds this tenant lock, execute directly
+    const currentLocks = tenantLockStorage.getStore();
+    if (currentLocks && currentLocks.has(tenantId)) {
+      return await fn();
+    }
+
     // 1. Serialize locally on this instance to avoid self-contention and lock thrashing
     const previous = this.locks[tenantId] || Promise.resolve();
     const next = previous.then(async () => {
@@ -54,8 +64,12 @@ class TenantLockManager {
           console.log(`[TenantLock] Flowing to local in-memory serialization fallback for tenant ${tenantId}.`);
         }
 
-        // 3. Execute the actual transactional operation
-        return await fn();
+        // 3. Execute the actual transactional operation within AsyncLocalStorage scope
+        const activeLocks = new Set(currentLocks || []);
+        activeLocks.add(tenantId);
+        return await tenantLockStorage.run(activeLocks, async () => {
+          return await fn();
+        });
       } catch (err) {
         console.error(`[TenantLock] Error in transaction for ${tenantId}:`, err);
         throw err;
