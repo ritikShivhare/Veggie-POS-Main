@@ -86,9 +86,10 @@ router.post("/billing/create-checkout-session", authMiddleware, requireRole("Own
       });
     }
     console.log(`[Stripe Billing] No Stripe API key configured. Redirecting to custom interactive Checkout Simulator for tenant ${tenantId}.`);
+    const sessionId = (req as any).session?.id || (req.headers["x-session-id"] as string);
     return res.json({
       success: true,
-      url: `/api/billing/mock-checkout?tenantId=${tenantId}&plan=${plan}&origin=${encodeURIComponent(origin)}`
+      url: `/api/billing/mock-checkout?tenantId=${tenantId}&plan=${plan}&origin=${encodeURIComponent(origin)}${sessionId ? `&sessionId=${encodeURIComponent(sessionId)}` : ""}`
     });
   }
 
@@ -161,9 +162,10 @@ router.post("/billing/create-portal-session", authMiddleware, requireRole("Owner
       });
     }
     console.log(`[Stripe Billing] No Stripe API key configured. Redirecting to custom interactive Billing Portal Simulator for tenant ${tenantId}.`);
+    const sessionId = (req as any).session?.id || (req.headers["x-session-id"] as string);
     return res.json({
       success: true,
-      url: `/api/billing/mock-portal?tenantId=${tenantId}&origin=${encodeURIComponent(origin)}`
+      url: `/api/billing/mock-portal?tenantId=${tenantId}&origin=${encodeURIComponent(origin)}${sessionId ? `&sessionId=${encodeURIComponent(sessionId)}` : ""}`
     });
   }
 
@@ -287,23 +289,29 @@ router.post("/webhooks/stripe", express.raw({ type: "application/json" }), async
   }
 });
 
-// 5. Serve HTML Mock Checkout Page
-router.get("/billing/mock-checkout", async (req, res) => {
-  if (isProductionEnvironment()) {
-    return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Mock billing is disabled in production." });
-  }
-  const tenantId = req.query.tenantId as string;
-  if (!tenantId) {
-    return res.status(400).send("Tenant identifier is required for mock checkout.");
-  }
-  const plan = req.query.plan as string || "pro";
-  const origin = req.query.origin as string || "http://localhost:3000";
+// ============================================================================
+// 5. MOCK PAYMENT & BILLING SIMULATOR (NON-PRODUCTION ONLY)
+// Strictly excluded from production builds and protected by session authentication
+// ============================================================================
+if (process.env.NODE_ENV !== "production") {
+  // 5. Serve HTML Mock Checkout Page
+  router.get("/billing/mock-checkout", authMiddleware, async (req, res) => {
+    if (isProductionEnvironment()) {
+      return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Mock billing is disabled in production." });
+    }
+    const tenantId = (req as any).tenantId || (req.query.tenantId as string);
+    if (!tenantId) {
+      return res.status(400).send("Tenant identifier is required for mock checkout.");
+    }
+    const plan = (req.query.plan as string) || "pro";
+    const origin = (req.query.origin as string) || "http://localhost:3000";
+    const sessionId = (req as any).session?.id || (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || "";
 
-  const planName = plan === "pro" ? "Professional Pro" : "Enterprise Elite";
-  const planPrice = plan === "pro" ? "₹999.00 / month" : "₹2999.00 / month";
-  const planLimits = plan === "pro" ? "Up to 10 staff members and 500 monthly orders" : "Unlimited staff members and unlimited orders";
+    const planName = plan === "pro" ? "Professional Pro" : "Enterprise Elite";
+    const planPrice = plan === "pro" ? "₹999.00 / month" : "₹2999.00 / month";
+    const planLimits = plan === "pro" ? "Up to 10 staff members and 500 monthly orders" : "Unlimited staff members and unlimited orders";
 
-  res.send(`
+    res.send(`
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -379,6 +387,7 @@ router.get("/billing/mock-checkout", async (req, res) => {
         const checkoutForm = document.getElementById("checkout-form");
         const btnPay = document.getElementById("btn-pay");
         const btnFail = document.getElementById("btn-fail");
+        const sessionId = "${sessionId}";
 
         checkoutForm.addEventListener("submit", async (e) => {
           e.preventDefault();
@@ -386,9 +395,13 @@ router.get("/billing/mock-checkout", async (req, res) => {
           btnPay.innerHTML = "Processing payment...";
 
           try {
+            const headers = { "Content-Type": "application/json" };
+            if (sessionId) {
+              headers["x-session-id"] = sessionId;
+            }
             const res = await fetch("/api/billing/mock-payment-success", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers,
               body: JSON.stringify({
                 tenantId: "${tenantId}",
                 plan: "${plan}",
@@ -415,9 +428,13 @@ router.get("/billing/mock-checkout", async (req, res) => {
           btnFail.innerHTML = "Simulating fail...";
 
           try {
+            const headers = { "Content-Type": "application/json" };
+            if (sessionId) {
+              headers["x-session-id"] = sessionId;
+            }
             const res = await fetch("/api/billing/mock-payment-fail", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers,
               body: JSON.stringify({
                 tenantId: "${tenantId}"
               })
@@ -440,70 +457,72 @@ router.get("/billing/mock-checkout", async (req, res) => {
     </body>
     </html>
   `);
-});
+  });
 
-// 6. Mock Success Payment Handler
-router.post("/billing/mock-payment-success", idempotencyMiddleware, async (req, res) => {
-  if (isProductionEnvironment()) {
-    return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Mock billing is disabled in production." });
-  }
-  const { tenantId, plan, email } = req.body;
-  if (!tenantId) {
-    return res.status(400).json({ success: false, error: "MISSING_TENANT", message: "Tenant ID is required." });
-  }
-  try {
-    await saveSubscription(tenantId, {
-      plan: plan || "pro",
-      status: "active",
-      stripeCustomerId: `mock_cus_${Date.now()}`,
-      stripeSubscriptionId: `mock_sub_${Date.now()}`,
-      isReadOnly: false
-    });
-    console.log(`[Stripe Billing Simulator] Success processed. Plan set to ${plan} for tenant ${tenantId}`);
-    res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+  // 6. Mock Success Payment Handler
+  router.post("/billing/mock-payment-success", authMiddleware, idempotencyMiddleware, async (req, res) => {
+    if (isProductionEnvironment()) {
+      return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Mock billing is disabled in production." });
+    }
+    const tenantId = (req as any).tenantId || req.body.tenantId;
+    const { plan, email } = req.body;
+    if (!tenantId) {
+      return res.status(400).json({ success: false, error: "MISSING_TENANT", message: "Tenant ID is required." });
+    }
+    try {
+      await saveSubscription(tenantId, {
+        plan: plan || "pro",
+        status: "active",
+        stripeCustomerId: `mock_cus_${Date.now()}`,
+        stripeSubscriptionId: `mock_sub_${Date.now()}`,
+        isReadOnly: false
+      });
+      console.log(`[Stripe Billing Simulator] Success processed. Plan set to ${plan} for tenant ${tenantId}`);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
 
-// 7. Mock Failed Payment Handler
-router.post("/billing/mock-payment-fail", idempotencyMiddleware, async (req, res) => {
-  if (isProductionEnvironment()) {
-    return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Mock billing is disabled in production." });
-  }
-  const { tenantId } = req.body;
-  if (!tenantId) {
-    return res.status(400).json({ success: false, error: "MISSING_TENANT", message: "Tenant ID is required." });
-  }
-  try {
-    const current = await getSubscription(tenantId);
-    await saveSubscription(tenantId, {
-      ...current,
-      status: "past_due",
-      isReadOnly: true
-    });
-    console.log(`[Stripe Billing Simulator] Failed payment simulated. Tenant ${tenantId} placed in READ-ONLY mode.`);
-    res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+  // 7. Mock Failed Payment Handler
+  router.post("/billing/mock-payment-fail", authMiddleware, idempotencyMiddleware, async (req, res) => {
+    if (isProductionEnvironment()) {
+      return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Mock billing is disabled in production." });
+    }
+    const tenantId = (req as any).tenantId || req.body.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ success: false, error: "MISSING_TENANT", message: "Tenant ID is required." });
+    }
+    try {
+      const current = await getSubscription(tenantId);
+      await saveSubscription(tenantId, {
+        ...current,
+        status: "past_due",
+        isReadOnly: true
+      });
+      console.log(`[Stripe Billing Simulator] Failed payment simulated. Tenant ${tenantId} placed in READ-ONLY mode.`);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
 
-// 8. Serve HTML Mock Billing Portal
-router.get("/billing/mock-portal", async (req, res) => {
-  if (isProductionEnvironment()) {
-    return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Mock billing is disabled in production." });
-  }
-  const tenantId = req.query.tenantId as string;
-  if (!tenantId) {
-    return res.status(400).send("Tenant identifier is required for mock portal.");
-  }
-  const origin = req.query.origin as string || "http://localhost:3000";
+  // 8. Serve HTML Mock Billing Portal
+  router.get("/billing/mock-portal", authMiddleware, async (req, res) => {
+    if (isProductionEnvironment()) {
+      return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Mock billing is disabled in production." });
+    }
+    const tenantId = (req as any).tenantId || (req.query.tenantId as string);
+    if (!tenantId) {
+      return res.status(400).send("Tenant identifier is required for mock portal.");
+    }
+    const origin = (req.query.origin as string) || "http://localhost:3000";
+    const sessionId = (req as any).session?.id || (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || "";
 
-  const sub = await getSubscription(tenantId);
-  const planLimits = sub.plan === "pro" ? "Up to 10 staff members and 500 monthly orders" : sub.plan === "enterprise" ? "Unlimited staff members and unlimited orders" : "Up to 3 staff members and 30 orders";
+    const sub = await getSubscription(tenantId);
+    const planLimits = sub.plan === "pro" ? "Up to 10 staff members and 500 monthly orders" : sub.plan === "enterprise" ? "Unlimited staff members and unlimited orders" : "Up to 3 staff members and 30 orders";
 
-  res.send(`
+    res.send(`
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -574,11 +593,17 @@ router.get("/billing/mock-portal", async (req, res) => {
       </div>
 
       <script>
+        const sessionId = "${sessionId}";
+
         async function updateSubscription(targetPlan) {
           try {
+            const headers = { "Content-Type": "application/json" };
+            if (sessionId) {
+              headers["x-session-id"] = sessionId;
+            }
             const res = await fetch("/api/billing/mock-payment-success", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers,
               body: JSON.stringify({
                 tenantId: "${tenantId}",
                 plan: targetPlan
@@ -597,9 +622,13 @@ router.get("/billing/mock-portal", async (req, res) => {
 
         async function simulateFailure() {
           try {
+            const headers = { "Content-Type": "application/json" };
+            if (sessionId) {
+              headers["x-session-id"] = sessionId;
+            }
             const res = await fetch("/api/billing/mock-payment-fail", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers,
               body: JSON.stringify({
                 tenantId: "${tenantId}"
               })
@@ -618,6 +647,7 @@ router.get("/billing/mock-portal", async (req, res) => {
     </body>
     </html>
   `);
-});
+  });
+}
 
 export default router;

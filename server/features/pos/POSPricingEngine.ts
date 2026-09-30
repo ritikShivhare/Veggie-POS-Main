@@ -73,6 +73,7 @@ export class POSPricingEngine {
       selectedCustomerId?: string;
       managerPin?: string;
       paymentAmount?: number;
+      recalculateTotals?: boolean;
     },
     userContext?: {
       role?: string;
@@ -197,11 +198,13 @@ export class POSPricingEngine {
           throw new FinancialValidationError("INVALID_PRICE", `Price for '${authoritativeMenuItem.name}' cannot be negative or invalid.`, 400);
         }
         if (Math.abs(parsedClientPrice - unitPrice) > 0.05) {
-          throw new FinancialValidationError(
-            "PRICE_TAMPERING_DETECTED",
-            `Client-provided price (₹${parsedClientPrice}) for '${authoritativeMenuItem.name}' does not match authoritative menu price (₹${unitPrice}). Request rejected.`,
-            400
-          );
+          if (!rawOrder.recalculateTotals) {
+            throw new FinancialValidationError(
+              "PRICE_TAMPERING_DETECTED",
+              `Client-provided price (₹${parsedClientPrice}) for '${authoritativeMenuItem.name}' does not match authoritative menu price (₹${unitPrice}). Request rejected.`,
+              400
+            );
+          }
         }
       }
 
@@ -318,31 +321,33 @@ export class POSPricingEngine {
     const calculatedTotal = Math.max(0, Number((calculatedSubtotal + calculatedTax - totalDiscount).toFixed(2)));
 
     // 5. Compare with client-provided totals if supplied (Defense against tampering)
-    if (rawOrder.total !== undefined) {
-      const clientTotal = Number(rawOrder.total);
-      if (isNaN(clientTotal) || clientTotal < 0) {
-        throw new FinancialValidationError("INVALID_PRICE", "Total cannot be negative or NaN.", 400);
+    if (!rawOrder.recalculateTotals) {
+      if (rawOrder.total !== undefined) {
+        const clientTotal = Number(rawOrder.total);
+        if (isNaN(clientTotal) || clientTotal < 0) {
+          throw new FinancialValidationError("INVALID_PRICE", "Total cannot be negative or NaN.", 400);
+        }
+        if (Math.abs(clientTotal - calculatedTotal) > 0.05) {
+          throw new FinancialValidationError(
+            "FINANCIAL_TAMPERING_DETECTED",
+            `Client-provided total (₹${clientTotal}) does not match authoritative calculated total (₹${calculatedTotal}). Request rejected.`,
+            400
+          );
+        }
       }
-      if (Math.abs(clientTotal - calculatedTotal) > 0.05) {
-        throw new FinancialValidationError(
-          "FINANCIAL_TAMPERING_DETECTED",
-          `Client-provided total (₹${clientTotal}) does not match authoritative calculated total (₹${calculatedTotal}). Request rejected.`,
-          400
-        );
-      }
-    }
 
-    if (rawOrder.subtotal !== undefined) {
-      const clientSubtotal = Number(rawOrder.subtotal);
-      if (isNaN(clientSubtotal) || clientSubtotal < 0) {
-        throw new FinancialValidationError("INVALID_PRICE", "Subtotal cannot be negative or NaN.", 400);
-      }
-      if (Math.abs(clientSubtotal - calculatedSubtotal) > 0.05) {
-        throw new FinancialValidationError(
-          "FINANCIAL_TAMPERING_DETECTED",
-          `Client-provided subtotal (₹${clientSubtotal}) does not match authoritative calculated subtotal (₹${calculatedSubtotal}). Request rejected.`,
-          400
-        );
+      if (rawOrder.subtotal !== undefined) {
+        const clientSubtotal = Number(rawOrder.subtotal);
+        if (isNaN(clientSubtotal) || clientSubtotal < 0) {
+          throw new FinancialValidationError("INVALID_PRICE", "Subtotal cannot be negative or NaN.", 400);
+        }
+        if (Math.abs(clientSubtotal - calculatedSubtotal) > 0.05) {
+          throw new FinancialValidationError(
+            "FINANCIAL_TAMPERING_DETECTED",
+            `Client-provided subtotal (₹${clientSubtotal}) does not match authoritative calculated subtotal (₹${calculatedSubtotal}). Request rejected.`,
+            400
+          );
+        }
       }
     }
 

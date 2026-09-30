@@ -317,18 +317,18 @@ describe("Express idempotencyMiddleware Unit Tests", () => {
     });
 
     // New request with lease duration arrives
-    const reservation = await service.reserveOrGetRecord({
-      tenantId: "tenant-pos-1",
-      idempotencyKey: idKey,
-      requestPath: "/api/orders",
-      requestMethod: "POST",
-      requestHash: "new-request-hash",
-      leaseDurationMs: 30000
-    });
+    const reservation = await service.reserveOrGetRecord(
+      "tenant-pos-1",
+      idKey,
+      "dummy-hash",
+      "/api/orders",
+      "POST"
+    );
 
     // Should have re-claimed reservation because previous expired
-    expect(reservation.isNewReservation).toBe(true);
-    expect(reservation.record.status).toBe("PROCESSING");
-    expect(reservation.record.request_hash).toBe("new-request-hash");
+    expect(reservation.status).toBe("RESERVED");
+    const updatedRecord = await service.getRecord("tenant-pos-1", idKey);
+    expect(updatedRecord?.status).toBe("PROCESSING");
+    expect(updatedRecord?.request_hash).toBe("dummy-hash");
   });
 });

@@ -166,11 +166,7 @@ export const PUBLIC_ROUTES = [
   { method: "POST", path: "/api/saas-admin/login" },
   { method: "POST", path: "/api/webhooks/stripe" },
   { method: "POST", path: "/api/monitoring/report-error" },
-  { method: "POST", path: "/api/copilot-chat" },
-  { method: "GET", path: "/api/billing/mock-checkout" },
-  { method: "POST", path: "/api/billing/mock-payment-success" },
-  { method: "POST", path: "/api/billing/mock-payment-fail" },
-  { method: "GET", path: "/api/billing/mock-portal" }
+  { method: "POST", path: "/api/copilot-chat" }
 ];
 
 export function isPublicRoute(req: express.Request): boolean {
@@ -199,11 +195,17 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     return next();
   }
 
+  const querySessionId =
+    process.env.NODE_ENV !== "production" && typeof req.query?.sessionId === "string"
+      ? (req.query.sessionId as string)
+      : undefined;
+
   const headerSessionId =
     (req.headers["x-session-id"] as string) ||
     (typeof req.headers["authorization"] === "string" && req.headers["authorization"].startsWith("Bearer ")
       ? req.headers["authorization"].substring(7).trim()
-      : undefined);
+      : undefined) ||
+    querySessionId;
 
   const cookieSessionId = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
 

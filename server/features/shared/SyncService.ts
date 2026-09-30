@@ -41,11 +41,23 @@ export class SyncService {
   }
 
   /**
+   * Extracts a comparable numeric millisecond timestamp from an entity record.
+   * Checks updatedAt, updated_at, createdAt, created_at, or returns null.
+   */
+  private getRecordTimestamp(record: any): number | null {
+    if (!record || typeof record !== "object") return null;
+    const raw = record.updatedAt || record.updated_at || record.createdAt || record.created_at;
+    if (!raw) return null;
+    const ts = new Date(raw).getTime();
+    return isNaN(ts) ? null : ts;
+  }
+
+  /**
    * Compares two entity records to detect if meaningful business fields have been modified,
-   * ignoring version, updated_at, and accounting for bcrypt PIN hashes on staff.
+   * ignoring version, updated_at, updatedAt, and accounting for bcrypt PIN hashes on staff.
    */
   private isRecordModified(sliceName: string, existing: any, incoming: any): boolean {
-    const ignoreKeys = ["version", "updated_at"];
+    const ignoreKeys = ["version", "updated_at", "updatedAt"];
     const allKeys = new Set([...Object.keys(existing || {}), ...Object.keys(incoming || {})]);
 
     for (const k of allKeys) {
@@ -76,9 +88,11 @@ export class SyncService {
   }
 
   /**
-   * Validates incoming items against existing items using conditional version checks.
-   * If an incoming item specifies a stale version, throws 409 OptimisticLockConflictError.
-   * Increments version on modified items.
+   * Safely merges incoming items with existing server items preventing data-loss:
+   * 1. Safe merging: Never drops existing server records missing from incoming payload (offline client safe merge).
+   * 2. Timestamp check: Only updates server record if incoming has a strictly newer 'updatedAt' timestamp.
+   * 3. Stale snapshot protection: Retains server's newer records when client submits older/stale snapshot.
+   * 4. Version increments: Monotonically increments version on applied updates.
    */
   private applyOptimisticLocking<T extends Record<string, any>>(
     sliceName: string,
@@ -91,37 +105,76 @@ export class SyncService {
       return incomingItems.map((item) => ({
         ...item,
         version: typeof item.version === "number" ? item.version : 1,
-        updated_at: item.updated_at || new Date().toISOString()
+        updated_at: item.updated_at || item.updatedAt || new Date().toISOString()
       }));
     }
 
     const existingMap = new Map<string, T>();
     for (const item of existingItems) {
-      const key = String(item[idKey]);
+      const key = String(item[idKey] ?? (item as any).id ?? "");
       if (key) existingMap.set(key, item);
     }
 
     const processedKeys = new Set<string>();
     const result: T[] = [];
+
     for (const incoming of incomingItems) {
-      const key = String(incoming[idKey]);
+      const key = String(incoming[idKey] ?? (incoming as any).id ?? "");
       if (key) processedKeys.add(key);
       const existing = existingMap.get(key);
 
+      // CASE 1: Brand new item created by client (e.g. offline created order)
       if (!existing) {
-        // Brand new item: assign version 1
         result.push({
           ...incoming,
           version: typeof incoming.version === "number" ? incoming.version : 1,
-          updated_at: incoming.updated_at || new Date().toISOString()
+          updated_at: incoming.updated_at || incoming.updatedAt || new Date().toISOString()
         });
         continue;
       }
 
+      // CASE 2: Item exists both on server and in client payload
       const currentVersion = typeof existing.version === "number" ? existing.version : 1;
       const incomingVersion = incoming.version;
 
-      // Conditional update check: require WHERE id = ? AND version = ?
+      const existingTimestamp = this.getRecordTimestamp(existing);
+      const incomingTimestamp = this.getRecordTimestamp(incoming);
+
+      // Check if any business field has changed
+      const hasChanged = this.isRecordModified(sliceName, existing, incoming);
+
+      if (!hasChanged) {
+        // Record was not modified: preserve the existing authoritative server record
+        result.push({
+          ...existing,
+          pin: (sliceName === "staff" && existing.pin) ? existing.pin : incoming.pin
+        });
+        continue;
+      }
+
+      // Business fields were modified:
+      // Timestamp check: Only update a server record if the client's version has a strictly newer timestamp
+      if (incomingTimestamp !== null && existingTimestamp !== null) {
+        if (incomingTimestamp > existingTimestamp) {
+          // Client has a newer timestamp -> accept update and increment version
+          result.push({
+            ...incoming,
+            version: currentVersion + 1,
+            updated_at: incoming.updated_at || incoming.updatedAt || new Date().toISOString()
+          });
+          continue;
+        } else {
+          // Client timestamp is older or equal -> Stale snapshot update!
+          // DO NOT overwrite the newer server version with stale client data
+          console.warn(
+            `[SyncService] Stale record skipped for ${sliceName} [${key}]: client timestamp (${incoming.updatedAt || incoming.updated_at}) <= server timestamp (${existing.updated_at || existing.updatedAt}). Preserving server record.`
+          );
+          result.push(existing);
+          continue;
+        }
+      }
+
+      // If timestamps are not both available to compare, enforce optimistic version check
       if (incomingVersion !== undefined && incomingVersion !== currentVersion) {
         throw new OptimisticLockConflictError(
           `Optimistic lock conflict on '${sliceName}' for ${idKey} '${key}': client sent version ${incomingVersion}, but server current version is ${currentVersion}. Stale update rejected.`,
@@ -129,23 +182,12 @@ export class SyncService {
         );
       }
 
-      // Check if any business field has changed
-      const hasChanged = this.isRecordModified(sliceName, existing, incoming);
-
-      if (hasChanged) {
-        result.push({
-          ...incoming,
-          version: currentVersion + 1,
-          updated_at: new Date().toISOString()
-        });
-      } else {
-        result.push({
-          ...incoming,
-          pin: (sliceName === "staff" && existing.pin) ? existing.pin : incoming.pin,
-          version: currentVersion,
-          updated_at: existing.updated_at || new Date().toISOString()
-        });
-      }
+      // Incoming version matches or was omitted
+      result.push({
+        ...incoming,
+        version: currentVersion + 1,
+        updated_at: new Date().toISOString()
+      });
     }
 
     // CRITICAL DATA-LOSS PREVENTION:
@@ -211,7 +253,8 @@ export class SyncService {
       existingOrders,
       existingCustomers,
       existingPurchases,
-      existingShifts
+      existingShifts,
+      existingSettings
     ] = await Promise.all([
       payload.menuItems !== undefined ? this.menuRepo.getAll(tenantId) : Promise.resolve(null),
       payload.ingredients !== undefined ? this.ingredientRepo.getAll(tenantId) : Promise.resolve(null),
@@ -220,10 +263,11 @@ export class SyncService {
       payload.orders !== undefined ? this.orderRepo.getAll(tenantId) : Promise.resolve(null),
       payload.customers !== undefined ? this.customerRepo.getAll(tenantId) : Promise.resolve(null),
       payload.purchases !== undefined ? this.purchaseRepo.getAll(tenantId) : Promise.resolve(null),
-      payload.shifts !== undefined ? this.shiftRepo.getAll(tenantId) : Promise.resolve(null)
+      payload.shifts !== undefined ? this.shiftRepo.getAll(tenantId) : Promise.resolve(null),
+      payload.settings !== undefined ? this.settingsRepo.get(tenantId) : Promise.resolve(null)
     ]);
 
-    // 2. Validate versions and apply conditional updates (rejects stale updates with 409)
+    // 2. Validate versions and apply conditional updates (rejects stale updates or preserves newer server state)
     const validatedMenu = payload.menuItems !== undefined
       ? this.applyOptimisticLocking<MenuItem>("menu_items", (existingMenu || []) as MenuItem[], payload.menuItems, "id")
       : undefined;
@@ -240,37 +284,53 @@ export class SyncService {
       ? this.applyOptimisticLocking<StaffMember>("staff", (existingStaff || []) as StaffMember[], payload.staffList, "id")
       : undefined;
 
-    // Validate orders authoritatively against tenant menu
+    // Validate orders authoritatively against tenant menu (enforced for both NEW and UPDATED orders)
     let ordersToStage = payload.orders;
     if (ordersToStage !== undefined && Array.isArray(ordersToStage)) {
       const sanitizedOrders: Order[] = [];
+      const effectiveMenu = payload.menuItems || existingMenu || undefined;
+
       for (const ord of ordersToStage) {
-        if (!ord.items || ord.items.length === 0) {
+        const existingOrd = (existingOrders || []).find((eo: any) => eo.id === ord.id);
+        const itemsToValidate = (ord.items && ord.items.length > 0) ? ord.items : existingOrd?.items;
+
+        if (!itemsToValidate || itemsToValidate.length === 0) {
           sanitizedOrders.push(ord);
           continue;
         }
-        const existingOrd = (existingOrders || []).find((eo: any) => eo.id === ord.id);
-        if (!existingOrd) {
-          try {
-            const effectiveMenu = payload.menuItems || existingMenu || undefined;
-            const calc = await posPricingEngine.validateAndCalculateOrder(tenantId, ord, undefined, effectiveMenu);
-            sanitizedOrders.push({
-              ...ord,
-              subtotal: calc.subtotal,
-              tax: calc.tax,
-              discount: calc.discount,
-              total: calc.total
-            });
-          } catch (err: any) {
-            if (err?.code === "CROSS_TENANT_VIOLATION" || err?.name === "CrossTenantViolationError") {
-              throw err;
-            }
-            if (err?.name === "FinancialValidationError" || err?.code === "PRICE_TAMPERING_DETECTED") {
-              throw err;
-            }
-            sanitizedOrders.push(ord);
+
+        // Authoritatively validate and calculate order pricing for both new and existing updated orders.
+        // Never allow the client to dictate total, subtotal, tax, or discount arbitrarily.
+        try {
+          const calc = await posPricingEngine.validateAndCalculateOrder(
+            tenantId,
+            { ...ord, items: itemsToValidate, recalculateTotals: true },
+            undefined,
+            effectiveMenu
+          );
+          sanitizedOrders.push({
+            ...ord,
+            items: calc.validatedItems.length > 0 ? calc.validatedItems : itemsToValidate,
+            subtotal: calc.subtotal,
+            tax: calc.tax,
+            discount: calc.discount,
+            total: calc.total
+          });
+        } catch (err: any) {
+          if (err?.code === "CROSS_TENANT_VIOLATION" || err?.name === "CrossTenantViolationError") {
+            throw err;
           }
-        } else {
+          if (
+            err?.name === "FinancialValidationError" ||
+            err?.code === "PRICE_TAMPERING_DETECTED" ||
+            err?.code === "FINANCIAL_TAMPERING_DETECTED" ||
+            err?.code === "INVALID_MENU_ITEM" ||
+            err?.code === "ITEM_UNAVAILABLE" ||
+            err?.code === "INVALID_QUANTITY" ||
+            err?.code === "QUANTITY_EXCEEDED"
+          ) {
+            throw err;
+          }
           sanitizedOrders.push(ord);
         }
       }
@@ -321,7 +381,17 @@ export class SyncService {
         await this.shiftRepo.saveAll(tenantId, validatedShifts, trx);
       }
       if (payload.settings !== undefined) {
-        await this.settingsRepo.save(tenantId, payload.settings, trx);
+        let settingsToSave = payload.settings;
+        if (existingSettings) {
+          const existingTs = this.getRecordTimestamp(existingSettings);
+          const incomingTs = this.getRecordTimestamp(payload.settings);
+          if (incomingTs !== null && existingTs !== null && incomingTs <= existingTs) {
+            settingsToSave = { ...payload.settings, ...existingSettings };
+          } else {
+            settingsToSave = { ...existingSettings, ...payload.settings };
+          }
+        }
+        await this.settingsRepo.save(tenantId, settingsToSave, trx);
       }
     });
 
