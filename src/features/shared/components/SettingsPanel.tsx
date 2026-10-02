@@ -1,10 +1,12 @@
-import React, { useState } from "react";
-import { Settings, ShieldCheck, RefreshCw, UserMinus, AlertTriangle, CheckCircle2, Bell, Mail, Activity, Lock, Globe, Percent, Receipt } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Settings, ShieldCheck, RefreshCw, UserMinus, AlertTriangle, CheckCircle2, Bell, Mail, Activity, Lock, Globe, Percent, Receipt, QrCode, Smartphone, Copy, Check, Info, IndianRupee, Sparkles, ExternalLink } from "lucide-react";
+import QRCode from "qrcode";
 import { BillingSettings } from "./BillingSettings";
 import { RestaurantTenant, InventorySettings, StaffMember, MenuItem, Ingredient, Recipe, Order, Customer, Purchase, Shift } from "../types";
 
 interface SettingsPanelProps {
   activeTenant: RestaurantTenant;
+  setActiveTenant?: React.Dispatch<React.SetStateAction<RestaurantTenant>>;
   settings: InventorySettings;
   setSettings: (s: InventorySettings) => void;
   toastMessage: { type: "success" | "error"; text: string } | null;
@@ -27,6 +29,7 @@ interface SettingsPanelProps {
 
 export default function SettingsPanel({
   activeTenant,
+  setActiveTenant,
   settings,
   setSettings,
   toastMessage,
@@ -63,6 +66,166 @@ export default function SettingsPanel({
   const [pwError, setPwError] = useState("");
   const [pwSuccess, setPwSuccess] = useState("");
 
+  // GSTIN & UPI QR Payment states
+  const [gstinInput, setGstinInput] = useState<string>(() => settings.gstin || activeTenant.gstin || "");
+  const [upiInputVpa, setUpiInputVpa] = useState<string>(() => settings.upiVpa || activeTenant.vpa || "");
+  const [upiMerchantInput, setUpiMerchantInput] = useState<string>(() => settings.upiMerchantName || activeTenant.upiMerchantName || activeTenant.name || "");
+  const [testAmount, setTestAmount] = useState<string>("1.00");
+  const [qrPreviewUrl, setQrPreviewUrl] = useState<string | null>(null);
+  const [copiedUpi, setCopiedUpi] = useState<boolean>(false);
+  const [isSavingTaxPayment, setIsSavingTaxPayment] = useState<boolean>(false);
+
+  // Sync inputs if activeTenant or settings change externally
+  useEffect(() => {
+    setGstinInput(settings.gstin || activeTenant.gstin || "");
+  }, [settings.gstin, activeTenant.gstin]);
+
+  useEffect(() => {
+    setUpiInputVpa(settings.upiVpa || activeTenant.vpa || "");
+  }, [settings.upiVpa, activeTenant.vpa]);
+
+  useEffect(() => {
+    setUpiMerchantInput(settings.upiMerchantName || activeTenant.upiMerchantName || activeTenant.name || "");
+  }, [settings.upiMerchantName, activeTenant.upiMerchantName, activeTenant.name]);
+
+  // Live UPI QR code generation preview
+  useEffect(() => {
+    const rawVpa = (upiInputVpa || activeTenant.vpa || "").trim();
+    const vpa = rawVpa || "veggiepos@upi";
+    const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Veggie POS").trim());
+    const amt = parseFloat(testAmount) > 0 ? parseFloat(testAmount).toFixed(2) : "1.00";
+    const note = encodeURIComponent(`Test QR - ${activeTenant.name}`);
+    const uri = `upi://pay?pa=${vpa}&pn=${name}&am=${amt}&cu=INR&tn=${note}`;
+
+    QRCode.toDataURL(uri, {
+      width: 220,
+      margin: 1,
+      color: {
+        dark: "#181A18",
+        light: "#FFFFFF"
+      },
+      errorCorrectionLevel: "M"
+    })
+      .then((url) => setQrPreviewUrl(url))
+      .catch((err) => console.error("Error generating UPI preview QR:", err));
+  }, [upiInputVpa, upiMerchantInput, testAmount, activeTenant]);
+
+  const INDIAN_STATE_CODES: Record<string, string> = {
+    "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
+    "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan",
+    "09": "Uttar Pradesh", "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh",
+    "13": "Nagaland", "14": "Manipur", "15": "Mizoram", "16": "Tripura",
+    "17": "Meghalaya", "18": "Assam", "19": "West Bengal", "20": "Jharkhand",
+    "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+    "26": "Dadra & Nagar Haveli and Daman & Diu", "27": "Maharashtra", "28": "Andhra Pradesh",
+    "29": "Karnataka", "30": "Goa", "31": "Lakshadweep", "32": "Kerala",
+    "33": "Tamil Nadu", "34": "Puducherry", "35": "Andaman & Nicobar Islands",
+    "36": "Telangana", "37": "Andhra Pradesh (New)", "38": "Ladakh"
+  };
+
+  const getGstinStatus = (val: string) => {
+    const clean = val.trim().toUpperCase();
+    if (!clean) {
+      return { isOptionalEmpty: true, text: "Optional: Leave empty if unregistered or under composition scheme", color: "text-slate-500", valid: true };
+    }
+    const statePrefix = clean.length >= 2 ? clean.substring(0, 2) : "";
+    const stateName = INDIAN_STATE_CODES[statePrefix];
+    const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+    
+    if (clean.length === 15) {
+      if (gstinRegex.test(clean)) {
+        return { 
+          isOptionalEmpty: false, 
+          text: `Valid GSTIN: ${stateName ? `${stateName} (${statePrefix})` : "Format OK"}`, 
+          color: "text-emerald-700 font-bold", 
+          valid: true 
+        };
+      }
+      return { 
+        isOptionalEmpty: false, 
+        text: "15 characters entered, but does not match standard 22AAAAA0000A1Z5 pattern.", 
+        color: "text-amber-600 font-medium", 
+        valid: false 
+      };
+    }
+    return { 
+      isOptionalEmpty: false, 
+      text: `${clean.length}/15 chars. ${stateName ? `State: ${stateName}. ` : ""}Standard: 2 state + 10 PAN + 1 entity + Z + 1 check`, 
+      color: "text-blue-600 font-medium", 
+      valid: false 
+    };
+  };
+
+  const getUpiStatus = (val: string) => {
+    const clean = val.trim();
+    if (!clean || clean === "veggiepos@upi") {
+      return { 
+        isConfigured: false, 
+        text: "Unconfigured: Customer payment apps will show 'Invalid UPI ID'. Please enter your real UPI ID.", 
+        color: "text-amber-800 bg-amber-50 border-amber-200" 
+      };
+    }
+    const upiRegex = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z0-9.\-_]{2,64}$/;
+    if (upiRegex.test(clean)) {
+      return { 
+        isConfigured: true, 
+        text: "Valid UPI VPA: Ready for real-time customer payments to your bank account.", 
+        color: "text-emerald-800 bg-emerald-50 border-emerald-200" 
+      };
+    }
+    return { 
+      isConfigured: false, 
+      text: "Invalid UPI format. Expected format: username@bank (e.g. restaurant@okhdfcbank or 9876543210@paytm).", 
+      color: "text-rose-800 bg-rose-50 border-rose-200" 
+    };
+  };
+
+  const handleSaveTaxAndPaymentSettings = () => {
+    setIsSavingTaxPayment(true);
+    const cleanedGstin = gstinInput.trim().toUpperCase();
+    const cleanedVpa = upiInputVpa.trim();
+    const cleanedMerchant = upiMerchantInput.trim();
+
+    // 1. Update settings
+    const updatedSettings: InventorySettings = {
+      ...settings,
+      gstin: cleanedGstin,
+      upiVpa: cleanedVpa,
+      upiMerchantName: cleanedMerchant
+    };
+    setSettings(updatedSettings);
+
+    // 2. Synchronize activeTenant
+    const updatedTenant: RestaurantTenant = {
+      ...activeTenant,
+      gstin: cleanedGstin,
+      vpa: cleanedVpa,
+      upiMerchantName: cleanedMerchant
+    };
+
+    if (setActiveTenant) {
+      setActiveTenant(updatedTenant);
+    }
+
+    const updatedTenants = tenants.map((t) =>
+      t.tenantId === activeTenant.tenantId ? updatedTenant : t
+    );
+    setTenants(updatedTenants);
+    try {
+      localStorage.setItem("veggiepos_tenants", JSON.stringify(updatedTenants));
+    } catch (e) {
+      console.warn("Error saving updated tenants to localStorage:", e);
+    }
+
+    setTimeout(() => {
+      setIsSavingTaxPayment(false);
+      setToastMessage({
+        type: "success",
+        text: "GSTIN and UPI QR payment settings saved and synced successfully!"
+      });
+    }, 200);
+  };
+
   const translations: Record<string, Record<string, string>> = {
     en: {
       terminalRules: "Terminal & Operational Rules",
@@ -74,7 +237,7 @@ export default function SettingsPanel({
       passwordTab: "Change PIN / Password",
       languageTab: "Language Change",
       currentPin: "Current PIN/Password",
-      newPin: "New PIN/Password (4 digits)",
+      newPin: "New PIN/Password (4-6 digits)",
       confirmPin: "Confirm New PIN/Password",
       saveChanges: "Save Security Changes",
       selectLanguage: "Select Terminal Language",
@@ -91,7 +254,7 @@ export default function SettingsPanel({
       passwordTab: "पिन / पासवर्ड बदलें",
       languageTab: "भाषा बदलें",
       currentPin: "वर्तमान पिन/पासवर्ड",
-      newPin: "नया पिन/पासवर्ड (4 अंक)",
+      newPin: "नया पिन/पासवर्ड (4-6 अंक)",
       confirmPin: "नया पिन/पासवर्ड पुष्टि करें",
       saveChanges: "सुरक्षा परिवर्तन सहेजें",
       selectLanguage: "टर्मिनल भाषा चुनें",
@@ -108,7 +271,7 @@ export default function SettingsPanel({
       passwordTab: "Cambiar PIN / Contraseña",
       languageTab: "Cambiar Idioma",
       currentPin: "PIN/Contraseña Actual",
-      newPin: "Nuevo PIN/Contraseña (4 dígitos)",
+      newPin: "Nuevo PIN/Contraseña (4-6 dígitos)",
       confirmPin: "Confirmar Nuevo PIN/Contraseña",
       saveChanges: "Guardar Cambios de Seguridad",
       selectLanguage: "Seleccionar Idioma de la Terminal",
@@ -125,7 +288,7 @@ export default function SettingsPanel({
       passwordTab: "Modifier le PIN / Mot de passe",
       languageTab: "Changer de Langue",
       currentPin: "PIN/Mot de passe Actuel",
-      newPin: "Nouveau PIN/Mot de passe (4 chiffres)",
+      newPin: "Nouveau PIN/Mot de passe (4-6 chiffres)",
       confirmPin: "Confirmer le Nouveau PIN/Mot de passe",
       saveChanges: "Enregistrer les Modifications",
       selectLanguage: "Sélectionner la Langue du Terminal",
@@ -153,8 +316,8 @@ export default function SettingsPanel({
       return;
     }
 
-    if (!/^\d{4}$/.test(newPinInput)) {
-      setPwError(currentLang === "hi" ? "नया पिन बिल्कुल 4 अंकों का होना चाहिए।" : "New PIN must be exactly 4 digits.");
+    if (!/^\d{4,6}$/.test(newPinInput)) {
+      setPwError(currentLang === "hi" ? "नया पिन 4 से 6 अंकों का होना चाहिए।" : "New PIN must be 4 to 6 digits.");
       return;
     }
 
@@ -183,6 +346,19 @@ export default function SettingsPanel({
       // Update currentStaff in localStorage
       const updatedCurrent = { ...currentStaff, pin: newPinInput };
       localStorage.setItem("veggiepos_current_staff", JSON.stringify(updatedCurrent));
+
+      // Synchronize owner PIN on tenant if current staff is Owner
+      if (currentStaff.role === "Owner" && setActiveTenant) {
+        const updatedTenant: RestaurantTenant = { ...activeTenant, ownerPin: newPinInput };
+        setActiveTenant(updatedTenant);
+        const updatedTenants = tenants.map((t) =>
+          t.tenantId === activeTenant.tenantId ? updatedTenant : t
+        );
+        setTenants(updatedTenants);
+        try {
+          localStorage.setItem("veggiepos_tenants", JSON.stringify(updatedTenants));
+        } catch (e) {}
+      }
 
       // Set Success message
       setPwSuccess(currentLang === "hi" ? "आपका सुरक्षा पिन सफलतापूर्वक बदल दिया गया है!" : "Your security PIN has been successfully changed!");
@@ -309,16 +485,16 @@ export default function SettingsPanel({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto animate-fadeIn">
         
         <div className="lg:col-span-5 flex flex-col gap-6 w-full">
-          {/* Restaurant GST % Tax Rate Configuration Card */}
-          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4" id="settings-gst-config-card">
+          {/* Restaurant Tax Rate & GSTIN (Optional) Configuration Card */}
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-5" id="settings-gst-config-card">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                   <Receipt className="w-5 h-5 text-emerald-600" />
-                  <span>Restaurant GST Tax Rate (%)</span>
+                  <span>Tax Rate & GSTIN Invoicing</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Modify the GST percentage rate applied to customer POS bills, invoices, and online orders.
+                  Configure GST percentage and your optional 15-character GSTIN number for customer receipts and legal tax invoices.
                 </p>
               </div>
               <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono font-bold text-xs rounded-full shrink-0 shadow-xs">
@@ -326,6 +502,7 @@ export default function SettingsPanel({
               </span>
             </div>
 
+            {/* GST Rate Preset Buttons */}
             <div className="space-y-3">
               <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider font-mono">
                 Quick Preset Rates
@@ -358,7 +535,7 @@ export default function SettingsPanel({
                 })}
               </div>
 
-              <div className="pt-2 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <div className="pt-1 flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div className="w-full sm:w-1/2">
                   <label className="block text-[11px] font-bold text-slate-600 mb-1">
                     Custom GST Percentage (%)
@@ -384,9 +561,238 @@ export default function SettingsPanel({
                   </div>
                 </div>
                 <p className="text-[11px] text-slate-500 italic leading-snug w-full sm:w-1/2">
-                  ⚡ Restaurant owners can fix or adjust this tax rate at any time. Changes take effect instantly across all cashier billing terminals.
+                  ⚡ Updates apply instantly to all POS cashier checkout orders.
                 </p>
               </div>
+            </div>
+
+            {/* GSTIN Number Input Section (Optional) */}
+            <div className="border-t border-slate-100 pt-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-800">
+                  Restaurant GSTIN Number <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-semibold">
+                  15-Alphanumeric
+                </span>
+              </div>
+
+              <div className="relative">
+                <input
+                  type="text"
+                  maxLength={15}
+                  value={gstinInput}
+                  onChange={(e) => setGstinInput(e.target.value.toUpperCase())}
+                  placeholder="e.g. 27AAAAA0000A1Z5 (or leave empty)"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-bold text-slate-800 tracking-wider uppercase focus:outline-none focus:border-emerald-500 focus:bg-white transition"
+                  id="settings-gstin-input"
+                />
+              </div>
+
+              {/* Status and State Indicator */}
+              <div className="text-[11px] leading-relaxed flex items-start gap-1.5">
+                <Info className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                <span className={getGstinStatus(gstinInput).color}>
+                  {getGstinStatus(gstinInput).text}
+                </span>
+              </div>
+
+              {/* Live Receipt Header Preview */}
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-[11px] font-mono text-slate-600 space-y-1">
+                <div className="flex items-center justify-between text-[10px] text-slate-400 font-sans font-bold uppercase tracking-wider">
+                  <span>Customer Thermal Receipt Preview:</span>
+                  <span className={gstinInput.trim() ? "text-emerald-600" : "text-slate-500"}>
+                    {gstinInput.trim() ? "✓ TAX INVOICE" : "RETAIL INVOICE"}
+                  </span>
+                </div>
+                <div className="bg-white p-2 rounded border border-dashed border-slate-300 text-center space-y-0.5">
+                  <div className="font-bold text-slate-800 text-xs">{activeTenant.name}</div>
+                  {gstinInput.trim() ? (
+                    <>
+                      <div className="text-emerald-700 font-bold">GSTIN: {gstinInput.trim().toUpperCase()}</div>
+                      <div className="text-[10px] font-bold text-slate-700 uppercase">*** TAX INVOICE ***</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-slate-400 text-[10px]">Composition Scheme / Non-GST Outlet</div>
+                      <div className="text-[10px] font-bold text-slate-700 uppercase">*** RETAIL CASH INVOICE ***</div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* UPI QR Code Payment & Bank Settlement Configuration Card */}
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-5" id="settings-upi-payment-card">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                  <QrCode className="w-5 h-5 text-blue-600" />
+                  <span>UPI QR Payment & Bank Settlement</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Configure your restaurant's bank UPI ID (VPA) so customers can scan and pay without "Invalid UPI ID" errors.
+                </p>
+              </div>
+              <div>
+                {upiInputVpa.trim() && upiInputVpa.trim() !== "veggiepos@upi" ? (
+                  <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono font-bold text-[11px] rounded-full flex items-center gap-1 shrink-0">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Bank Linked
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 font-mono font-bold text-[11px] rounded-full flex items-center gap-1 shrink-0 animate-pulse">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Action Required
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Why previous QR was invalid banner */}
+            <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl space-y-1 text-xs text-amber-900">
+              <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Why did the payment QR code show "Invalid" previously?</span>
+              </div>
+              <p className="text-[11px] text-amber-800/90 leading-relaxed">
+                When customers scan with <b>PhonePe, Google Pay, or Paytm</b>, the banking network looks up the receiver's UPI ID. If it is set to a placeholder (e.g. <code>veggiepos@upi</code>), the bank rejects the payment as <b>"Invalid UPI ID"</b>. Entering your authentic merchant/bank UPI ID below routes customer payments directly into your bank account.
+              </p>
+            </div>
+
+            {/* UPI ID / VPA Input */}
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  Restaurant UPI ID / VPA (Payee Virtual Address) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={upiInputVpa}
+                    onChange={(e) => setUpiInputVpa(e.target.value.trim())}
+                    placeholder="e.g. yourrestaurant@okhdfcbank or 9876543210@paytm"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-bold text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                    id="settings-upi-vpa-input"
+                  />
+                </div>
+                <div className={`mt-1.5 p-2 rounded-lg border text-[11px] leading-snug ${getUpiStatus(upiInputVpa).color}`}>
+                  {getUpiStatus(upiInputVpa).text}
+                </div>
+              </div>
+
+              {/* Merchant Display Name Input (Optional) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  Merchant / Payee Name <span className="text-slate-400 font-normal">(Optional, defaults to restaurant name)</span>
+                </label>
+                <input
+                  type="text"
+                  value={upiMerchantInput}
+                  onChange={(e) => setUpiMerchantInput(e.target.value)}
+                  placeholder={`e.g. ${activeTenant.name}`}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white transition"
+                  id="settings-upi-merchant-name-input"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  This business name appears on customer phone screens in PhonePe, GPay, Paytm, or BHIM before paying.
+                </p>
+              </div>
+            </div>
+
+            {/* Live Interactive Test QR Code */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-4">
+              <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center shrink-0">
+                {qrPreviewUrl ? (
+                  <img
+                    src={qrPreviewUrl}
+                    alt="Live Test UPI QR Code"
+                    className="w-32 h-32 rounded-lg object-contain"
+                    id="settings-test-qr-image"
+                  />
+                ) : (
+                  <div className="w-32 h-32 flex items-center justify-center text-slate-400 bg-slate-100 rounded-lg">
+                    <QrCode className="w-8 h-8 animate-pulse text-slate-300" />
+                  </div>
+                )}
+                <span className="text-[10px] font-mono text-slate-500 font-bold mt-1 text-center truncate max-w-[130px]">
+                  {upiInputVpa.trim() || "veggiepos@upi"}
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs w-full">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-700 flex items-center gap-1">
+                    <Smartphone className="w-3.5 h-3.5 text-blue-600" /> Test QR Scanner
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-400 font-mono">Amt:</span>
+                    <select
+                      value={testAmount}
+                      onChange={(e) => setTestAmount(e.target.value)}
+                      className="text-[11px] font-mono font-bold bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-700"
+                    >
+                      <option value="1.00">₹1.00 (Test)</option>
+                      <option value="10.00">₹10.00</option>
+                      <option value="100.00">₹100.00</option>
+                    </select>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Scan this live QR code right now with your phone's <b>PhonePe or Google Pay</b> to verify that your bank account and restaurant name load properly!
+                </p>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const vpa = (upiInputVpa || activeTenant.vpa || "veggiepos@upi").trim();
+                      const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Veggie POS").trim());
+                      const amt = parseFloat(testAmount) > 0 ? parseFloat(testAmount).toFixed(2) : "1.00";
+                      const uri = `upi://pay?pa=${vpa}&pn=${name}&am=${amt}&cu=INR&tn=TestQR`;
+                      navigator.clipboard?.writeText(uri);
+                      setCopiedUpi(true);
+                      setTimeout(() => setCopiedUpi(false), 2000);
+                    }}
+                    className="px-2.5 py-1 text-[11px] font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    {copiedUpi ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span className="text-emerald-700">Copied URI!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3 text-slate-400" />
+                        <span>Copy UPI URI</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Save Button for GSTIN & Payment Settings */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={handleSaveTaxAndPaymentSettings}
+                disabled={isSavingTaxPayment}
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                id="settings-save-tax-payment-btn"
+              >
+                {isSavingTaxPayment ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Saving & Syncing Settings...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Save & Apply GSTIN and UPI Payment Settings</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
@@ -729,7 +1135,7 @@ export default function SettingsPanel({
             ) : (
               <div className="space-y-6 mt-4">
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  As the <b>Restaurant Owner</b>, you have the administrative privilege to manage the 4-digit numeric code and module permissions for your team.
+                  As the <b>Restaurant Owner</b>, you have the administrative privilege to manage the 4 to 6 digit numeric PIN codes and module permissions for your team.
                 </p>
 
                 <div className="space-y-4 divide-y divide-slate-100">
@@ -745,17 +1151,17 @@ export default function SettingsPanel({
                             <span className="text-xs font-semibold text-slate-500">PIN:</span>
                             <input
                               type="text"
-                              maxLength={4}
+                              maxLength={6}
                               placeholder="PIN"
                               value={staff.pin}
                               onChange={(e) => {
-                                const val = e.target.value.replace(/\D/g, "");
+                                const val = e.target.value.replace(/\D/g, "").slice(0, 6);
                                 const updatedList = staffList.map((s) =>
                                   s.id === staff.id ? { ...s, pin: val } : s
                                 );
                                 setStaffList(updatedList);
                               }}
-                              className="w-16 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-center font-mono font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:bg-white text-xs"
+                              className="w-20 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-center font-mono font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:bg-white text-xs"
                             />
                           </div>
                           {staff.role !== "Owner" && (
@@ -871,10 +1277,10 @@ export default function SettingsPanel({
               <label className="font-bold text-slate-700 block">{t("currentPin")}</label>
               <input
                 type="password"
-                maxLength={4}
+                maxLength={6}
                 value={currentPinInput}
-                onChange={(e) => setCurrentPinInput(e.target.value.replace(/\D/g, ""))}
-                placeholder="••••"
+                onChange={(e) => setCurrentPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="••••••"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-center text-sm focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700 tracking-widest"
                 required
               />
@@ -884,10 +1290,10 @@ export default function SettingsPanel({
               <label className="font-bold text-slate-700 block">{t("newPin")}</label>
               <input
                 type="password"
-                maxLength={4}
+                maxLength={6}
                 value={newPinInput}
-                onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, ""))}
-                placeholder="••••"
+                onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="••••••"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-center text-sm focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700 tracking-widest"
                 required
               />
@@ -897,10 +1303,10 @@ export default function SettingsPanel({
               <label className="font-bold text-slate-700 block">{t("confirmPin")}</label>
               <input
                 type="password"
-                maxLength={4}
+                maxLength={6}
                 value={confirmPinInput}
-                onChange={(e) => setConfirmPinInput(e.target.value.replace(/\D/g, ""))}
-                placeholder="••••"
+                onChange={(e) => setConfirmPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="••••••"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-center text-sm focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700 tracking-widest"
                 required
               />

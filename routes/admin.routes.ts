@@ -24,6 +24,7 @@ import {
   getSessionCookieOptions
 } from "../server/features/auth/SessionService";
 import { hashPin } from "../server/features/auth/PinSecurityService";
+import { Database } from "../server/features/shared/database";
 
 const router = express.Router();
 
@@ -461,6 +462,216 @@ router.post("/admin/tenants/register", adminAuthMiddleware, async (req, res) => 
       tenant: publicTenant,
       message: `Tenant "${businessName}" successfully registered by Super-Admin.`
     });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// -----------------------------------------------------------------
+// Walkthrough Bookings & Leads Management Endpoints (Public & Admin)
+// -----------------------------------------------------------------
+
+export interface WalkthroughLeadRecord {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  restaurantName: string;
+  address: string; // Address column
+  format: string;
+  outletCount: string;
+  primaryGoal: string;
+  preferredDate?: string;
+  preferredTime: string;
+  notes?: string;
+  createdAt: string;
+  status: "new" | "contacted" | "scheduled" | "completed" | "converted" | "cancelled";
+  internalNotes?: string;
+}
+
+const DEFAULT_SAMPLE_LEADS: WalkthroughLeadRecord[] = [
+  {
+    id: "lead-sample-1",
+    fullName: "Vikram Malhotra",
+    email: "vikram@urbanbistro.in",
+    phone: "9820198201",
+    restaurantName: "Urban Bistro & Brews",
+    address: "Shop 14, High Street Mall, Senapati Bapat Road, Pune, Maharashtra - 411016",
+    format: "casual-dine",
+    outletCount: "2-4",
+    primaryGoal: "Recipe BOM stock & ingredient leakage control",
+    preferredDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+    preferredTime: "morning",
+    notes: "Facing inventory wastage issue across 2 locations.",
+    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
+    status: "new"
+  },
+  {
+    id: "lead-sample-2",
+    fullName: "Pooja Singhania",
+    email: "pooja@chaico.com",
+    phone: "9811234567",
+    restaurantName: "Chai & Conversations Cafe",
+    address: "Ground Floor, Cyber Hub, DLF Phase 2, Gurugram, Haryana - 122002",
+    format: "cafe-bakery",
+    outletCount: "5-10",
+    primaryGoal: "Fast PIN billing & speed at register",
+    preferredDate: new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10),
+    preferredTime: "afternoon",
+    notes: "Opening 2 more quick-service outlets next month, need fast counter setup.",
+    createdAt: new Date(Date.now() - 3600000 * 18).toISOString(),
+    status: "contacted",
+    internalNotes: "Spoke with manager on WhatsApp. Walkthrough call scheduled."
+  }
+];
+
+// 1. Public Endpoint: Book Walkthrough from Marketing Website
+router.post("/leads/walkthrough", async (req, res) => {
+  try {
+    const {
+      fullName,
+      email,
+      phone,
+      restaurantName,
+      address,
+      format,
+      outletCount,
+      primaryGoal,
+      preferredDate,
+      preferredTime,
+      notes
+    } = req.body;
+
+    if (!fullName || !phone || !restaurantName) {
+      return res.status(400).json({
+        success: false,
+        message: "Full name, phone number, and restaurant name are required."
+      });
+    }
+
+    const db = Database.getInstance();
+    let existingLeads = await db.getObject<WalkthroughLeadRecord[]>("system-tenant", "walkthrough_leads");
+    if (!existingLeads || !Array.isArray(existingLeads)) {
+      existingLeads = [...DEFAULT_SAMPLE_LEADS];
+    }
+
+    const newLead: WalkthroughLeadRecord = {
+      id: `lead-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      fullName: String(fullName).trim(),
+      email: String(email || "").trim(),
+      phone: String(phone).trim(),
+      restaurantName: String(restaurantName).trim(),
+      address: String(address || "").trim(),
+      format: format || "casual-dine",
+      outletCount: outletCount || "1",
+      primaryGoal: primaryGoal || "Fast PIN billing & speed at register",
+      preferredDate: preferredDate || new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+      preferredTime: preferredTime || "morning",
+      notes: notes ? String(notes).trim() : "",
+      createdAt: new Date().toISOString(),
+      status: "new"
+    };
+
+    existingLeads.unshift(newLead);
+    await db.saveObject("system-tenant", "walkthrough_leads", existingLeads);
+
+    // Also push notification to in-app notification center for all tenants/SaaS owner
+    try {
+      const currentNotifications = (await db.getObject<any[]>("veg-main-001", "system_notifications")) || [];
+      const newNotification = {
+        id: `notify-lead-${Date.now()}`,
+        title: "🌟 New Walkthrough Lead Booked",
+        message: `${newLead.fullName} booked a 15-min walkthrough for "${newLead.restaurantName}" (Address: ${newLead.address || "Location provided"}). Contact: ${newLead.phone}`,
+        timestamp: new Date().toISOString(),
+        read: false,
+        severity: "info"
+      };
+      currentNotifications.unshift(newNotification);
+      await db.saveObject("veg-main-001", "system_notifications", currentNotifications.slice(0, 50));
+    } catch (notifErr) {
+      console.warn("Could not append lead to system_notifications:", notifErr);
+    }
+
+    await auditLogService.log(
+      "system-tenant",
+      "LEAD_CAPTURE",
+      "WEBSITE",
+      `New Walkthrough booked for "${newLead.restaurantName}" by ${newLead.fullName} (Phone: ${newLead.phone}, Address: ${newLead.address || "N/A"})`
+    );
+
+    res.json({
+      success: true,
+      lead: newLead,
+      message: "Walkthrough request successfully recorded."
+    });
+  } catch (error: any) {
+    console.error("Error creating walkthrough lead:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 2. Admin Endpoint: List all Walkthrough Leads
+router.get("/leads/walkthrough", async (req, res) => {
+  try {
+    const db = Database.getInstance();
+    let leads = await db.getObject<WalkthroughLeadRecord[]>("system-tenant", "walkthrough_leads");
+    if (!leads || !Array.isArray(leads) || leads.length === 0) {
+      leads = [...DEFAULT_SAMPLE_LEADS];
+      await db.saveObject("system-tenant", "walkthrough_leads", leads);
+    }
+
+    res.json({
+      success: true,
+      leads
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3. Admin Endpoint: Update Lead Status / Notes
+router.patch("/leads/walkthrough/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, internalNotes } = req.body;
+
+    const db = Database.getInstance();
+    let leads = await db.getObject<WalkthroughLeadRecord[]>("system-tenant", "walkthrough_leads");
+    if (!leads || !Array.isArray(leads)) {
+      leads = [...DEFAULT_SAMPLE_LEADS];
+    }
+
+    const index = leads.findIndex((l) => l.id === id);
+    if (index === -1) {
+      return res.status(404).json({ success: false, message: "Lead not found." });
+    }
+
+    if (status) leads[index].status = status;
+    if (internalNotes !== undefined) leads[index].internalNotes = internalNotes;
+
+    await db.saveObject("system-tenant", "walkthrough_leads", leads);
+
+    res.json({
+      success: true,
+      lead: leads[index],
+      message: "Lead updated successfully."
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4. Admin Endpoint: Delete a Lead
+router.delete("/leads/walkthrough/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = Database.getInstance();
+    let leads = await db.getObject<WalkthroughLeadRecord[]>("system-tenant", "walkthrough_leads");
+    if (leads && Array.isArray(leads)) {
+      leads = leads.filter((l) => l.id !== id);
+      await db.saveObject("system-tenant", "walkthrough_leads", leads);
+    }
+    res.json({ success: true, message: "Lead removed." });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

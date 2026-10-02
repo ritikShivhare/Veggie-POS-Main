@@ -26,7 +26,7 @@ import {
   CheckCircle2,
   Share2
 } from "lucide-react";
-import { Ingredient, Order, Shift } from "../types";
+import { Ingredient, Order, Shift, RestaurantTenant, InventorySettings } from "../types";
 
 interface DashboardProps {
   dashboardStats: {
@@ -44,6 +44,8 @@ interface DashboardProps {
   shifts: Shift[];
   setActiveTab: (tab: string) => void;
   handleGenerateAIReport: () => void;
+  activeTenant?: RestaurantTenant;
+  settings?: InventorySettings;
 }
 
 type PeriodType = "yesterday" | "week" | "month" | "custom";
@@ -54,7 +56,9 @@ export default function Dashboard({
   orders,
   shifts,
   setActiveTab,
-  handleGenerateAIReport
+  handleGenerateAIReport,
+  activeTenant,
+  settings
 }: DashboardProps) {
   // Main view toggle
   const [dashboardViewTab, setDashboardViewTab] = useState<"live" | "analytics">("live");
@@ -89,91 +93,12 @@ export default function Dashboard({
   const [drilldownSearch, setDrilldownSearch] = useState<string>("");
   const [drilldownPaymentFilter, setDrilldownPaymentFilter] = useState<"All" | "Cash" | "UPI">("All");
 
-  // Deterministically generate beautiful historic orders if the database has low history.
-  // This guarantees that the graphs, tables, and comparison trends are completely functional and realistic.
+  // Use exclusively genuine restaurant orders. No synthetic or dummy data is generated.
   const allOrdersCombined = useMemo(() => {
     const realOrders = orders || [];
-    
-    // Generate synthetic past orders for Yesterday and the past 65 days to support full comparative periods
-    const syntheticOrders: Order[] = [];
-    const baseTime = Date.now();
-    const oneDay = 24 * 60 * 60 * 1000;
-    
-    // Generate data for each of the last 65 days
-    for (let dayOffset = 1; dayOffset <= 65; dayOffset++) {
-      const dayDate = new Date(baseTime - dayOffset * oneDay);
-      // Determine daily parameters based on day of week (weekends have higher sales)
-      const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
-      const orderCount = isWeekend ? Math.floor(18 + Math.random() * 8) : Math.floor(10 + Math.random() * 6);
-      
-      // Daily menu selections to make items realistic
-      const sampleMenuItems = [
-        { id: "m-thali", name: "Special Thali", price: 220 },
-        { id: "m-paneer-butter", name: "Paneer Butter Masala", price: 180 },
-        { id: "m-paneer-tikka", name: "Paneer Tikka", price: 150 },
-        { id: "m-dal-makhani", name: "Dal Makhani", price: 160 },
-        { id: "m-veg-biryani", name: "Veg Biryani", price: 250 },
-        { id: "m-butter-naan", name: "Butter Naan", price: 50 },
-        { id: "m-gulab-jamun", name: "Gulab Jamun (2pcs)", price: 50 }
-      ];
-
-      for (let j = 0; j < orderCount; j++) {
-        const orderHour = Math.floor(11 + Math.random() * 11); // 11 AM to 10 PM
-        const orderDate = new Date(dayDate);
-        orderDate.setHours(orderHour, Math.floor(Math.random() * 60), 0);
-        
-        // Randomly select 1-3 menu items
-        const numItems = Math.floor(1 + Math.random() * 3);
-        const orderItems = [];
-        let orderSubtotal = 0;
-        
-        for (let k = 0; k < numItems; k++) {
-          const mItem = sampleMenuItems[Math.floor(Math.random() * sampleMenuItems.length)];
-          const qty = Math.floor(1 + Math.random() * 2);
-          orderItems.push({
-            menuItem: {
-              id: mItem.id,
-              name: mItem.name,
-              price: mItem.price,
-              category: "Main Course",
-              isVegetarian: true,
-              isAvailable: true
-            },
-            quantity: qty
-          });
-          orderSubtotal += mItem.price * qty;
-        }
-
-        const tax = Math.round(orderSubtotal * 0.05);
-        const total = orderSubtotal + tax;
-        const paymentMethod = Math.random() > 0.45 ? "UPI" : "Cash";
-
-        syntheticOrders.push({
-          id: `synth-o-${dayOffset}-${j}`,
-          orderNumber: (1000 + dayOffset * 20 + j).toString(),
-          date: orderDate.toISOString(),
-          type: Math.random() > 0.3 ? "Dine-In" : "Takeaway",
-          tableNo: Math.random() > 0.3 ? `T-0${Math.floor(1 + Math.random() * 6)}` : undefined,
-          customerName: ["Rahul Gupta", "Amit Singh", "Priya Verma", "Anjali Nair", "Vikram Sen", "Ritu Shah", "Siddharth Sharma"][Math.floor(Math.random() * 7)],
-          items: orderItems,
-          subtotal: orderSubtotal,
-          tax,
-          total,
-          status: "Completed",
-          paymentMethod,
-          paidAt: orderDate.toISOString(),
-          cashierId: "s-rahul",
-          cashierName: "Rahul Sharma"
-        });
-      }
-    }
-
-    // Merge both, sorting by date descending
-    const combined = [...realOrders, ...syntheticOrders].sort((a, b) => {
+    return [...realOrders].sort((a, b) => {
       return new Date(b.date).getTime() - new Date(a.date).getTime();
     });
-
-    return combined;
   }, [orders]);
 
   // Compute stats based on the selected period
@@ -1013,16 +938,18 @@ export default function Dashboard({
 
               {/* Responsive custom-crafted SVG Chart */}
               <div className="flex-1 w-full min-h-[220px] flex items-end justify-center relative select-none">
-                {periodAnalytics.chartData.length === 0 ? (
-                  <div className="text-slate-400 text-xs italic py-16">No checkouts recorded in the selected period.</div>
+                {periodAnalytics.chartData.length === 0 || periodAnalytics.orderCount === 0 ? (
+                  <div className="text-slate-400 text-xs italic py-16 text-center">
+                    No checkout records in the selected period. Real orders placed at the billing terminal will appear here automatically.
+                  </div>
                 ) : (
                   <div className="w-full h-[220px] flex flex-col justify-between">
                     {/* Visual columns bars container */}
                     <div className="flex-1 w-full flex items-end justify-between px-2 gap-3">
                       {periodAnalytics.chartData.map((d, index) => {
                         const maxSales = Math.max(...periodAnalytics.chartData.map(cd => cd.sales)) || 1;
-                        const salesHeightPct = (d.sales / maxSales) * 85; // Max height 85% to fit margins
-                        const profitHeightPct = (d.profit / maxSales) * 85;
+                        const salesHeightPct = maxSales > 0 ? (d.sales / maxSales) * 85 : 0; // Max height 85% to fit margins
+                        const profitHeightPct = maxSales > 0 ? (d.profit / maxSales) * 85 : 0;
 
                         return (
                           <div key={index} className="flex-1 flex flex-col items-center justify-end group h-full relative">
@@ -1037,20 +964,22 @@ export default function Dashboard({
                             {/* Bar segment Stack */}
                             <div 
                               onClick={() => {
-                                setSelectedDrilldownDay(d);
-                                setDrilldownSearch("");
-                                setDrilldownPaymentFilter("All");
+                                if (d.orders > 0) {
+                                  setSelectedDrilldownDay(d);
+                                  setDrilldownSearch("");
+                                  setDrilldownPaymentFilter("All");
+                                }
                               }}
-                              className="w-full flex items-end justify-center gap-0.5 max-w-[45px] h-full cursor-pointer hover:opacity-85 transition-opacity"
+                              className={`w-full flex items-end justify-center gap-0.5 max-w-[45px] h-full ${d.orders > 0 ? "cursor-pointer hover:opacity-85" : "cursor-default opacity-40"} transition-opacity`}
                             >
                               {/* Sales Bar */}
                               <div 
-                                style={{ height: `${Math.max(3, salesHeightPct)}%` }}
+                                style={{ height: d.sales > 0 ? `${Math.max(4, salesHeightPct)}%` : "0%" }}
                                 className="w-1/2 bg-indigo-600/95 hover:bg-indigo-700 transition-all rounded-t-sm relative"
                               />
                               {/* Profit Bar */}
                               <div 
-                                style={{ height: `${Math.max(3, profitHeightPct)}%` }}
+                                style={{ height: d.profit > 0 ? `${Math.max(4, profitHeightPct)}%` : "0%" }}
                                 className="w-1/2 bg-emerald-500 hover:bg-emerald-600 transition-all rounded-t-sm relative"
                               />
                             </div>
@@ -1122,7 +1051,7 @@ export default function Dashboard({
                 <p className="text-[10px] text-slate-400 mt-0.5">Calculated financial breakdown matrices per calendar day. Click on any date row to see individual customer order receipts.</p>
               </div>
               <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-bold rounded-md font-mono">
-                {periodAnalytics.chartData.length} records calculated
+                {periodAnalytics.chartData.filter(r => r.orders > 0).length} active dates
               </span>
             </div>
 
@@ -1141,12 +1070,12 @@ export default function Dashboard({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-600">
-                  {periodAnalytics.chartData.length === 0 ? (
+                  {periodAnalytics.chartData.filter(r => r.orders > 0).length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-12 text-center text-slate-400 italic">No checkout data found in range.</td>
+                      <td colSpan={8} className="p-12 text-center text-slate-400 italic">No checkout records found in this time range.</td>
                     </tr>
                   ) : (
-                    periodAnalytics.chartData.map((row, idx) => (
+                    periodAnalytics.chartData.filter(row => row.orders > 0).map((row, idx) => (
                       <tr 
                         key={idx} 
                         onClick={() => {
@@ -1393,7 +1322,9 @@ export default function Dashboard({
             <div className="p-4 border-b border-slate-100 bg-slate-900 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-emerald-400" />
-                <span className="font-bold text-xs tracking-wider uppercase font-mono">Tax Invoice Receipt</span>
+                <span className="font-bold text-xs tracking-wider uppercase font-mono">
+                  {(settings?.gstin || activeTenant?.gstin) ? "Tax Invoice Receipt" : "Retail Cash Bill"}
+                </span>
               </div>
               <button
                 onClick={() => setSelectedOrderReceipt(null)}
@@ -1406,9 +1337,13 @@ export default function Dashboard({
             {/* Printable Receipt Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4 font-mono text-xs text-slate-800 bg-white">
               <div className="text-center border-b border-dashed border-slate-300 pb-4">
-                <h2 className="text-lg font-black text-slate-900 uppercase font-sans">VeggiePOS Restaurant</h2>
+                <h2 className="text-lg font-black text-slate-900 uppercase font-sans">
+                  {activeTenant?.name || "VeggiePOS Restaurant"}
+                </h2>
                 <p className="text-[11px] text-slate-500 mt-0.5">Authentic Dining & Quick Billing Hub</p>
-                <p className="text-[10px] text-slate-400 mt-1">GSTIN: 07AAACG1234F1Z8 • FSSAI: 10020011000123</p>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {(settings?.gstin || activeTenant?.gstin) ? `GSTIN: ${(settings?.gstin || activeTenant?.gstin)?.toUpperCase()} • ` : "Retail Cash Bill • "}FSSAI: 10020011000123
+                </p>
               </div>
 
               {/* Order Meta Info */}

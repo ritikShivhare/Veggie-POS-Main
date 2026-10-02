@@ -35,7 +35,8 @@ import {
   Sparkles,
   Menu,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  X
 } from "lucide-react";
 
 function AppContent() {
@@ -68,6 +69,7 @@ function AppContent() {
     purchases,
     shifts,
     isInitialSyncLoading,
+    setIsInitialSyncLoading,
     settings,
     setSettings,
     toastMessage,
@@ -97,9 +99,18 @@ function AppContent() {
     handleShiftAction
   } = useAppContext();
 
-  // Active view tab state
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+
+  // Safety watchdog: Automatically dismiss initial sync overlay after 2.5s if not resolved
+  useEffect(() => {
+    if (isInitialSyncLoading) {
+      const timer = setTimeout(() => {
+        setIsInitialSyncLoading(false);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [isInitialSyncLoading, setIsInitialSyncLoading]);
   const [initialSignupData, setInitialSignupData] = useState<{
     businessName: string;
     ownerName: string;
@@ -481,8 +492,22 @@ function AppContent() {
 
         <div className="flex-1 overflow-hidden relative">
           {isInitialSyncLoading && (
-            <div className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px] z-50 flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-2xl rounded-2xl p-6 flex flex-col items-center gap-3 text-center max-w-xs w-full animate-scale-up">
+            <div 
+              onClick={() => setIsInitialSyncLoading(false)}
+              className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px] z-50 flex items-center justify-center p-4 animate-fade-in"
+            >
+              <div 
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-2xl rounded-2xl p-6 flex flex-col items-center gap-3 text-center max-w-xs w-full animate-scale-up relative"
+              >
+                <button
+                  onClick={() => setIsInitialSyncLoading(false)}
+                  className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 p-1 rounded-lg transition cursor-pointer"
+                  title="Dismiss sync notice"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+
                 <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-inner">
                   <RefreshCw className="w-6 h-6 animate-spin" />
                 </div>
@@ -490,6 +515,12 @@ function AppContent() {
                   <p className="text-sm font-bold text-slate-800 tracking-tight">Synchronizing POS Terminal...</p>
                   <p className="text-xs text-slate-500 font-medium">Fetching real-time menu, orders & shifts</p>
                 </div>
+                <button
+                  onClick={() => setIsInitialSyncLoading(false)}
+                  className="mt-2 px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                >
+                  Continue to Terminal →
+                </button>
               </div>
             </div>
           )}
@@ -502,6 +533,8 @@ function AppContent() {
               shifts={shifts}
               setActiveTab={setActiveTab}
               handleGenerateAIReport={handleGenerateAIReport}
+              activeTenant={activeTenant}
+              settings={settings}
             />
           )}
 
@@ -664,6 +697,7 @@ function AppContent() {
             }>
               <SettingsPanel
                 activeTenant={activeTenant}
+                setActiveTenant={setActiveTenant}
                 settings={settings}
                 setSettings={setSettings}
                 toastMessage={toastMessage}

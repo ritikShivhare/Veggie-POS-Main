@@ -40,7 +40,7 @@ interface POSBillingProps {
   onUpdateOrderStatus: (orderId: string, status: OrderStatus, paymentMethod?: 'Cash' | 'UPI', paidAt?: string) => void;
   customers: Customer[];
   setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
-  activeTenant?: { name: string; tenantId?: string; vpa?: string };
+  activeTenant?: { name: string; tenantId?: string; vpa?: string; gstin?: string; upiMerchantName?: string };
 }
 
 export default function POSBilling({
@@ -388,9 +388,12 @@ export default function POSBilling({
     }
 
     const currentAmount = billingOrder ? billingOrder.total : total;
-    const vpa = activeTenant?.vpa || "veggiepos@upi";
-    const brandName = encodeURIComponent(activeTenant?.name || "Veggie POS");
-    const note = encodeURIComponent(`Order ${billingOrder?.orderNumber || "New"}`);
+    const configuredVpa = (settings.upiVpa || activeTenant?.vpa || "").trim();
+    const isDemoVpa = !configuredVpa || configuredVpa === "veggiepos@upi";
+    const vpa = !isDemoVpa ? configuredVpa : "veggiepos@upi";
+    const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Veggie POS").trim();
+    const brandName = encodeURIComponent(merchantName);
+    const note = encodeURIComponent(`Order ${billingOrder?.orderNumber || "Bill"}`);
     const upiUri = `upi://pay?pa=${vpa}&pn=${brandName}&am=${currentAmount.toFixed(2)}&cu=INR&tn=${note}`;
 
     QRCode.toDataURL(upiUri, {
@@ -404,7 +407,7 @@ export default function POSBilling({
     })
       .then((url) => setUpiQrDataUrl(url))
       .catch((err) => console.error("Error generating UPI QR Code:", err));
-  }, [showPaymentModal, selectedPayment, billingOrder, total, activeTenant]);
+  }, [showPaymentModal, selectedPayment, billingOrder, total, activeTenant, settings]);
 
   // Table Occupancy Status Helper (Occupied, Dining, Billing, Vacant)
   const getTableOccupancy = (tbl: string) => {
@@ -1452,52 +1455,85 @@ export default function POSBilling({
               </div>
 
               {/* DYNAMIC UPI QR CODE DISPLAY */}
-              {selectedPayment === "UPI" && (
-                <div className="border-t border-slate-200/60 pt-3 flex flex-col items-center text-center space-y-2.5">
-                  <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center">
-                    {upiQrDataUrl ? (
-                      <img
-                        src={upiQrDataUrl}
-                        alt="Dynamic UPI QR Code"
-                        className="w-44 h-44 rounded-xl object-contain"
-                      />
-                    ) : (
-                      <div className="w-44 h-44 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl">
-                        <QrCode className="w-8 h-8 animate-pulse mb-1 text-slate-300" />
-                        <span className="text-[10px]">Generating UPI QR...</span>
+              {selectedPayment === "UPI" && (() => {
+                const currentAmount = billingOrder ? billingOrder.total : total;
+                const configuredVpa = (settings.upiVpa || activeTenant?.vpa || "").trim();
+                const isUnconfigured = !configuredVpa || configuredVpa === "veggiepos@upi";
+                const activeVpa = !isUnconfigured ? configuredVpa : "veggiepos@upi";
+                const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Veggie POS").trim();
+
+                return (
+                  <div className="border-t border-slate-200/60 pt-3 flex flex-col items-center text-center space-y-2.5">
+                    {/* Unconfigured Warning Alert */}
+                    {isUnconfigured && (
+                      <div className="w-full bg-amber-50 border border-amber-200 rounded-xl p-3 text-left space-y-1">
+                        <div className="flex items-center gap-1.5 text-amber-800 font-bold text-xs">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>Restaurant UPI ID Not Configured</span>
+                        </div>
+                        <p className="text-[11px] text-amber-800 leading-snug">
+                          This counter is using a demo address (<code>veggiepos@upi</code>). Customer apps (PhonePe, GPay, Paytm) will display <b>"Invalid UPI ID"</b>. To collect real bank payments, add your UPI ID in <b>Settings</b>.
+                        </p>
                       </div>
                     )}
-                    <span className="text-[10px] font-mono text-slate-500 font-bold mt-1">
-                      {activeTenant?.vpa || "veggiepos@upi"}
-                    </span>
-                  </div>
 
-                  <div className="space-y-1">
-                    <p className="text-[11px] font-bold text-slate-700">
-                      Scan with Any UPI App
-                    </p>
-                    <p className="text-[10px] text-slate-400">
-                      Google Pay, PhonePe, Paytm, BHIM, Cred • Auto-fills ₹{orderAmount.toFixed(2)}
-                    </p>
-                  </div>
+                    <div className="bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-center">
+                      {upiQrDataUrl ? (
+                        <img
+                          src={upiQrDataUrl}
+                          alt="Dynamic UPI QR Code"
+                          className="w-44 h-44 rounded-xl object-contain"
+                        />
+                      ) : (
+                        <div className="w-44 h-44 flex flex-col items-center justify-center text-slate-400 bg-slate-50 rounded-xl">
+                          <QrCode className="w-8 h-8 animate-pulse mb-1 text-slate-300" />
+                          <span className="text-[10px]">Generating UPI QR...</span>
+                        </div>
+                      )}
+                      
+                      <div className="mt-1 flex flex-col items-center gap-0.5">
+                        <span className="text-[11px] font-mono text-slate-700 font-bold">
+                          {activeVpa}
+                        </span>
+                        {!isUnconfigured ? (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                            <CheckCircle className="w-3 h-3 text-emerald-600" /> Verified Merchant: {merchantName}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                            Demo Placeholder ID
+                          </span>
+                        )}
+                      </div>
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const vpa = activeTenant?.vpa || "veggiepos@upi";
-                      const brandName = encodeURIComponent(activeTenant?.name || "Veggie POS");
-                      const upiUri = `upi://pay?pa=${vpa}&pn=${brandName}&am=${orderAmount.toFixed(2)}&cu=INR&tn=Order${billingOrder?.orderNumber || "Bill"}`;
-                      navigator.clipboard?.writeText(upiUri);
-                      setUpiCopied(true);
-                      setTimeout(() => setUpiCopied(false), 2000);
-                    }}
-                    className="text-[10px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 bg-blue-50 hover:bg-blue-100/80 px-2.5 py-1 rounded-lg transition"
-                  >
-                    {upiCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
-                    <span>{upiCopied ? "UPI URI Copied!" : "Copy UPI Link"}</span>
-                  </button>
-                </div>
-              )}
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-bold text-slate-700">
+                        Scan with Any UPI App
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        Google Pay, PhonePe, Paytm, BHIM, Cred • Auto-fills ₹{currentAmount.toFixed(2)}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const brandName = encodeURIComponent(merchantName);
+                        const note = encodeURIComponent(`Order ${billingOrder?.orderNumber || "Bill"}`);
+                        const upiUri = `upi://pay?pa=${activeVpa}&pn=${brandName}&am=${currentAmount.toFixed(2)}&cu=INR&tn=${note}`;
+                        navigator.clipboard?.writeText(upiUri);
+                        setUpiCopied(true);
+                        setTimeout(() => setUpiCopied(false), 2000);
+                      }}
+                      className="text-[10px] text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 bg-blue-50 hover:bg-blue-100/80 px-2.5 py-1 rounded-lg transition cursor-pointer"
+                    >
+                      {upiCopied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                      <span>{upiCopied ? "UPI URI Copied!" : "Copy UPI Link"}</span>
+                    </button>
+                  </div>
+                );
+              })()}
 
               {/* Amount Received Input (for Cash) */}
               {selectedPayment === "Cash" && (
@@ -1830,8 +1866,18 @@ export default function POSBilling({
                     {activeTenant?.name || "VEGGIE RESTAURANT & POS"}
                   </h2>
                   <p className="text-[10px] text-slate-600">Pure Vegetarian Hospitality Suite</p>
-                  <p className="text-[9px] text-slate-500 mt-0.5">GSTIN: 27AAAAA0000A1Z5</p>
-                  <p className="text-[10px] font-bold mt-1 uppercase">*** TAX INVOICE ***</p>
+                  {(settings.gstin || activeTenant?.gstin) ? (
+                    <p className="text-[9px] text-slate-700 font-bold mt-0.5">
+                      GSTIN: {(settings.gstin || activeTenant?.gstin)?.toUpperCase()}
+                    </p>
+                  ) : (
+                    <p className="text-[9px] text-slate-500 mt-0.5">
+                      Composition Scheme / Unregistered Retail Outlet
+                    </p>
+                  )}
+                  <p className="text-[10px] font-bold mt-1 uppercase">
+                    {(settings.gstin || activeTenant?.gstin) ? "*** TAX INVOICE ***" : "*** RETAIL CASH INVOICE ***"}
+                  </p>
                 </div>
 
                 <div className="py-2 border-b border-dashed border-slate-400 space-y-0.5 text-[10px]">

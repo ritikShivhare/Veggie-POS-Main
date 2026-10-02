@@ -193,6 +193,9 @@ export interface RestaurantTenant {
   storeCode?: string;
   staffQrSecret?: string;
   staffQrUpdatedAt?: string;
+  vpa?: string;
+  gstin?: string;
+  upiMerchantName?: string;
 }
 
 export interface InventorySettings {
@@ -207,4 +210,7 @@ export interface InventorySettings {
   emailAlertAddress?: string;
   enableAlerts?: boolean;
   gstPercentage?: number;
+  gstin?: string;
+  upiVpa?: string;
+  upiMerchantName?: string;
 }

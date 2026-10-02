@@ -16,9 +16,17 @@ export interface DemoRequest {
   format: "casual-dine" | "qsr" | "cafe-bakery" | "cloud-kitchen" | "multi-outlet" | "other";
   outletCount: string;
   primaryGoal: string;
+  address: string;
   preferredDate?: string;
   preferredTime?: string;
   notes?: string;
+}
+
+export interface WalkthroughLead extends DemoRequest {
+  id: string;
+  createdAt: string;
+  status: "new" | "contacted" | "scheduled" | "completed" | "converted" | "cancelled";
+  internalNotes?: string;
 }
 
 export interface ResourceArticle {

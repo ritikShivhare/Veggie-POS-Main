@@ -21,8 +21,18 @@ import {
   Mail,
   Phone,
   MapPin,
-  ChevronRight
+  ChevronRight,
+  MessageSquare,
+  Calendar,
+  Sparkles,
+  Clock,
+  ExternalLink,
+  FileText,
+  Filter,
+  CheckCircle,
+  Tag
 } from "lucide-react";
+import { WalkthroughLead } from "../marketing/types";
 
 interface SaasAdminDashboardProps {
   tenants: RestaurantTenant[];
@@ -84,6 +94,79 @@ export default function SaasAdminDashboard({
   // Live Sync Log generation
   const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
   const [isSyncingAll, setIsSyncingAll] = useState(false);
+
+  // Sub-tab switcher: "tenants" | "leads" | "syncLogs"
+  const [activeAdminTab, setActiveAdminTab] = useState<"tenants" | "leads" | "syncLogs">("tenants");
+
+  // Walkthrough Leads states (Option 1 & Address feature)
+  const [leads, setLeads] = useState<WalkthroughLead[]>([]);
+  const [leadsLoading, setLeadsLoading] = useState<boolean>(false);
+  const [leadSearchQuery, setLeadSearchQuery] = useState<string>("");
+  const [leadStatusFilter, setLeadStatusFilter] = useState<string>("all");
+  const [updatingLeadId, setUpdatingLeadId] = useState<string | null>(null);
+
+  const fetchLeads = async () => {
+    setLeadsLoading(true);
+    try {
+      const res = await fetch("/api/leads/walkthrough");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.leads)) {
+        setLeads(data.leads);
+      }
+    } catch (err) {
+      console.error("Failed to load walkthrough leads:", err);
+    } finally {
+      setLeadsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLeads();
+  }, []);
+
+  const handleUpdateLeadStatus = async (leadId: string, newStatus: string) => {
+    setUpdatingLeadId(leadId);
+    try {
+      const res = await fetch(`/api/leads/walkthrough/${leadId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus })
+      });
+      const data = await res.json();
+      if (data.success && data.lead) {
+        setLeads((prev) => prev.map((l) => (l.id === leadId ? data.lead : l)));
+      }
+    } catch (err) {
+      console.error("Failed to update lead status:", err);
+    } finally {
+      setUpdatingLeadId(null);
+    }
+  };
+
+  const handleDeleteLead = async (leadId: string) => {
+    if (!confirm("Are you sure you want to delete this walkthrough lead?")) return;
+    try {
+      const res = await fetch(`/api/leads/walkthrough/${leadId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (data.success) {
+        setLeads((prev) => prev.filter((l) => l.id !== leadId));
+      }
+    } catch (err) {
+      console.error("Failed to delete lead:", err);
+    }
+  };
+
+  const handleOnboardLead = (lead: WalkthroughLead) => {
+    setBusinessName(lead.restaurantName);
+    setOwnerName(lead.fullName);
+    setOwnerPhone(lead.phone);
+    setEmail(lead.email || "");
+    setRegion(lead.address ? lead.address.slice(0, 45) : "North India / Delhi");
+    setPin("12345");
+    setShowQuickRegister(true);
+    setActiveAdminTab("tenants");
+    handleUpdateLeadStatus(lead.id, "converted");
+  };
 
   const fetchTenants = async () => {
     if (!currentSessionId) {
@@ -363,6 +446,22 @@ export default function SaasAdminDashboard({
     return matchesSearch && matchesRegion && matchesStatus;
   });
 
+  // Filtered walkthrough leads (Option 1 & Address column)
+  const filteredLeads = leads.filter((l) => {
+    const q = leadSearchQuery.toLowerCase();
+    const matchesSearch =
+      l.restaurantName.toLowerCase().includes(q) ||
+      l.fullName.toLowerCase().includes(q) ||
+      l.phone.toLowerCase().includes(q) ||
+      (l.address && l.address.toLowerCase().includes(q)) ||
+      (l.email && l.email.toLowerCase().includes(q));
+
+    const matchesStatus = leadStatusFilter === "all" || l.status === leadStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const newLeadsCount = leads.filter((l) => l.status === "new").length;
+
   return (
     <div className="h-full p-6 flex flex-col gap-6 overflow-y-auto bg-[#fafbfd] font-sans">
       
@@ -407,7 +506,40 @@ export default function SaasAdminDashboard({
           </div>
         </div>
 
-        {/* Card 2: Active Workspace */}
+        {/* Card 2: Walkthrough Bookings (Option 1 & 3 Leads Pipeline) */}
+        <div
+          onClick={() => setActiveAdminTab("leads")}
+          className={`p-5 rounded-2xl border transition cursor-pointer flex flex-col justify-between ${
+            activeAdminTab === "leads"
+              ? "bg-pink-50/80 border-pink-300 shadow-md ring-2 ring-pink-500/20"
+              : "bg-white border-slate-100 hover:border-pink-200 shadow-[0_2px_8px_-3px_rgba(0,0,0,0.04)] hover:shadow-md"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-extrabold text-pink-600 uppercase tracking-widest font-mono">
+              Walkthrough Leads
+            </span>
+            <div className="p-2 bg-pink-100/70 text-pink-600 rounded-xl">
+              <Sparkles className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 className="text-3xl font-black text-slate-800 tracking-tight leading-none flex items-center gap-2">
+              <span>{leads.length}</span>
+              {newLeadsCount > 0 && (
+                <span className="px-2 py-0.5 bg-pink-600 text-white text-[10px] font-extrabold rounded-full animate-pulse">
+                  {newLeadsCount} New
+                </span>
+              )}
+            </h3>
+            <p className="text-[10px] text-slate-500 mt-2 font-medium flex items-center justify-between">
+              <span>Website qualified requests</span>
+              <span className="text-pink-600 font-bold hover:underline">View Pipeline →</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Card 3: Active Workspace */}
         <div className="bg-white p-5 border border-slate-100 rounded-2xl shadow-[0_2px_8px_-3px_rgba(0,0,0,0.04)] flex flex-col justify-between hover:shadow-md transition">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest font-mono">Selected Workspace</span>
@@ -425,7 +557,7 @@ export default function SaasAdminDashboard({
           </div>
         </div>
 
-        {/* Card 3: Cloud Database Connection */}
+        {/* Card 4: Cloud Database Connection */}
         <div className="bg-white p-5 border border-slate-100 rounded-2xl shadow-[0_2px_8px_-3px_rgba(0,0,0,0.04)] flex flex-col justify-between hover:shadow-md transition">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest font-mono">Database Ingress</span>
@@ -444,28 +576,78 @@ export default function SaasAdminDashboard({
           </div>
         </div>
 
-        {/* Card 4: Background Sync Queue */}
-        <div className="bg-white p-5 border border-slate-100 rounded-2xl shadow-[0_2px_8px_-3px_rgba(0,0,0,0.04)] flex flex-col justify-between hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest font-mono">Sync Operations</span>
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-xl border border-blue-100/30">
-              <RefreshCw className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-3xl font-black text-slate-800 tracking-tight leading-none">
-              99.9% <span className="text-xs text-emerald-600 font-bold">Sync Health</span>
-            </h3>
-            <p className="text-[10px] text-slate-500 mt-2 font-medium">
-              All REST API channels active
-            </p>
-          </div>
+      </div>
+
+      {/* SUB-TAB CONTROLS BAR */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          <button
+            onClick={() => setActiveAdminTab("tenants")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              activeAdminTab === "tenants"
+                ? "bg-slate-900 text-white shadow-sm"
+                : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <Building className="w-4 h-4" />
+            <span>Registered Outlets ({localTenants.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveAdminTab("leads")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer relative ${
+              activeAdminTab === "leads"
+                ? "bg-pink-600 text-white shadow-sm shadow-pink-500/20"
+                : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            <span>Walkthrough Leads & Bookings</span>
+            {newLeadsCount > 0 ? (
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  activeAdminTab === "leads"
+                    ? "bg-white text-pink-700"
+                    : "bg-pink-100 text-pink-700 animate-pulse"
+                }`}
+              >
+                {newLeadsCount} New
+              </span>
+            ) : (
+              <span className="text-[10px] opacity-75 font-mono">({leads.length})</span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveAdminTab("syncLogs")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+              activeAdminTab === "syncLogs"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "bg-slate-50 text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <Activity className="w-4 h-4" />
+            <span>Live Cloud Sync Logs ({syncLogs.length})</span>
+          </button>
         </div>
 
+        <div className="flex items-center gap-2 pr-1">
+          {activeAdminTab === "leads" && (
+            <button
+              onClick={fetchLeads}
+              disabled={leadsLoading}
+              className="px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${leadsLoading ? "animate-spin text-pink-600" : ""}`} />
+              <span>Refresh Leads</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 3. BUSINESSES TABLE WITH WORKSPACE SELECTOR */}
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
+      {activeAdminTab === "tenants" && (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
         
         {/* Table Filters Header */}
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
@@ -825,11 +1007,287 @@ export default function SaasAdminDashboard({
             </tbody>
           </table>
         </div>
-
       </div>
+      )}
+
+      {/* WALKTHROUGH LEADS & DEMO PIPELINE DASHBOARD (Option 1 & 3 with Address Column) */}
+      {activeAdminTab === "leads" && (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden space-y-4 animate-in fade-in-50 duration-150">
+          
+          {/* Header & Filter Controls */}
+          <div className="p-5 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/50">
+            <div>
+              <h3 className="font-extrabold text-sm text-slate-900 tracking-tight flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-pink-600" />
+                <span>Website Walkthrough Requests & Demo Bookings (वॉकथ्रू लीड्स व इंक्वायरी)</span>
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                यहाँ वेबसाइट से आने वाले सभी रेस्टोरेंट ओनर्स की 15-मिनट वॉकथ्रू रिक्वेस्ट और उनका <b>पूरा पता (Address)</b> दिखता है।
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Search */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search by restaurant, address, phone..."
+                  value={leadSearchQuery}
+                  onChange={(e) => setLeadSearchQuery(e.target.value)}
+                  className="pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-pink-500 w-64 shadow-2xs"
+                />
+              </div>
+
+              {/* Status Filter */}
+              <select
+                value={leadStatusFilter}
+                onChange={(e) => setLeadStatusFilter(e.target.value)}
+                className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-700 font-semibold focus:outline-none focus:ring-1 focus:ring-pink-500 shadow-2xs"
+              >
+                <option value="all">All Statuses ({leads.length})</option>
+                <option value="new">New ({leads.filter((l) => l.status === "new").length})</option>
+                <option value="contacted">Contacted ({leads.filter((l) => l.status === "contacted").length})</option>
+                <option value="scheduled">Scheduled ({leads.filter((l) => l.status === "scheduled").length})</option>
+                <option value="completed">Completed ({leads.filter((l) => l.status === "completed").length})</option>
+                <option value="converted">Converted ({leads.filter((l) => l.status === "converted").length})</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Metric Status Badges */}
+          <div className="px-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-pink-50/70 border border-pink-100 p-3 rounded-xl">
+              <span className="text-[10px] font-mono font-bold text-pink-600 uppercase">New Inquiries</span>
+              <p className="text-xl font-extrabold text-pink-900 mt-0.5">{leads.filter((l) => l.status === "new").length}</p>
+            </div>
+            <div className="bg-blue-50/70 border border-blue-100 p-3 rounded-xl">
+              <span className="text-[10px] font-mono font-bold text-blue-600 uppercase">In Contact / Scheduled</span>
+              <p className="text-xl font-extrabold text-blue-900 mt-0.5">
+                {leads.filter((l) => l.status === "contacted" || l.status === "scheduled").length}
+              </p>
+            </div>
+            <div className="bg-emerald-50/70 border border-emerald-100 p-3 rounded-xl">
+              <span className="text-[10px] font-mono font-bold text-emerald-600 uppercase">Converted Outlets</span>
+              <p className="text-xl font-extrabold text-emerald-900 mt-0.5">{leads.filter((l) => l.status === "converted").length}</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-xl">
+              <span className="text-[10px] font-mono font-bold text-slate-500 uppercase">Total Pipeline</span>
+              <p className="text-xl font-extrabold text-slate-800 mt-0.5">{leads.length}</p>
+            </div>
+          </div>
+
+          {/* Leads Table with Address Column */}
+          <div className="overflow-x-auto px-5 pb-5">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="bg-slate-50 border-y border-slate-200 text-slate-500 font-bold uppercase tracking-wider font-mono text-[10px]">
+                <tr>
+                  <th className="py-3 px-3">Restaurant & Outlets</th>
+                  <th className="py-3 px-3 min-w-[220px]">
+                    <div className="flex items-center gap-1.5 text-slate-800">
+                      <MapPin className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Address (रेस्टोरेंट का पता)</span>
+                    </div>
+                  </th>
+                  <th className="py-3 px-3">Contact Person</th>
+                  <th className="py-3 px-3">Preferred Slot & Focus</th>
+                  <th className="py-3 px-3">Status (स्थिति)</th>
+                  <th className="py-3 px-3 text-right">Actions (WhatsApp / Onboard)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-150">
+                {filteredLeads.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-slate-400">
+                      <Sparkles className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="font-semibold text-slate-600 text-xs">No walkthrough requests found matching your filter.</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Requests submitted on the website form will appear here automatically.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredLeads.map((lead) => {
+                    const isUpdating = updatingLeadId === lead.id;
+                    const cleanPhone = lead.phone.replace(/[^0-9]/g, "");
+                    const whatsappPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+
+                    return (
+                      <tr key={lead.id} className="hover:bg-slate-50/70 transition">
+                        
+                        {/* Restaurant Name & Format */}
+                        <td className="py-3 px-3">
+                          <div className="space-y-1">
+                            <h4 className="font-extrabold text-slate-800 text-xs">{lead.restaurantName}</h4>
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[9.5px] font-medium font-mono uppercase">
+                                {lead.format}
+                              </span>
+                              <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 rounded text-[9.5px] font-bold font-mono">
+                                {lead.outletCount} Outlet(s)
+                              </span>
+                            </div>
+                            <span className="text-[9.5px] text-slate-400 font-mono block">
+                              Booked: {new Date(lead.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* ADDRESS COLUMN (Added as requested) */}
+                        <td className="py-3 px-3 max-w-[280px]">
+                          <div className="flex items-start gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                              <p className="text-slate-800 font-medium leading-relaxed text-[11px]" title={lead.address}>
+                                {lead.address || "Address not provided"}
+                              </p>
+                              {lead.address && (
+                                <a
+                                  href={`https://maps.google.com/?q=${encodeURIComponent(lead.address)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-[9.5px] text-blue-600 hover:text-blue-800 font-semibold"
+                                >
+                                  <span>Open Google Maps</span>
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Contact Person */}
+                        <td className="py-3 px-3">
+                          <div className="space-y-0.5">
+                            <p className="font-bold text-slate-800 text-xs">{lead.fullName}</p>
+                            <a
+                              href={`tel:${lead.phone}`}
+                              className="text-slate-600 hover:text-blue-600 font-mono text-[11px] flex items-center gap-1"
+                            >
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              <span>{lead.phone}</span>
+                            </a>
+                            {lead.email && (
+                              <a
+                                href={`mailto:${lead.email}`}
+                                className="text-slate-400 hover:text-slate-600 text-[10px] truncate max-w-[150px] block"
+                              >
+                                {lead.email}
+                              </a>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Preferred Slot & Goal */}
+                        <td className="py-3 px-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-700">
+                              <Calendar className="w-3 h-3 text-[#6E8F45]" />
+                              <span>{lead.preferredDate || "Upcoming"}</span>
+                              <span className="px-1.5 py-0.2 bg-emerald-50 text-emerald-700 rounded text-[9.5px] font-mono uppercase font-bold">
+                                {lead.preferredTime}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 italic max-w-[200px] line-clamp-1" title={lead.primaryGoal}>
+                              🎯 {lead.primaryGoal}
+                            </p>
+                            {lead.notes && (
+                              <p className="text-[9.5px] text-slate-400 bg-slate-50 p-1 rounded border border-slate-150 line-clamp-1" title={lead.notes}>
+                                Note: {lead.notes}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Status Dropdown */}
+                        <td className="py-3 px-3">
+                          <div className="space-y-1">
+                            <select
+                              value={lead.status}
+                              disabled={isUpdating}
+                              onChange={(e) => handleUpdateLeadStatus(lead.id, e.target.value)}
+                              className={`text-[10px] font-bold rounded-lg px-2.5 py-1 border transition cursor-pointer ${
+                                lead.status === "new"
+                                  ? "bg-pink-50 text-pink-700 border-pink-200"
+                                  : lead.status === "contacted"
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : lead.status === "scheduled"
+                                  ? "bg-purple-50 text-purple-700 border-purple-200"
+                                  : lead.status === "completed"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : lead.status === "converted"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : "bg-slate-100 text-slate-600 border-slate-200"
+                              }`}
+                            >
+                              <option value="new">🟡 New Request</option>
+                              <option value="contacted">🔵 Contacted</option>
+                              <option value="scheduled">🟣 Scheduled</option>
+                              <option value="completed">🟠 Demo Done</option>
+                              <option value="converted">🟢 Converted to Store</option>
+                              <option value="cancelled">⚪ Cancelled</option>
+                            </select>
+                            {isUpdating && <span className="text-[9px] text-pink-600 animate-pulse block">Saving...</span>}
+                          </div>
+                        </td>
+
+                        {/* Quick Actions (WhatsApp, Call, Onboard, Delete) */}
+                        <td className="py-3 px-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* WhatsApp Button (Option 3 & 1) */}
+                            <a
+                              href={`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
+                                `Hello ${lead.fullName}, I am reaching out from Veggie POS regarding your 15-minute walkthrough request for "${lead.restaurantName}" (Address: ${lead.address || "your outlet"}). Are you available for a demonstration call?`
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 bg-[#25D366]/15 hover:bg-[#25D366] text-[#128C7E] hover:text-white rounded-lg transition"
+                              title="Chat on WhatsApp"
+                            >
+                              <MessageSquare className="w-4 h-4 fill-current" />
+                            </a>
+
+                            {/* Call Link */}
+                            <a
+                              href={`tel:${lead.phone}`}
+                              className="p-1.5 bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white rounded-lg transition"
+                              title={`Call ${lead.phone}`}
+                            >
+                              <Phone className="w-4 h-4" />
+                            </a>
+
+                            {/* Quick Onboard as Tenant Button */}
+                            <button
+                              onClick={() => handleOnboardLead(lead)}
+                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1 shadow-xs cursor-pointer"
+                              title="Pre-fill and onboard as new restaurant tenant"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Onboard</span>
+                            </button>
+
+                            {/* Delete Button */}
+                            <button
+                              onClick={() => handleDeleteLead(lead.id)}
+                              className="p-1.5 text-slate-300 hover:text-rose-600 transition cursor-pointer"
+                              title="Delete Lead"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* 4. REAL-TIME SQL & CLOUD SYNC LIVE STREAM */}
-      <div className="bg-white border border-slate-250 rounded-2xl p-5 shadow-sm space-y-4">
+      {(activeAdminTab === "syncLogs" || activeAdminTab === "tenants") && (
+        <div className="bg-white border border-slate-250 rounded-2xl p-5 shadow-sm space-y-4">
         <div className="flex justify-between items-center border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
             <h3 className="font-extrabold text-sm text-slate-900 tracking-tight flex items-center gap-1.5 font-display">
@@ -886,6 +1344,7 @@ export default function SaasAdminDashboard({
           </table>
         </div>
       </div>
+      )}
 
     </div>
   );

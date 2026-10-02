@@ -140,19 +140,36 @@ ${lowStockList}
 
       Provide bulleted, actionable, specific advice for the restaurant owner. Return clean standard markdown.`;
 
-      const response = await retryWithBackoff(() => 
-        ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: prompt,
-        })
-      );
+      let reportText: string | undefined;
+      try {
+        const response = await executeWithRetry(() => 
+          ai.models.generateContent({
+            model: "gemini-3.8-flash",
+            contents: prompt,
+          })
+        );
+        reportText = response?.text;
+      } catch {
+        try {
+          const fallbackResponse = await executeWithRetry(() =>
+            ai.models.generateContent({
+              model: "gemini-flash-latest",
+              contents: prompt,
+            }),
+            1,
+            500
+          );
+          reportText = fallbackResponse?.text;
+        } catch {
+          reportText = undefined;
+        }
+      }
 
       return {
-        report: response.text || this.generateSimulatedReport(salesData, inventoryData, shiftsData, language),
-        isSimulated: false
+        report: reportText || this.generateSimulatedReport(salesData, inventoryData, shiftsData, language),
+        isSimulated: !reportText
       };
-    } catch (error: any) {
-      console.info("[ReportService] Gemini API is currently unavailable. Falling back to simulated heuristics.");
+    } catch {
       return {
         report: this.generateSimulatedReport(salesData, inventoryData, shiftsData, language),
         isSimulated: true
@@ -161,26 +178,29 @@ ${lowStockList}
   }
 }
 
-async function retryWithBackoff<T>(
+async function executeWithRetry<T>(
   fn: () => Promise<T>,
-  retries = 3,
-  delay = 1000,
+  retries = 2,
+  delay = 500,
   backoffFactor = 2
 ): Promise<T> {
   try {
     return await fn();
   } catch (error: any) {
     const status = error?.status || error?.code || error?.statusCode;
-    const message = typeof error?.message === "string" ? error.message : JSON.stringify(error);
-    const isRetryable = status === 503 || status === 429 || 
-                        message.includes("503") || message.includes("429") || 
-                        message.includes("high demand") || message.includes("UNAVAILABLE") ||
-                        message.includes("temporary") || message.includes("Unavailable");
-    
+    const message = typeof error?.message === "string" ? error.message : "";
+    const isRetryable =
+      status === 503 ||
+      status === 429 ||
+      message.includes("503") ||
+      message.includes("429") ||
+      message.includes("high demand") ||
+      message.includes("UNAVAILABLE") ||
+      message.includes("Unavailable");
+
     if (retries > 0 && isRetryable) {
-      console.info(`[ReportService] Gemini call failed with status ${status}. Retrying in ${delay}ms... (${retries} attempts remaining).`);
       await new Promise(resolve => setTimeout(resolve, delay));
-      return retryWithBackoff(fn, retries - 1, delay * backoffFactor, backoffFactor);
+      return executeWithRetry(fn, retries - 1, delay * backoffFactor, backoffFactor);
     }
     throw error;
   }

@@ -42,6 +42,7 @@ export interface AppContextType {
   shifts: Shift[];
   setShifts: (shifts: Shift[]) => void;
   isInitialSyncLoading: boolean;
+  setIsInitialSyncLoading: (loading: boolean) => void;
   settings: InventorySettings;
   setSettings: React.Dispatch<React.SetStateAction<InventorySettings>>;
   toastMessage: { type: "success" | "error"; text: string } | null;

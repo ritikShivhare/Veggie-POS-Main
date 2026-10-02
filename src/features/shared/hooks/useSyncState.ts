@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { MenuItem, Ingredient, Recipe, Purchase, StaffMember, Shift, Order, InventorySettings, Customer } from "../types";
-import { ApiClient } from "../services/api";
+import { ApiClient, SyncResponse } from "../services/api";
 import { offlineRepository, OutboxProcessor } from "../services/offline";
 import {
   INITIAL_MENU_ITEMS,
@@ -87,10 +87,13 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     slackWebhookUrl: "",
     emailAlertAddress: "",
     enableAlerts: true,
-    gstPercentage: 5
+    gstPercentage: 5,
+    gstin: "",
+    upiVpa: "",
+    upiMerchantName: ""
   });
 
-  const [isInitialSyncLoading, setIsInitialSyncLoading] = useState<boolean>(!initialCache);
+  const [isInitialSyncLoading, setIsInitialSyncLoading] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Gemini AI Report State
@@ -134,7 +137,8 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
       }
 
       if (cancelled) return;
-      setIsInitialSyncLoading(true);
+      // Do not block UI if local state is already available
+      setIsInitialSyncLoading(false);
       const isMain = activeTenantId === "veg-main-001";
       setMenuItems(INITIAL_MENU_ITEMS);
       setIngredients(INITIAL_INGREDIENTS);
@@ -212,9 +216,20 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     }
   }, [toastMessage]);
 
+  // Guaranteed safety watchdog: Never block the UI for more than 2.5 seconds under any circumstance
+  useEffect(() => {
+    if (isInitialSyncLoading) {
+      const timer = setTimeout(() => {
+        setIsInitialSyncLoading(false);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [isInitialSyncLoading]);
+
   // Initial Sync load & Background Sync Polling
   useEffect(() => {
     if (!currentStaff || !currentSessionId) {
+      setIsInitialSyncLoading(false);
       return;
     }
     let active = true;
@@ -276,7 +291,13 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
 
     const fetchSync = async () => {
       try {
-        const json = await ApiClient.getTenantSync(activeTenantId, currentSessionId || undefined);
+        // Enforce 3-second network timeout so initial sync never blocks applet
+        const json = await Promise.race([
+          ApiClient.getTenantSync(activeTenantId, currentSessionId || undefined),
+          new Promise<SyncResponse>((_, reject) =>
+            setTimeout(() => reject(new Error("INITIAL_SYNC_TIMEOUT")), 3000)
+          )
+        ]);
         if (!active) return;
 
         if (json.success && json.initialized && json.data) {
@@ -417,14 +438,16 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
 
             loadedTenantIdRef.current = activeTenantId;
             isLoadedRef.current = true;
-            setIsInitialSyncLoading(false);
           }
         } else if (json.error) {
           throw new Error(json.error);
         }
       } catch (err) {
         console.warn("Failed to perform initial database synchronization for tenant:", activeTenantId, err);
-        setIsInitialSyncLoading(false);
+      } finally {
+        if (active) {
+          setIsInitialSyncLoading(false);
+        }
       }
     };
 
@@ -915,6 +938,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     shifts,
     setShifts,
     isInitialSyncLoading,
+    setIsInitialSyncLoading,
     settings,
     setSettings,
     toastMessage,

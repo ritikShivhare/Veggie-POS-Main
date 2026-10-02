@@ -19,20 +19,8 @@ export class CopilotService {
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || apiKey === "") {
-      // Missing key - use a smart rule-based conversational responder
-      let reply = "";
-      if (lowercasePrompt.includes("hi") || lowercasePrompt.includes("hello")) {
-        reply = `Hello ${staffName}! How can I assist you with ${tenantName}'s operations today? You can ask about recipe setups, ingredients tracking, and billing configs.`;
-      } else if (isImportant) {
-        reply = `This concern involves technical configurations or operations parameters. I have flagged this as an "Administrative Issue" for log archiving. You can click "Log & Dispatch Transcript to Admin" below to instantly log this conversation.`;
-      } else if (lowercasePrompt.includes("recipe") || lowercasePrompt.includes("ingredient") || lowercasePrompt.includes("stock")) {
-        reply = `In VeggiePOS, you map recipe weights in the 'Inventory & Recipes' tab. If 'Auto-Deduct Stock' is enabled in Settings, ingredients are automatically subtracted when checked out at the POS Billing terminal. Store managers can log vendor supplies, while only the Restaurant Owner has full editing rights.`;
-      } else {
-        reply = `Thank you for asking! I can help with general terminal navigation, shift logging, and digital UPI configurations. For customized reports or premium terminal setups, please use the dispatch button below to archive your query.`;
-      }
-
       return {
-        reply,
+        reply: this.getRuleBasedReply(lowercasePrompt, staffName, tenantName, isImportant),
         isImportant,
         isSimulated: true
       };
@@ -85,55 +73,125 @@ COMMUNICATION STYLE:
 - Support both English and Hindi/Hinglish naturally if the user asks in Hindi or Hinglish.
 - If asked how to login or access the staff terminal, explain that store users can click 'Sign In' at the top right, enter their Store Code or Restaurant Name to link their device, and enter their 4-digit staff PIN to start billing.`;
 
-      const chatResponse = await retryWithBackoff(() => 
-        ai.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: `System Context:
+      // Try primary model gemini-3.8-flash, falling back to gemini-flash-latest if needed
+      let chatResponseText: string | undefined;
+
+      try {
+        const response = await executeWithRetry(() =>
+          ai.models.generateContent({
+            model: "gemini-3.8-flash",
+            contents: `System Context:
 ${formattedHistory}
 User Prompt: ${prompt}`,
-          config: {
-            systemInstruction,
-            temperature: 0.7,
-          }
-        })
-      );
+            config: {
+              systemInstruction,
+              temperature: 0.7,
+            }
+          })
+        );
+        chatResponseText = response?.text;
+      } catch {
+        // Fallback model attempt
+        try {
+          const fallbackResponse = await executeWithRetry(() =>
+            ai.models.generateContent({
+              model: "gemini-flash-latest",
+              contents: `System Context:
+${formattedHistory}
+User Prompt: ${prompt}`,
+              config: {
+                systemInstruction,
+                temperature: 0.7,
+              }
+            }),
+            1,
+            500
+          );
+          chatResponseText = fallbackResponse?.text;
+        } catch {
+          chatResponseText = undefined;
+        }
+      }
+
+      if (chatResponseText && chatResponseText.trim().length > 0) {
+        return {
+          reply: chatResponseText,
+          isImportant,
+          isSimulated: false
+        };
+      }
 
       return {
-        reply: chatResponse.text || "I am here to help you configure VeggiePOS. Please clarify your query.",
+        reply: this.getRuleBasedReply(lowercasePrompt, staffName, tenantName, isImportant),
         isImportant,
-        isSimulated: false
+        isSimulated: true
       };
-    } catch (err: any) {
-      console.info("[CopilotService] Gemini Copilot connection threshold hit. Falling back to friendly local heuristics/offline mode.");
+    } catch {
       return {
-        reply: `I encountered a connection threshold. For licensing queries or terminal configuration support, please use the Dispatch button below to log your inquiry.`,
+        reply: this.getRuleBasedReply(lowercasePrompt, staffName, tenantName, isImportant),
         isImportant,
         isSimulated: true
       };
     }
   }
+
+  private getRuleBasedReply(
+    lowercasePrompt: string,
+    staffName: string,
+    tenantName: string,
+    isImportant: boolean
+  ): string {
+    if (lowercasePrompt.includes("hi") || lowercasePrompt.includes("hello") || lowercasePrompt.includes("namaste")) {
+      return `Hello ${staffName}! How can I assist you with ${tenantName}'s operations today? You can ask about recipe setups, ingredients tracking, billing configurations, KOT, and table floor plans.`;
+    }
+    if (lowercasePrompt.includes("price") || lowercasePrompt.includes("plan") || lowercasePrompt.includes("cost") || lowercasePrompt.includes("subscription")) {
+      return `VeggiePOS plans include:\n• Starter / Counter: ₹799/month (billed annually) for single counters, cafés, and bakeries.\n• Growth / Full Dine-In: ₹1,499/month (billed annually) with table floor plan, KOT pacing, live recipe BOM, and staff PIN audit.\n• Multi-Outlet / Enterprise: ₹2,999/month with centralized catalog management and cross-outlet inventory transfers.\nAll plans include zero hardware lock-in and 48-hour rapid go-live!`;
+    }
+    if (lowercasePrompt.includes("kot") || lowercasePrompt.includes("kds") || lowercasePrompt.includes("kitchen")) {
+      return `VeggiePOS Kitchen Order Tickets (KOT) feature visual station color-coding (Starters, Mains, Desserts), multi-course holding/firing, kitchen latency timers, and direct thermal printing via USB, Bluetooth, or LAN.`;
+    }
+    if (lowercasePrompt.includes("recipe") || lowercasePrompt.includes("ingredient") || lowercasePrompt.includes("stock") || lowercasePrompt.includes("inventory")) {
+      return `In VeggiePOS, you map recipe weights in the 'Inventory & Recipes' tab. When an order is processed, ingredients are automatically deducted down to grams/milliliters based on your Recipe Bill of Materials (BOM). Store managers can log vendor supplies, while the Owner has full master editing rights.`;
+    }
+    if (lowercasePrompt.includes("table") || lowercasePrompt.includes("floor") || lowercasePrompt.includes("dine")) {
+      return `Our Table Floor Plan features live color-coded table states (Vacant, Occupied, Dining, Billing) across customizable zones (Indoor, Patio, Terrace, Bar) with quick multi-server ordering.`;
+    }
+    if (lowercasePrompt.includes("swiggy") || lowercasePrompt.includes("zomato") || lowercasePrompt.includes("online")) {
+      return `The Online Order Aggregator provides a unified inbox for Swiggy, Zomato, and Direct Orders with one-click acceptance and automatic KOT dispatch to the kitchen.`;
+    }
+    if (lowercasePrompt.includes("hardware") || lowercasePrompt.includes("printer") || lowercasePrompt.includes("device")) {
+      return `VeggiePOS is 100% browser-based (PWA) and runs on iPads, Android tablets, Windows/Mac laptops, and mobile phones. It connects to standard ESC/POS 58mm/80mm thermal receipt printers without proprietary hardware lock-ins.`;
+    }
+    if (isImportant) {
+      return `This concern involves technical configurations or operations parameters. I have flagged this as an "Administrative Issue" for log archiving. You can click "Log & Dispatch Transcript to Admin" below to instantly log this conversation.`;
+    }
+    return `Thank you for asking! I can help with general terminal navigation, shift logging, recipe BOM, digital UPI/cash billing, and analytics. How can I assist ${staffName} today?`;
+  }
 }
 
-async function retryWithBackoff<T>(
+async function executeWithRetry<T>(
   fn: () => Promise<T>,
-  retries = 3,
-  delay = 1000,
+  retries = 2,
+  delay = 500,
   backoffFactor = 2
 ): Promise<T> {
   try {
     return await fn();
   } catch (error: any) {
     const status = error?.status || error?.code || error?.statusCode;
-    const message = typeof error?.message === "string" ? error.message : JSON.stringify(error);
-    const isRetryable = status === 503 || status === 429 || 
-                        message.includes("503") || message.includes("429") || 
-                        message.includes("high demand") || message.includes("UNAVAILABLE") ||
-                        message.includes("temporary") || message.includes("Unavailable");
-    
+    const message = typeof error?.message === "string" ? error.message : "";
+    const isRetryable =
+      status === 503 ||
+      status === 429 ||
+      message.includes("503") ||
+      message.includes("429") ||
+      message.includes("high demand") ||
+      message.includes("UNAVAILABLE") ||
+      message.includes("Unavailable");
+
     if (retries > 0 && isRetryable) {
-      console.info(`[CopilotService] Gemini call failed with status ${status}. Retrying in ${delay}ms... (${retries} attempts remaining).`);
       await new Promise(resolve => setTimeout(resolve, delay));
-      return retryWithBackoff(fn, retries - 1, delay * backoffFactor, backoffFactor);
+      return executeWithRetry(fn, retries - 1, delay * backoffFactor, backoffFactor);
     }
     throw error;
   }
