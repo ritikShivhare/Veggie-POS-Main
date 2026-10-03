@@ -63,6 +63,28 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
 
   const otpInputRef = React.useRef<HTMLInputElement>(null);
 
+  // Restore any pending verification session on mount (so user checking email in another tab doesn't lose state)
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("veggiepos_pending_verify");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.pendingToken && parsed.sentEmail && (Date.now() - (parsed.savedAt || 0)) < 30 * 60 * 1000) {
+          setPendingToken(parsed.pendingToken);
+          setSentEmail(parsed.sentEmail);
+          setEmail(parsed.sentEmail);
+          if (parsed.businessName) setBusinessName(parsed.businessName);
+          if (parsed.ownerName) setOwnerName(parsed.ownerName);
+          setGeneratedTenantId(parsed.generatedTenantId || "");
+          if (parsed.devOtpCode) setDevOtpCode(parsed.devOtpCode);
+          setPhase("verify");
+        } else {
+          sessionStorage.removeItem("veggiepos_pending_verify");
+        }
+      }
+    } catch {}
+  }, []);
+
   // Auto-focus OTP input on entering verify phase
   useEffect(() => {
     if (phase === "verify" && otpInputRef.current) {
@@ -152,6 +174,17 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
       setSentEmail(data.email);
       setGeneratedTenantId(data.tenantId);
       if (data.devOtp) setDevOtpCode(data.devOtp);
+      try {
+        sessionStorage.setItem("veggiepos_pending_verify", JSON.stringify({
+          pendingToken: data.pendingToken,
+          sentEmail: data.email,
+          businessName,
+          ownerName,
+          generatedTenantId: data.tenantId,
+          devOtpCode: data.devOtp || "",
+          savedAt: Date.now()
+        }));
+      } catch {}
       setPhase("verify");
     } catch (err: any) {
       setError(err.message || "Something went wrong. Please check your network and try again.");
@@ -164,7 +197,8 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
   const handleVerifySubmitWithCode = async (codeToVerify: string) => {
     setError("");
 
-    if (!codeToVerify || codeToVerify.trim().length !== 6) {
+    const cleanedCode = codeToVerify.trim().replace(/\D/g, "");
+    if (!cleanedCode || cleanedCode.length !== 6) {
       return setError("Please enter the 6-digit verification code sent to your email.");
     }
 
@@ -175,7 +209,8 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           pendingToken,
-          verificationCode: codeToVerify.trim()
+          email: sentEmail || email,
+          verificationCode: cleanedCode
         })
       });
 
@@ -183,6 +218,10 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
       if (!res.ok || !data.success) {
         throw new Error(data.message || data.error || "The code entered is invalid or expired.");
       }
+
+      try {
+        sessionStorage.removeItem("veggiepos_pending_verify");
+      } catch {}
 
       // Success! Move to success phase and trigger registration handler
       setPhase("success");
@@ -228,6 +267,17 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
       }
       setPendingToken(data.pendingToken);
       if (data.devOtp) setDevOtpCode(data.devOtp);
+      try {
+        sessionStorage.setItem("veggiepos_pending_verify", JSON.stringify({
+          pendingToken: data.pendingToken,
+          sentEmail: data.email || email,
+          businessName,
+          ownerName,
+          generatedTenantId: data.tenantId,
+          devOtpCode: data.devOtp || "",
+          savedAt: Date.now()
+        }));
+      } catch {}
       alert(`A fresh verification code has been dispatched to ${email}!`);
     } catch (err: any) {
       setError(err.message || "Failed to resend verification code.");
@@ -521,7 +571,12 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
                 <div className="flex justify-between items-center text-[10px] font-bold font-mono uppercase tracking-wider text-slate-400 px-1">
                   <button
                     type="button"
-                    onClick={() => setPhase("form")}
+                    onClick={() => {
+                      try {
+                        sessionStorage.removeItem("veggiepos_pending_verify");
+                      } catch {}
+                      setPhase("form");
+                    }}
                     className="hover:text-white transition flex items-center gap-1 cursor-pointer"
                   >
                     <ChevronLeft className="w-4 h-4" />

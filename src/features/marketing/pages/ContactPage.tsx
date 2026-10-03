@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { MarketingRoute, DemoRequest } from "../types";
 import {
   Calendar,
@@ -15,7 +15,8 @@ import {
   MapPin,
   MessageSquare,
   Copy,
-  Check
+  Check,
+  RefreshCw
 } from "lucide-react";
 
 interface ContactPageProps {
@@ -39,8 +40,43 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
 
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [copiedAlert, setCopiedAlert] = useState<boolean>(false);
   const [createdLeadId, setCreatedLeadId] = useState<string | null>(null);
+  const [previousSlotExpired, setPreviousSlotExpired] = useState<boolean>(false);
+  const [expiredDateStr, setExpiredDateStr] = useState<string>("");
+
+  // Check saved walkthrough booking on load: shows scheduled screen every time, or re-schedules when expired
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("veggiepos_walkthrough_lead");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && (parsed.restaurantName || parsed.fullName)) {
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const isExpired = parsed.preferredDate ? parsed.preferredDate < todayStr : false;
+
+          if (isExpired) {
+            // Preferred slot expired: pre-fill details so user can schedule again when required
+            setPreviousSlotExpired(true);
+            setExpiredDateStr(parsed.preferredDate);
+            setFormData({
+              ...parsed,
+              preferredDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+              preferredTime: parsed.preferredTime || "morning"
+            });
+            setCreatedLeadId(parsed.id || null);
+            setIsSubmitted(false);
+          } else {
+            // Slot is active: show walkthrough schedule like given picture
+            setFormData(parsed);
+            setCreatedLeadId(parsed.id || null);
+            setIsSubmitted(true);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Could not retrieve saved walkthrough booking:", err);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,15 +89,37 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
         body: JSON.stringify(formData)
       });
       const data = await res.json();
-      if (data.success && data.lead) {
-        setCreatedLeadId(data.lead.id);
-      }
+      const leadRecord = data.success && data.lead ? data.lead : {
+        ...formData,
+        id: `lead-${Date.now()}`
+      };
+      setCreatedLeadId(leadRecord.id);
+      setFormData(leadRecord);
+      try {
+        localStorage.setItem("veggiepos_walkthrough_lead", JSON.stringify(leadRecord));
+      } catch (storageErr) {}
     } catch (err) {
       console.warn("API lead submission fallback to simulated success:", err);
+      const fallback = { ...formData, id: `lead-${Date.now()}` };
+      setCreatedLeadId(fallback.id);
+      try {
+        localStorage.setItem("veggiepos_walkthrough_lead", JSON.stringify(fallback));
+      } catch (e) {}
     } finally {
       setIsSubmitting(false);
       setIsSubmitted(true);
+      setPreviousSlotExpired(false);
     }
+  };
+
+  const handleScheduleAgain = () => {
+    setIsSubmitted(false);
+    setPreviousSlotExpired(false);
+    setFormData((prev) => ({
+      ...prev,
+      preferredDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+      preferredTime: prev.preferredTime || "morning"
+    }));
   };
 
   const checklistItems = [
@@ -120,10 +178,6 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                     <CheckCircle2 className="w-8 h-8 text-[#6E8F45]" />
                   </div>
                   <div className="space-y-2">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-mono font-bold">
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Request Logged in SaaS Master Command Center</span>
-                    </div>
                     <h2 className="font-serif text-3xl font-bold text-[#181A18]">
                       Walkthrough Scheduled!
                     </h2>
@@ -132,10 +186,10 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                     </p>
                   </div>
 
-                  {/* Summary Box with Address Column */}
+                  {/* Summary Box with Address Column (Matching Image 3) */}
                   <div className="p-4 bg-[#FBF9F5] rounded-2xl border border-[#EAE5DA] max-w-md mx-auto text-xs text-[#787F74] text-left space-y-2">
                     <div className="flex items-start justify-between gap-2 border-b border-[#EAE5DA] pb-2">
-                      <span className="font-mono text-[10px] uppercase font-bold text-[#567234]">Booking Summary</span>
+                      <span className="font-mono text-[10px] uppercase font-bold text-[#567234]">BOOKING SUMMARY</span>
                       {createdLeadId && (
                         <span className="font-mono text-[10px] text-slate-400">ID: {createdLeadId}</span>
                       )}
@@ -158,46 +212,15 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                     </p>
                   </div>
 
-                  {/* Option 3: Instant WhatsApp Alert & Direct Confirmation */}
-                  <div className="max-w-md mx-auto p-4 bg-[#25D366]/10 border border-[#25D366]/30 rounded-2xl text-left space-y-3">
-                    <div className="flex items-center gap-2 text-[#128C7E]">
-                      <MessageSquare className="w-4 h-4 fill-current" />
-                      <span className="font-bold text-xs">Instant WhatsApp Confirmation Available</span>
-                    </div>
-                    <p className="text-[11px] text-[#2C3E50] leading-snug">
-                      Would you like to connect immediately with our hospitality onboarding specialist on WhatsApp?
-                    </p>
-                    
-                    <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
-                      <a
-                        href={`https://wa.me/919876543210?text=${encodeURIComponent(
-                          `Hello Veggie POS Support Team,\n\nI have submitted a 15-minute walkthrough request on your website.\n\n• Restaurant: ${formData.restaurantName}\n• Address: ${formData.address}\n• Contact Person: ${formData.fullName}\n• Phone: ${formData.phone}\n• Email: ${formData.email}\n• Outlets: ${formData.outletCount}\n• Preferred Date & Time: ${formData.preferredDate || "Tomorrow"} (${formData.preferredTime})\n• Primary Focus: ${formData.primaryGoal}\n\nPlease confirm my walkthrough slot.`
-                        )}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full sm:w-auto flex-1 px-4 py-2.5 bg-[#25D366] hover:bg-[#1EBE5D] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition"
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                        <span>Chat on WhatsApp Now</span>
-                      </a>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const msg = `Walkthrough Request:\nRestaurant: ${formData.restaurantName}\nAddress: ${formData.address}\nContact: ${formData.fullName} (${formData.phone})\nSlot: ${formData.preferredDate} (${formData.preferredTime})`;
-                          navigator.clipboard?.writeText(msg);
-                          setCopiedAlert(true);
-                          setTimeout(() => setCopiedAlert(false), 2500);
-                        }}
-                        className="px-3.5 py-2.5 bg-white border border-[#EAE5DA] text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-xl flex items-center gap-1.5 transition"
-                      >
-                        {copiedAlert ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                        <span>{copiedAlert ? "Copied" : "Copy Details"}</span>
-                      </button>
-                    </div>
-                  </div>
-
                   <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={handleScheduleAgain}
+                      className="px-5 py-3 text-xs font-bold text-[#181A18] bg-[#FBF9F5] hover:bg-[#EAE5DA] rounded-xl border border-[#EAE5DA] transition cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Schedule Again / Change Slot</span>
+                    </button>
                     <button
                       onClick={() => onNavigate("/")}
                       className="px-6 py-3 text-xs font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition cursor-pointer"
@@ -214,6 +237,18 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Expired Slot Notice: pre-filled details so user can schedule again when required */}
+                  {previousSlotExpired && (
+                    <div className="p-4 bg-amber-50 border border-amber-200/90 rounded-2xl text-xs text-amber-900 flex items-start gap-3 animate-in fade-in duration-150">
+                      <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="space-y-0.5">
+                        <p className="font-bold">Your previous walkthrough slot ({expiredDateStr}) has expired.</p>
+                        <p className="text-amber-700 text-[11px] leading-relaxed">
+                          Your restaurant details are already saved. Please select a fresh date and timing below to schedule again.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="space-y-1 pb-2 border-b border-[#EAE5DA]">
                     <h2 className="font-serif text-2xl font-bold text-[#181A18]">

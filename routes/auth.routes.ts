@@ -52,10 +52,243 @@ interface PendingSignup {
   tenantId: string;
   verificationCode: string;
   createdAt: number;
+  pendingToken: string;
 }
+
 const pendingSignups = new Map<string, PendingSignup>();
 
-// Self-Serve Signup Flow with Email Verification
+/**
+ * Generates a high-conversion, professional HTML email template for restaurant onboarding & verification
+ */
+function generateVerificationEmailHtml(params: {
+  ownerName: string;
+  businessName: string;
+  verificationCode: string;
+  tenantId: string;
+  region: string;
+}): string {
+  const { ownerName, businessName, verificationCode, tenantId, region } = params;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Activate Your VeggiePOS Account</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #0b1120; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f1f5f9;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #0b1120; padding: 32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" style="max-width: 580px; background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);" cellspacing="0" cellpadding="0" border="0">
+          
+          <!-- Top Gradient Accent Bar -->
+          <tr>
+            <td style="height: 6px; background: linear-gradient(90deg, #ec4899 0%, #f43f5e 50%, #f59e0b 100%);"></td>
+          </tr>
+
+          <!-- Header Section with Brand -->
+          <tr>
+            <td style="padding: 32px 32px 16px 32px; text-align: center;">
+              <div style="display: inline-block; padding: 6px 14px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 9999px; margin-bottom: 16px;">
+                <span style="font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #34d399; font-family: monospace;">🌱 Restaurant Activation</span>
+              </div>
+              <h1 style="margin: 0 0 6px 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: #ffffff;">
+                Veggie<span style="color: #f43f5e;">POS</span>
+              </h1>
+              <p style="margin: 0; font-size: 13px; color: #94a3b8; font-weight: 500;">
+                Cloud-Native Restaurant &amp; Billing Operating System
+              </p>
+            </td>
+          </tr>
+
+          <!-- Welcome Headline -->
+          <tr>
+            <td style="padding: 12px 32px 8px 32px; text-align: left;">
+              <h2 style="margin: 0 0 10px 0; font-size: 20px; font-weight: 700; color: #f8fafc;">
+                Welcome, ${ownerName}! 👋
+              </h2>
+              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #cbd5e1;">
+                Thank you for choosing VeggiePOS to power <strong style="color: #ffffff;">${businessName}</strong>. You are just one quick step away from activating your full cloud billing terminal, table QR ordering, live KDS, and smart inventory management.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Verification Code Card -->
+          <tr>
+            <td style="padding: 8px 32px 20px 32px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: linear-gradient(180deg, #131d33 0%, #0d1527 100%); border: 1.5px dashed #059669; border-radius: 12px; padding: 24px; text-align: center;">
+                <tr>
+                  <td>
+                    <p style="margin: 0 0 10px 0; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #34d399; font-family: monospace;">
+                      Your 6-Digit Email Verification Code
+                    </p>
+                    <div style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; font-size: 38px; font-weight: 900; letter-spacing: 10px; color: #10b981; padding: 10px 0;">
+                      ${verificationCode}
+                    </div>
+                    <p style="margin: 8px 0 0 0; font-size: 12px; color: #94a3b8;">
+                      ⏱️ Valid for <strong>30 minutes</strong> &bull; Single-use security token
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- What to do next -->
+          <tr>
+            <td style="padding: 0 32px 20px 32px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: rgba(30, 41, 59, 0.4); border: 1px solid #1e293b; border-radius: 12px; padding: 18px 20px;">
+                <tr>
+                  <td>
+                    <h3 style="margin: 0 0 12px 0; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #e2e8f0;">
+                      🚀 Quick Next Steps:
+                    </h3>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td style="padding: 4px 0; font-size: 13px; color: #cbd5e1; line-height: 1.5;">
+                          <strong style="color: #f1f5f9;">1. Enter the 6 digits</strong> into your VeggiePOS registration screen.
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 4px 0; font-size: 13px; color: #cbd5e1; line-height: 1.5;">
+                          <strong style="color: #f1f5f9;">2. Explore pre-seeded menus</strong> (Special Thali, Paneer, Beverages, and recipes).
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 4px 0; font-size: 13px; color: #cbd5e1; line-height: 1.5;">
+                          <strong style="color: #f1f5f9;">3. Launch Table Billing &amp; KOT</strong> or print QR table standees in 1-click.
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Outlet Registration Summary -->
+          <tr>
+            <td style="padding: 0 32px 20px 32px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #111827; border: 1px solid #1f2937; border-radius: 10px; padding: 14px 18px;">
+                <tr>
+                  <td style="font-size: 12px; color: #9ca3af; padding-bottom: 6px;">
+                    <strong>Restaurant Name:</strong> <span style="color: #f3f4f6;">${businessName}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size: 12px; color: #9ca3af; padding-bottom: 6px;">
+                    <strong>Owner / Admin:</strong> <span style="color: #f3f4f6;">${ownerName}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size: 12px; color: #9ca3af; padding-bottom: 6px;">
+                    <strong>Workspace Identifier:</strong> <span style="color: #38bdf8; font-family: monospace;">${tenantId}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="font-size: 12px; color: #9ca3af;">
+                    <strong>Region:</strong> <span style="color: #f3f4f6;">${region}</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Security Notice -->
+          <tr>
+            <td style="padding: 0 32px 24px 32px; font-size: 12px; line-height: 1.6; color: #64748b; border-top: 1px solid #1e293b; padding-top: 16px;">
+              <p style="margin: 0 0 6px 0;">
+                🔒 <strong>Security Tip:</strong> Never share your verification code or login PIN. VeggiePOS representatives will never ask for your code.
+              </p>
+              <p style="margin: 0;">
+                If you did not initiate this registration, you can safely disregard this email.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background: #090e1a; padding: 20px 32px; text-align: center; border-top: 1px solid #1e293b;">
+              <p style="margin: 0 0 4px 0; font-size: 11px; color: #64748b;">
+                &copy; ${new Date().getFullYear()} VeggiePOS Cloud Systems. All rights reserved.
+              </p>
+              <p style="margin: 0; font-size: 11px; color: #475569;">
+                Next-Gen Cloud Restaurant OS &bull; Offline Billing &bull; Table QR Ordering &bull; KDS &bull; Inventory
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+// Synchronize memory map with persistent Database storage to survive server recycles
+async function syncPendingSignupsFromDb(): Promise<void> {
+  try {
+    const db = Database.getInstance();
+    const stored = await db.getObject<PendingSignup[]>("system-tenant", "pending_signups_store");
+    if (stored && Array.isArray(stored)) {
+      const now = Date.now();
+      const active = stored.filter(s => (now - s.createdAt) < 30 * 60 * 1000);
+      for (const s of active) {
+        if (s.pendingToken) pendingSignups.set(s.pendingToken, s);
+        if (s.email) pendingSignups.set(s.email.toLowerCase().trim(), s);
+      }
+    }
+  } catch (err) {
+    console.warn("[Auth] Failed to sync pending signups from DB:", err);
+  }
+}
+
+async function persistPendingSignup(signup: PendingSignup): Promise<void> {
+  pendingSignups.set(signup.pendingToken, signup);
+  pendingSignups.set(signup.email.toLowerCase().trim(), signup);
+  try {
+    const db = Database.getInstance();
+    const existing = (await db.getObject<PendingSignup[]>("system-tenant", "pending_signups_store")) || [];
+    const now = Date.now();
+    // Exclude expired and existing signups for same email or token to prevent stale code conflicts
+    const filtered = existing.filter(s => 
+      (now - s.createdAt) < 30 * 60 * 1000 &&
+      s.email.toLowerCase().trim() !== signup.email.toLowerCase().trim() &&
+      s.pendingToken !== signup.pendingToken
+    );
+    filtered.push(signup);
+    await db.saveObject("system-tenant", "pending_signups_store", filtered);
+  } catch (err) {
+    console.warn("[Auth] Failed to persist pending signup:", err);
+  }
+}
+
+async function removePendingSignupRecord(tokenOrEmail: string): Promise<void> {
+  const norm = tokenOrEmail.toLowerCase().trim();
+  const existing = pendingSignups.get(tokenOrEmail) || pendingSignups.get(norm);
+  if (existing) {
+    pendingSignups.delete(existing.pendingToken);
+    pendingSignups.delete(existing.email.toLowerCase().trim());
+  } else {
+    pendingSignups.delete(tokenOrEmail);
+    pendingSignups.delete(norm);
+  }
+  try {
+    const db = Database.getInstance();
+    const stored = (await db.getObject<PendingSignup[]>("system-tenant", "pending_signups_store")) || [];
+    const filtered = stored.filter(s => 
+      s.pendingToken !== tokenOrEmail && 
+      s.email.toLowerCase().trim() !== norm &&
+      (!existing || (s.pendingToken !== existing.pendingToken && s.email.toLowerCase().trim() !== existing.email.toLowerCase().trim()))
+    );
+    await db.saveObject("system-tenant", "pending_signups_store", filtered);
+  } catch (err) {
+    console.warn("[Auth] Failed to remove pending signup from DB:", err);
+  }
+}
+
+// Self-Serve Signup Flow with Engaging Email Verification
 router.post("/auth/signup", async (req, res) => {
   const { businessName, ownerName, ownerPhone, email, pin, region } = req.body;
   if (!businessName || !ownerName || !email || !pin) {
@@ -70,26 +303,40 @@ router.post("/auth/signup", async (req, res) => {
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const pendingToken = `ptok-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    pendingSignups.set(pendingToken, {
+    const pendingSignupRecord: PendingSignup = {
       businessName,
       ownerName,
       ownerPhone: ownerPhone || "",
-      email,
+      email: email.trim(),
       pin,
       region: region || "North India / Delhi",
       tenantId,
       verificationCode,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      pendingToken
+    };
+
+    // Store in both memory and persistent database
+    await persistPendingSignup(pendingSignupRecord);
+
+    // Generate beautifully styled, engaging HTML email
+    const emailHtml = generateVerificationEmailHtml({
+      ownerName,
+      businessName,
+      verificationCode,
+      tenantId,
+      region: region || "North India / Delhi"
     });
 
     // Send verification email via NotificationService
     await notificationService.send(tenantId, {
-      title: "VeggiePOS Email Verification",
+      title: `🔐 Complete Setup: Your VeggiePOS Verification Code for ${businessName}`,
       message: `Dear ${ownerName}, thank you for registering "${businessName}". Your email verification code is: ${verificationCode}. Enter this to complete your setup.`,
+      htmlBody: emailHtml,
       severity: "info",
       channels: ["email"],
-      recipientEmail: email,
-      metadata: { verificationCode, tenantId }
+      recipientEmail: email.trim(),
+      metadata: { verificationCode, tenantId, businessName }
     });
 
     const isProduction = isProductionEnvironment();
@@ -104,7 +351,7 @@ router.post("/auth/signup", async (req, res) => {
       success: true,
       pendingToken,
       tenantId,
-      email,
+      email: email.trim(),
       message: "Verification code sent to email."
     };
 
@@ -120,23 +367,69 @@ router.post("/auth/signup", async (req, res) => {
 });
 
 router.post("/auth/verify", async (req, res) => {
-  const { pendingToken, verificationCode } = req.body;
-  if (!pendingToken || !verificationCode) {
-    return res.status(400).json({ success: false, error: "Token and verification code are required" });
+  const { pendingToken, verificationCode, email } = req.body;
+  const inputCode = String(verificationCode || "").trim().replace(/\D/g, "");
+
+  if ((!pendingToken && !email) || !inputCode) {
+    return res.status(400).json({ 
+      success: false, 
+      error: "Verification code and session token or email are required." 
+    });
   }
 
-  const signup = pendingSignups.get(pendingToken);
+  // Ensure DB store is synchronized into memory
+  await syncPendingSignupsFromDb();
+
+  let signup: PendingSignup | undefined;
+  if (pendingToken) {
+    signup = pendingSignups.get(pendingToken);
+  }
+  if (!signup && email) {
+    signup = pendingSignups.get(String(email).toLowerCase().trim());
+  }
+
+  // Fallback: check directly in persistent DB array
   if (!signup) {
-    return res.status(400).json({ success: false, error: "Registration session has expired or is invalid" });
+    try {
+      const db = Database.getInstance();
+      const stored = (await db.getObject<PendingSignup[]>("system-tenant", "pending_signups_store")) || [];
+      signup = stored.find(s => 
+        (pendingToken && s.pendingToken === pendingToken) || 
+        (email && s.email.toLowerCase().trim() === String(email).toLowerCase().trim())
+      );
+    } catch {}
   }
 
-  // Constant-time verification code validation & Master code check (strict env var only)
-  const isDirectCodeValid = constantTimeStringCompare(verificationCode, signup.verificationCode);
-  const isMasterCodeValid = verifyMasterVerificationCode(verificationCode);
+  if (!signup) {
+    return res.status(400).json({ 
+      success: false, 
+      error: "Registration session has expired or is invalid. Please click 'Resend Code' to get a fresh code." 
+    });
+  }
+
+  // Check code expiration (30 minutes)
+  const isExpired = (Date.now() - signup.createdAt) > 30 * 60 * 1000;
+  if (isExpired) {
+    await removePendingSignupRecord(signup.pendingToken);
+    return res.status(400).json({ 
+      success: false, 
+      error: "This verification code has expired. Please click 'Resend Code' to receive a new code." 
+    });
+  }
+
+  const storedCode = String(signup.verificationCode).trim();
+
+  // Constant-time verification code validation & Master code check
+  const isDirectCodeValid = constantTimeStringCompare(inputCode, storedCode);
+  const isMasterCodeValid = verifyMasterVerificationCode(inputCode);
   const isCodeValid = isDirectCodeValid || isMasterCodeValid;
 
   if (!isCodeValid) {
-    return res.status(400).json({ success: false, error: "INVALID_CODE", message: "The verification code entered is incorrect. Please try again." });
+    return res.status(400).json({ 
+      success: false, 
+      error: "INVALID_CODE", 
+      message: `The 6-digit verification code entered is incorrect. Please check your latest email for "${signup.businessName}" or click Resend Code.` 
+    });
   }
 
   try {
@@ -395,8 +688,8 @@ router.post("/auth/verify", async (req, res) => {
       userAgent
     );
 
-    // Remove from pending map
-    pendingSignups.delete(pendingToken);
+    // Remove from pending map and persistent database store
+    await removePendingSignupRecord(signup.pendingToken);
 
     // Set production-grade HttpOnly Secure session cookie
     res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));

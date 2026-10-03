@@ -555,24 +555,64 @@ router.post("/leads/walkthrough", async (req, res) => {
       existingLeads = [...DEFAULT_SAMPLE_LEADS];
     }
 
-    const newLead: WalkthroughLeadRecord = {
-      id: `lead-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      fullName: String(fullName).trim(),
-      email: String(email || "").trim(),
-      phone: String(phone).trim(),
-      restaurantName: String(restaurantName).trim(),
-      address: String(address || "").trim(),
-      format: format || "casual-dine",
-      outletCount: outletCount || "1",
-      primaryGoal: primaryGoal || "Fast PIN billing & speed at register",
-      preferredDate: preferredDate || new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-      preferredTime: preferredTime || "morning",
-      notes: notes ? String(notes).trim() : "",
-      createdAt: new Date().toISOString(),
-      status: "new"
-    };
+    const cleanPhone = String(phone).replace(/[^0-9]/g, "");
+    const todayStr = new Date().toISOString().slice(0, 10);
 
-    existingLeads.unshift(newLead);
+    const existingIndex = existingLeads.findIndex((l) => {
+      const p1 = l.phone.replace(/[^0-9]/g, "");
+      const isSamePhone = cleanPhone && p1 && (p1 === cleanPhone || p1.endsWith(cleanPhone) || cleanPhone.endsWith(p1));
+      const isSameEmail = email && l.email && l.email.toLowerCase().trim() === String(email).toLowerCase().trim();
+      const isSameRest = l.restaurantName && l.restaurantName.toLowerCase().trim() === String(restaurantName).toLowerCase().trim();
+      return isSamePhone || isSameEmail || (isSameRest && l.fullName.toLowerCase().trim() === String(fullName).toLowerCase().trim());
+    });
+
+    let targetLead: WalkthroughLeadRecord;
+    let isRescheduled = false;
+
+    if (existingIndex !== -1) {
+      // Existing lead putting same details again or scheduling again after slot expired
+      const existingLead = existingLeads[existingIndex];
+      const isExpired = existingLead.preferredDate ? existingLead.preferredDate < todayStr : false;
+
+      existingLead.fullName = String(fullName).trim();
+      if (email) existingLead.email = String(email).trim();
+      existingLead.phone = String(phone).trim();
+      existingLead.restaurantName = String(restaurantName).trim();
+      if (address) existingLead.address = String(address).trim();
+      if (format) existingLead.format = format;
+      if (outletCount) existingLead.outletCount = outletCount;
+      if (primaryGoal) existingLead.primaryGoal = primaryGoal;
+      existingLead.preferredDate = preferredDate || existingLead.preferredDate || new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+      existingLead.preferredTime = preferredTime || existingLead.preferredTime || "morning";
+      if (notes) existingLead.notes = String(notes).trim();
+      existingLead.createdAt = new Date().toISOString();
+      existingLead.status = "new";
+
+      // Move to top of list
+      existingLeads.splice(existingIndex, 1);
+      existingLeads.unshift(existingLead);
+      targetLead = existingLead;
+      isRescheduled = isExpired;
+    } else {
+      targetLead = {
+        id: `lead-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        fullName: String(fullName).trim(),
+        email: String(email || "").trim(),
+        phone: String(phone).trim(),
+        restaurantName: String(restaurantName).trim(),
+        address: String(address || "").trim(),
+        format: format || "casual-dine",
+        outletCount: outletCount || "1",
+        primaryGoal: primaryGoal || "Fast PIN billing & speed at register",
+        preferredDate: preferredDate || new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+        preferredTime: preferredTime || "morning",
+        notes: notes ? String(notes).trim() : "",
+        createdAt: new Date().toISOString(),
+        status: "new"
+      };
+      existingLeads.unshift(targetLead);
+    }
+
     await db.saveObject("system-tenant", "walkthrough_leads", existingLeads);
 
     // Also push notification to in-app notification center for all tenants/SaaS owner
@@ -580,8 +620,8 @@ router.post("/leads/walkthrough", async (req, res) => {
       const currentNotifications = (await db.getObject<any[]>("veg-main-001", "system_notifications")) || [];
       const newNotification = {
         id: `notify-lead-${Date.now()}`,
-        title: "🌟 New Walkthrough Lead Booked",
-        message: `${newLead.fullName} booked a 15-min walkthrough for "${newLead.restaurantName}" (Address: ${newLead.address || "Location provided"}). Contact: ${newLead.phone}`,
+        title: isRescheduled ? "🔄 Walkthrough Re-scheduled" : "🌟 Walkthrough Schedule Confirmed",
+        message: `${targetLead.fullName} (${targetLead.restaurantName}) - Slot: ${targetLead.preferredDate} (${targetLead.preferredTime.toUpperCase()}). Address: ${targetLead.address || "N/A"}. Contact: ${targetLead.phone}`,
         timestamp: new Date().toISOString(),
         read: false,
         severity: "info"
@@ -596,12 +636,13 @@ router.post("/leads/walkthrough", async (req, res) => {
       "system-tenant",
       "LEAD_CAPTURE",
       "WEBSITE",
-      `New Walkthrough booked for "${newLead.restaurantName}" by ${newLead.fullName} (Phone: ${newLead.phone}, Address: ${newLead.address || "N/A"})`
+      `Walkthrough ${isRescheduled ? "re-scheduled" : "booked"} for "${targetLead.restaurantName}" by ${targetLead.fullName} (Phone: ${targetLead.phone}, Address: ${targetLead.address || "N/A"})`
     );
 
     res.json({
       success: true,
-      lead: newLead,
+      lead: targetLead,
+      isRescheduled,
       message: "Walkthrough request successfully recorded."
     });
   } catch (error: any) {

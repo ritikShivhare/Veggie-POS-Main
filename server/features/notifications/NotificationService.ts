@@ -11,6 +11,7 @@ export interface NotificationPayload {
   channels: NotificationChannel[];
   recipientEmail?: string;
   recipientPhone?: string;
+  htmlBody?: string;
   metadata?: Record<string, any>;
 }
 
@@ -253,7 +254,8 @@ export class NotificationService {
               results.push({ channel: "email", status: "failed", detail: "Missing recipient email address" });
               break;
             }
-            const emailRes = await this.emailProvider.sendEmail(recipientEmail, title, `<p>${message}</p>`);
+            const bodyToSend = payload.htmlBody || `<p>${message}</p>`;
+            const emailRes = await this.emailProvider.sendEmail(recipientEmail, title, bodyToSend);
             if (emailRes.success) {
               results.push({ channel: "email", status: "success", detail: `Delivered via Resend (Ref: ${emailRes.providerId})` });
               logs.push({
