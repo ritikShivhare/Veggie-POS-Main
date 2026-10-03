@@ -301,9 +301,13 @@ export class NotificationService {
       }
     }
 
-    // Persist dispatch logs for auditing
+    // Persist dispatch logs for auditing (non-blocking)
     if (logs.length > 0) {
-      await this.saveDispatchLogs(tenantId, logs);
+      try {
+        await this.saveDispatchLogs(tenantId, logs);
+      } catch (logErr) {
+        console.warn(`[NotificationService] Warning: Failed to persist dispatch logs for tenant ${tenantId}:`, logErr);
+      }
     }
 
     return {
@@ -388,8 +392,12 @@ export class NotificationService {
   }
 
   private async saveDispatchLogs(tenantId: string, newLogs: DispatchLog[]): Promise<void> {
-    const existing = await this.getDispatchLogs(tenantId);
-    const combined = [...newLogs, ...existing];
-    await this.db.saveObject(tenantId, "notification_dispatch_logs", combined.slice(0, 100));
+    try {
+      const existing = await this.getDispatchLogs(tenantId);
+      const combined = [...newLogs, ...existing];
+      await this.db.saveObject(tenantId, "notification_dispatch_logs", combined.slice(0, 100));
+    } catch (err) {
+      console.warn(`[NotificationService] Suppressed log save error for ${tenantId}:`, err);
+    }
   }
 }

@@ -230,10 +230,10 @@ function generateVerificationEmailHtml(params: {
 async function syncPendingSignupsFromDb(): Promise<void> {
   try {
     const db = Database.getInstance();
-    const stored = await db.getObject<PendingSignup[]>("system-tenant", "pending_signups_store");
+    const stored = await db.getObject<PendingSignup[]>("global", "pending_signups_store");
     if (stored && Array.isArray(stored)) {
       const now = Date.now();
-      const active = stored.filter(s => (now - s.createdAt) < 30 * 60 * 1000);
+      const active = stored.filter(s => s && (now - s.createdAt) < 30 * 60 * 1000);
       for (const s of active) {
         if (s.pendingToken) pendingSignups.set(s.pendingToken, s);
         if (s.email) pendingSignups.set(s.email.toLowerCase().trim(), s);
@@ -249,22 +249,24 @@ async function persistPendingSignup(signup: PendingSignup): Promise<void> {
   pendingSignups.set(signup.email.toLowerCase().trim(), signup);
   try {
     const db = Database.getInstance();
-    const existing = (await db.getObject<PendingSignup[]>("system-tenant", "pending_signups_store")) || [];
+    const existing = (await db.getObject<PendingSignup[]>("global", "pending_signups_store")) || [];
     const now = Date.now();
     // Exclude expired and existing signups for same email or token to prevent stale code conflicts
-    const filtered = existing.filter(s => 
+    const filtered = (Array.isArray(existing) ? existing : []).filter(s => 
+      s &&
       (now - s.createdAt) < 30 * 60 * 1000 &&
-      s.email.toLowerCase().trim() !== signup.email.toLowerCase().trim() &&
-      s.pendingToken !== signup.pendingToken
+      s.email && s.email.toLowerCase().trim() !== signup.email.toLowerCase().trim() &&
+      s.pendingToken && s.pendingToken !== signup.pendingToken
     );
     filtered.push(signup);
-    await db.saveObject("system-tenant", "pending_signups_store", filtered);
+    await db.saveObject("global", "pending_signups_store", filtered);
   } catch (err) {
     console.warn("[Auth] Failed to persist pending signup:", err);
   }
 }
 
 async function removePendingSignupRecord(tokenOrEmail: string): Promise<void> {
+  if (!tokenOrEmail) return;
   const norm = tokenOrEmail.toLowerCase().trim();
   const existing = pendingSignups.get(tokenOrEmail) || pendingSignups.get(norm);
   if (existing) {
@@ -276,13 +278,16 @@ async function removePendingSignupRecord(tokenOrEmail: string): Promise<void> {
   }
   try {
     const db = Database.getInstance();
-    const stored = (await db.getObject<PendingSignup[]>("system-tenant", "pending_signups_store")) || [];
-    const filtered = stored.filter(s => 
-      s.pendingToken !== tokenOrEmail && 
-      s.email.toLowerCase().trim() !== norm &&
-      (!existing || (s.pendingToken !== existing.pendingToken && s.email.toLowerCase().trim() !== existing.email.toLowerCase().trim()))
-    );
-    await db.saveObject("system-tenant", "pending_signups_store", filtered);
+    const stored = (await db.getObject<PendingSignup[]>("global", "pending_signups_store")) || [];
+    if (Array.isArray(stored)) {
+      const filtered = stored.filter(s => 
+        s &&
+        s.pendingToken !== tokenOrEmail && 
+        s.email && s.email.toLowerCase().trim() !== norm &&
+        (!existing || (s.pendingToken !== existing.pendingToken && s.email && s.email.toLowerCase().trim() !== existing.email.toLowerCase().trim()))
+      );
+      await db.saveObject("global", "pending_signups_store", filtered);
+    }
   } catch (err) {
     console.warn("[Auth] Failed to remove pending signup from DB:", err);
   }
@@ -329,15 +334,19 @@ router.post("/auth/signup", async (req, res) => {
     });
 
     // Send verification email via NotificationService
-    await notificationService.send(tenantId, {
-      title: `🔐 Complete Setup: Your VeggiePOS Verification Code for ${businessName}`,
-      message: `Dear ${ownerName}, thank you for registering "${businessName}". Your email verification code is: ${verificationCode}. Enter this to complete your setup.`,
-      htmlBody: emailHtml,
-      severity: "info",
-      channels: ["email"],
-      recipientEmail: email.trim(),
-      metadata: { verificationCode, tenantId, businessName }
-    });
+    try {
+      await notificationService.send(tenantId, {
+        title: `🔐 Complete Setup: Your VeggiePOS Verification Code for ${businessName}`,
+        message: `Dear ${ownerName}, thank you for registering "${businessName}". Your email verification code is: ${verificationCode}. Enter this to complete your setup.`,
+        htmlBody: emailHtml,
+        severity: "info",
+        channels: ["email"],
+        recipientEmail: email.trim(),
+        metadata: { verificationCode, tenantId, businessName }
+      });
+    } catch (emailErr) {
+      console.warn("[Auth] Email delivery warning (proceeding with registration session):", emailErr);
+    }
 
     const isProduction = isProductionEnvironment();
     const allowDevOtp = !isProduction && process.env.ENABLE_DEV_OTP === "true";
@@ -362,7 +371,11 @@ router.post("/auth/signup", async (req, res) => {
 
     res.json(responsePayload);
   } catch (error: any) {
-    res.status(500).json({ success: false, error: "An error occurred while creating registration." });
+    console.error("[Registration Signup Error]:", error);
+    res.status(500).json({ 
+      success: false, 
+      error: error?.message || "An error occurred while creating registration." 
+    });
   }
 });
 
@@ -392,11 +405,14 @@ router.post("/auth/verify", async (req, res) => {
   if (!signup) {
     try {
       const db = Database.getInstance();
-      const stored = (await db.getObject<PendingSignup[]>("system-tenant", "pending_signups_store")) || [];
-      signup = stored.find(s => 
-        (pendingToken && s.pendingToken === pendingToken) || 
-        (email && s.email.toLowerCase().trim() === String(email).toLowerCase().trim())
-      );
+      const stored = (await db.getObject<PendingSignup[]>("global", "pending_signups_store")) || [];
+      if (Array.isArray(stored)) {
+        signup = stored.find(s => 
+          s &&
+          ((pendingToken && s.pendingToken === pendingToken) || 
+           (email && s.email && s.email.toLowerCase().trim() === String(email).toLowerCase().trim()))
+        );
+      }
     } catch {}
   }
 
