@@ -424,13 +424,6 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
                       <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono">5-Digit Terminal PIN</label>
-                      <button
-                        type="button"
-                        onClick={() => setPin("55555")}
-                        className="text-[9px] text-pink-400 hover:text-pink-300 font-bold bg-pink-500/10 hover:bg-pink-500/20 px-1.5 py-0.5 rounded transition cursor-pointer"
-                      >
-                        ⚡ Use 55555
-                      </button>
                     </div>
                     <div className="relative">
                       <Key className="absolute left-3 top-2.5 w-4 h-4 text-slate-500" />
@@ -438,7 +431,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
                         type="password"
                         required
                         maxLength={5}
-                        placeholder="e.g. 55555"
+                        placeholder="Enter 4-5 digit PIN"
                         value={pin}
                         onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
                         className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-9 pr-3 text-xs font-bold tracking-widest text-slate-100 placeholder-slate-600 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition"

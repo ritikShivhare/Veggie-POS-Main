@@ -804,6 +804,8 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
 
   // Handle Menu Item updates
   const handleUpdateMenuItems = (updated: MenuItem[]) => {
+    hasPendingChangesRef.current = true;
+    lastSaveTimeRef.current = Date.now();
     setMenuItems(updated);
     offlineRepository.saveMenuItems(activeTenantId, updated).catch(err => {
       console.warn("[useSyncState] Error recording menu items offline:", err);

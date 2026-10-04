@@ -471,7 +471,7 @@ router.post("/auth/verify", async (req, res) => {
       ownerName: "Raunak",
       ownerPhone: "8989595109",
       email: "ritikshiv53@gmail.com",
-      pin: pin || "55555",
+      pin: pin || "13090",
       region: "North India / Delhi",
       tenantId: "",
       verificationCode: "398398",
@@ -792,8 +792,8 @@ router.post("/auth/login", async (req, res) => {
   try {
     const globalTenants = await getGlobalTenantsList();
     
-    // 1. First attempt to match target tenant by ID, Name, Outlet Code, Email, or Phone
-    let targetTenant = globalTenants.find(
+    // 1. First attempt to match target tenant by ID, Name, Outlet Code, Email, or Phone (newest first)
+    let targetTenant = [...globalTenants].reverse().find(
       (t) =>
         (tenantId && (t.tenantId.toLowerCase() === tenantId.toLowerCase() || t.id.toLowerCase() === tenantId.toLowerCase() || t.name.toLowerCase() === tenantId.toLowerCase())) ||
         (restaurantName && (t.name.toLowerCase() === restaurantName.toLowerCase() || t.tenantId.toLowerCase() === restaurantName.toLowerCase())) ||

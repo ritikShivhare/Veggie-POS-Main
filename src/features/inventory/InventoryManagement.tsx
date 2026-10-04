@@ -187,7 +187,9 @@ export default function InventoryManagement({
         category: finalCategory,
         imageUrl: newMenuItem.imageUrl || undefined,
         isVegetarian: newMenuItem.isVegetarian,
-        isAvailable: true
+        isAvailable: true,
+        version: 1,
+        updated_at: new Date().toISOString()
       };
       onUpdateMenuItems([...menuItems, newItem]);
     }

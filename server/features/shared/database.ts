@@ -1122,32 +1122,9 @@ export class Database {
             objectsPayload[key] = data;
           }
 
+          // Hollow RPC save_multi_slice_transaction only deletes and lacks row-level upsert logic.
+          // Direct table-level transactional upsert below guarantees authoritative commits of all slices.
           let rpcSucceeded = false;
-          try {
-            const { data: rpcRes, error: rpcErr } = await client.rpc("save_multi_slice_transaction", {
-              p_tenant_id: tenantId,
-              p_slices: slicesPayload,
-              p_objects: objectsPayload
-            });
-
-            if (!rpcErr && rpcRes && rpcRes.success) {
-              rpcSucceeded = true;
-            } else if (rpcErr) {
-              const errMsg = rpcErr.message || String(rpcErr);
-              const lower = errMsg.toLowerCase();
-              if (
-                !lower.includes("does not exist") &&
-                !lower.includes("not found") &&
-                !lower.includes("could not find")
-              ) {
-                throw new DatabaseUnavailableError(`PostgreSQL atomic transaction rolled back: ${errMsg}`);
-              }
-            }
-          } catch (rpcCallErr: any) {
-            if (rpcCallErr instanceof DatabaseUnavailableError || (rpcCallErr.message && rpcCallErr.message.includes("PostgreSQL atomic transaction"))) {
-              throw rpcCallErr;
-            }
-          }
 
           if (!rpcSucceeded) {
             // Pre-fetch snapshots of original DB rows for touched tables
@@ -1182,11 +1159,16 @@ export class Database {
               const tableName = TABLE_MAP[sliceKey] || sliceKey;
               if (data.length > 0) {
                 const rows = data.map((item: any) => {
-                  const { tenant_id, ...rest } = item;
-                  return {
-                    ...rest,
-                    tenant_id: tenantId
-                  };
+                  const { tenant_id, tenantId: _tid, ...rest } = item;
+                  const cleaned: Record<string, any> = { tenant_id: tenantId };
+                  for (const [k, v] of Object.entries(rest)) {
+                    if (v !== undefined) {
+                      // Discard pin on non-staff tables
+                      if (k === "pin" && tableName !== "staff") continue;
+                      cleaned[k] = v;
+                    }
+                  }
+                  return cleaned;
                 });
 
                 const { error: upsertError } = await client
