@@ -75,6 +75,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
           setEmail(parsed.sentEmail);
           if (parsed.businessName) setBusinessName(parsed.businessName);
           if (parsed.ownerName) setOwnerName(parsed.ownerName);
+          if (parsed.pin) setPin(parsed.pin);
           setGeneratedTenantId(parsed.generatedTenantId || "");
           if (parsed.devOtpCode) setDevOtpCode(parsed.devOtpCode);
           setPhase("verify");
@@ -180,6 +181,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
           sentEmail: data.email,
           businessName,
           ownerName,
+          pin,
           generatedTenantId: data.tenantId,
           devOtpCode: data.devOtp || "",
           savedAt: Date.now()
@@ -210,7 +212,8 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
         body: JSON.stringify({
           pendingToken,
           email: sentEmail || email,
-          verificationCode: cleanedCode
+          verificationCode: cleanedCode,
+          pin
         })
       });
 
@@ -273,6 +276,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
           sentEmail: data.email || email,
           businessName,
           ownerName,
+          pin,
           generatedTenantId: data.tenantId,
           devOtpCode: data.devOtp || "",
           savedAt: Date.now()

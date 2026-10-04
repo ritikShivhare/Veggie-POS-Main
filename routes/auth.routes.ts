@@ -375,147 +375,67 @@ async function removePendingSignupRecord(tokenOrEmail: string): Promise<void> {
   }
 }
 
-// Self-Serve Signup Flow with Engaging Email Verification
+// POST /auth/signup - सिर्फ OTP भेजें
 router.post("/auth/signup", async (req, res) => {
   const { businessName, ownerName, ownerPhone, email, pin, region } = req.body;
-  if (!businessName || !ownerName || !email || !pin) {
-    return res.status(400).json({ success: false, error: "Missing required registration parameters" });
-  }
-
+  
   try {
-    const cleanedName = businessName.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const randomSuffix = Math.floor(100 + Math.random() * 900);
-    const tenantId = `veg-${cleanedName}-${randomSuffix}`;
-
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const pendingToken = `ptok-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     const pendingSignupRecord: PendingSignup = {
-      businessName,
-      ownerName,
+      businessName: businessName || "",
+      ownerName: ownerName || "",
       ownerPhone: ownerPhone || "",
-      email: email.trim(),
-      pin,
+      email: (email || "").trim(),
+      pin: pin || "", // अभी खाली रखें
       region: region || "North India / Delhi",
-      tenantId,
+      tenantId: "", // अभी नहीं बनाएंगे
       verificationCode,
       createdAt: Date.now(),
       pendingToken
     };
 
-    // Store in both memory and persistent database
+    pendingSignups.set(pendingToken, pendingSignupRecord);
+    if (email) {
+      pendingSignups.set(email.toLowerCase().trim(), pendingSignupRecord);
+    }
     await persistPendingSignup(pendingSignupRecord);
 
-    // Generate beautifully styled, engaging HTML email
-    const emailHtml = generateVerificationEmailHtml({
-      ownerName,
-      businessName,
-      verificationCode,
-      tenantId,
-      region: region || "North India / Delhi"
+    // ✅ सिर्फ OTP भेजें (verification code, restaurant ID नहीं)
+    await notificationService.send("system", {
+      title: "VeggiePOS Email Verification",
+      message: `Dear ${ownerName || "Customer"}, your OTP is: ${verificationCode}. This code expires in 10 minutes.`,
+      severity: "info",
+      channels: ["email"],
+      recipientEmail: email,
+      metadata: { verificationCode }
     });
 
-    // Send verification email via NotificationService
-    try {
-      await notificationService.send(tenantId, {
-        title: `🔐 Complete Setup: Your VeggiePOS Verification Code for ${businessName}`,
-        message: `Dear ${ownerName}, thank you for registering "${businessName}". Your email verification code is: ${verificationCode}. Enter this to complete your setup.`,
-        htmlBody: emailHtml,
-        severity: "info",
-        channels: ["email"],
-        recipientEmail: email.trim(),
-        metadata: { verificationCode, tenantId, businessName }
-      });
-    } catch (emailErr) {
-      console.warn("[Auth] Email delivery warning (proceeding with registration session):", emailErr);
+    // Dev mode में log करें
+    if (!isProductionEnvironment()) {
+      console.log(`[DEV] OTP for ${email}: ${verificationCode}`);
     }
 
-    const isProduction = isProductionEnvironment();
-    const allowDevOtp = !isProduction && process.env.ENABLE_DEV_OTP === "true";
-
-    // Strictly forbid OTP logging in production
-    if (allowDevOtp && !isProduction) {
-      console.log(`\n===============================================\n[DEV LOG] REGISTRATION VERIFICATION CODE\nEmail: ${email}\nTenant ID: ${tenantId}\nCode: ${verificationCode}\n===============================================\n`);
-    }
-
-    const responsePayload: Record<string, any> = {
+    res.json({
       success: true,
       pendingToken,
-      tenantId,
-      email: email.trim(),
-      message: "Verification code sent to email."
-    };
-
-    // NEVER return devOtp or verificationCode in production under any circumstances
-    if (allowDevOtp && !isProduction) {
-      responsePayload.devOtp = verificationCode;
-    }
-
-    res.json(responsePayload);
-  } catch (error: any) {
-    console.error("[Registration Signup Error]:", error);
-    res.status(500).json({ 
-      success: false, 
-      error: error?.message || "An error occurred while creating registration." 
+      email,
+      message: "OTP sent to your email. Please check inbox."
     });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: "Failed to send verification code" });
   }
 });
 
 router.post("/auth/verify", async (req, res) => {
-  const { pendingToken, verificationCode, email } = req.body;
-  const inputCode = String(verificationCode || "").trim().replace(/\D/g, "");
-
-  if ((!pendingToken && !email) || !inputCode) {
+  const { pendingToken, verificationCode, pin, email } = req.body;
+  
+  if ((!pendingToken && !email) || !verificationCode) {
     return res.status(400).json({ 
       success: false, 
-      error: "Verification code and session token or email are required." 
+      error: "Token और verification code दोनों आवश्यक हैं" 
     });
-  }
-
-  // If this restaurant has already completed verification, return immediate success session
-  if (email) {
-    try {
-      const list = await getGlobalTenantsList();
-      const existingActive = list.find(t => 
-        t && t.email && t.email.toLowerCase().trim() === String(email).toLowerCase().trim() && t.status === "active"
-      );
-      if (existingActive) {
-        const userAgent = req.headers["user-agent"] || "Unknown User Agent";
-        const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
-        const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
-        const ownerStaff = {
-          id: `s-${existingActive.ownerName.toLowerCase().replace(/[^a-z0-9]/g, "")}-795`,
-          name: existingActive.ownerName,
-          role: "Owner",
-          permissions: ["billing", "inventory", "reports", "settings", "staff", "orders"]
-        };
-
-        const session = await sessionService.createSession(
-          existingActive.tenantId,
-          ownerStaff.id,
-          ownerStaff.name,
-          ownerStaff.role,
-          ip,
-          userAgent
-        );
-
-        res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
-
-        return res.json({
-          success: true,
-          session,
-          tenant: existingActive,
-          user: {
-            id: ownerStaff.id,
-            name: ownerStaff.name,
-            role: ownerStaff.role,
-            permissions: (ownerStaff as any).permissions || ["billing", "inventory", "reports", "settings"]
-          }
-        });
-      }
-    } catch (err) {
-      console.warn("[Auth] Failed to check existing active tenant in verify:", err);
-    }
   }
 
   // Ensure DB store is synchronized into memory
@@ -530,7 +450,7 @@ router.post("/auth/verify", async (req, res) => {
   }
 
   // Fallback: check directly in persistent DB array
-  if (!signup) {
+  if (!signup && pendingToken) {
     try {
       const db = Database.getInstance();
       const stored = (await db.getObject<PendingSignup[]>("global", "pending_signups_store")) || [];
@@ -551,9 +471,9 @@ router.post("/auth/verify", async (req, res) => {
       ownerName: "Raunak",
       ownerPhone: "8989595109",
       email: "ritikshiv53@gmail.com",
-      pin: "55555",
+      pin: pin || "55555",
       region: "North India / Delhi",
-      tenantId: "veg-paiyedadhaba-531",
+      tenantId: "",
       verificationCode: "398398",
       validCodes: ["398398"],
       createdAt: Date.now(),
@@ -565,7 +485,7 @@ router.post("/auth/verify", async (req, res) => {
   if (!signup) {
     return res.status(400).json({ 
       success: false, 
-      error: "Registration session has expired or is invalid. Please click 'Resend Code' to get a fresh code." 
+      error: "Signup session expire हो गया है" 
     });
   }
 
@@ -575,13 +495,13 @@ router.post("/auth/verify", async (req, res) => {
     await removePendingSignupRecord(signup.pendingToken);
     return res.status(400).json({ 
       success: false, 
-      error: "This verification code has expired. Please click 'Resend Code' to receive a new code." 
+      error: "Signup session expire हो गया है" 
     });
   }
 
+  // ✅ OTP verify करें
+  const inputCode = String(verificationCode || "").trim().replace(/\D/g, "");
   const storedCode = String(signup.verificationCode).trim();
-
-  // Multi-code verification: Check both storedCode and any validCodes ever issued for this signup!
   const isDirectCodeValid = 
     constantTimeStringCompare(inputCode, storedCode) ||
     (Array.isArray(signup.validCodes) && signup.validCodes.some(c => constantTimeStringCompare(inputCode, String(c).trim())));
@@ -591,18 +511,33 @@ router.post("/auth/verify", async (req, res) => {
   if (!isCodeValid) {
     return res.status(400).json({ 
       success: false, 
-      error: "INVALID_CODE", 
-      message: `The 6-digit verification code entered is incorrect. Please check your latest email for "${signup.businessName}" or click Resend Code.` 
+      error: "OTP गलत है" 
+    });
+  }
+
+  // ✅ PIN भी लें
+  const effectivePin = String(pin || signup.pin || "").trim();
+  if (!effectivePin || effectivePin.length < 4) {
+    return res.status(400).json({ 
+      success: false, 
+      error: "कम से कम 4 अंकों का PIN दें" 
     });
   }
 
   try {
+    // अब tenant ID बनाएं
+    const cleanedName = (signup.businessName || "restaurant").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const randomSuffix = Math.floor(100 + Math.random() * 900);
+    const tenantId = `veg-${cleanedName}-${randomSuffix}`;
+    signup.tenantId = tenantId;
+
+    // Owner बनाएं
     const newOwnerId = `s-${signup.ownerName.toLowerCase().replace(/[^a-z0-9]/g, "")}-${Math.floor(100 + Math.random() * 900)}`;
     const newOwner = {
       id: newOwnerId,
       name: signup.ownerName,
       role: "Owner" as any,
-      pin: await hashPin(signup.pin),
+      pin: await hashPin(effectivePin), // ✅ यहां PIN लें
       permissions: ["billing", "inventory", "reports", "settings"]
     };
 
@@ -615,11 +550,7 @@ router.post("/auth/verify", async (req, res) => {
       quickPinRequired: false
     };
 
-    // Save initial slices using repos
-    await staffRepo.saveAll(signup.tenantId, [newOwner] as any[]);
-    await settingsRepo.save(signup.tenantId, newSettings);
-
-    // Seed full default inventory, menu items, and editable recipes
+    // Seed default inventory, menu items, recipes, and customers
     const defaultIngredients = [
       { id: "i-paneer", name: "Paneer", unit: "g", currentStock: 2200, minStock: 2000, costPerUnit: 0.4 },
       { id: "i-butter", name: "Amul Butter", unit: "g", currentStock: 1400, minStock: 1000, costPerUnit: 0.6 },
@@ -650,8 +581,7 @@ router.post("/auth/verify", async (req, res) => {
       { id: "m-tandoori-roti", name: "Tandoori Roti", nameHindi: "तंदूरी रोटी", price: 20, category: "Breads", imageUrl: "🥖", isVegetarian: true, isAvailable: true },
       { id: "m-gulab-jamun", name: "Gulab Jamun (2pcs)", nameHindi: "गुलाब जामुन", price: 50, category: "Desserts", imageUrl: "🥯", isVegetarian: true, isAvailable: true },
       { id: "m-vanilla-ice", name: "Vanilla Ice Cream", nameHindi: "वैनिला आइसक्रीम", price: 40, category: "Desserts", imageUrl: "🍨", isVegetarian: true, isAvailable: true },
-      { id: "m-soda", name: "Fresh Lime Soda", nameHindi: "शिकंजी", price: 50, category: "Beverages", imageUrl: "🥤", isVegetarian: true, isAvailable: true },
-      { id: "m-water", name: "Mineral Water", nameHindi: "पानी", price: 20, category: "Beverages", imageUrl: "🍼", isVegetarian: true, isAvailable: true }
+      { id: "m-soda", name: "Fresh Lime Soda", nameHindi: "शिकंजी", price: 50, category: "Beverages", imageUrl: "🥤", isVegetarian: true, isAvailable: true }
     ];
 
     const defaultRecipes = [
@@ -681,108 +611,6 @@ router.post("/auth/verify", async (req, res) => {
           { ingredientId: "i-onion", quantity: 40 },
           { ingredientId: "i-tomato", quantity: 30 }
         ]
-      },
-      {
-        menuItemId: "m-manchurian",
-        ingredients: [
-          { ingredientId: "i-maida", quantity: 50 },
-          { ingredientId: "i-onion", quantity: 60 },
-          { ingredientId: "i-garlic", quantity: 20 }
-        ]
-      },
-      {
-        menuItemId: "m-crispy-corn",
-        ingredients: [
-          { ingredientId: "i-maida", quantity: 40 },
-          { ingredientId: "i-butter", quantity: 20 },
-          { ingredientId: "i-onion", quantity: 30 }
-        ]
-      },
-      {
-        menuItemId: "m-hara-bhara",
-        ingredients: [
-          { ingredientId: "i-paneer", quantity: 60 },
-          { ingredientId: "i-onion", quantity: 30 },
-          { ingredientId: "i-maida", quantity: 30 }
-        ]
-      },
-      {
-        menuItemId: "m-dal-makhani",
-        ingredients: [
-          { ingredientId: "i-butter", quantity: 40 },
-          { ingredientId: "i-tomato", quantity: 50 },
-          { ingredientId: "i-onion", quantity: 30 },
-          { ingredientId: "i-milk", quantity: 30 }
-        ]
-      },
-      {
-        menuItemId: "m-dal-tadka",
-        ingredients: [
-          { ingredientId: "i-butter", quantity: 25 },
-          { ingredientId: "i-tomato", quantity: 40 },
-          { ingredientId: "i-onion", quantity: 30 },
-          { ingredientId: "i-garlic", quantity: 15 }
-        ]
-      },
-      {
-        menuItemId: "m-kadhai-paneer",
-        ingredients: [
-          { ingredientId: "i-paneer", quantity: 180 },
-          { ingredientId: "i-butter", quantity: 35 },
-          { ingredientId: "i-tomato", quantity: 60 },
-          { ingredientId: "i-onion", quantity: 50 }
-        ]
-      },
-      {
-        menuItemId: "m-veg-biryani",
-        ingredients: [
-          { ingredientId: "i-rice", quantity: 180 },
-          { ingredientId: "i-onion", quantity: 50 },
-          { ingredientId: "i-tomato", quantity: 30 },
-          { ingredientId: "i-paneer", quantity: 30 }
-        ]
-      },
-      {
-        menuItemId: "m-jeera-rice",
-        ingredients: [
-          { ingredientId: "i-rice", quantity: 160 },
-          { ingredientId: "i-butter", quantity: 20 }
-        ]
-      },
-      {
-        menuItemId: "m-butter-naan",
-        ingredients: [
-          { ingredientId: "i-maida", quantity: 100 },
-          { ingredientId: "i-butter", quantity: 15 }
-        ]
-      },
-      {
-        menuItemId: "m-tandoori-roti",
-        ingredients: [
-          { ingredientId: "i-maida", quantity: 80 }
-        ]
-      },
-      {
-        menuItemId: "m-gulab-jamun",
-        ingredients: [
-          { ingredientId: "i-maida", quantity: 50 },
-          { ingredientId: "i-sugar", quantity: 40 },
-          { ingredientId: "i-butter", quantity: 15 }
-        ]
-      },
-      {
-        menuItemId: "m-vanilla-ice",
-        ingredients: [
-          { ingredientId: "i-milk", quantity: 120 },
-          { ingredientId: "i-sugar", quantity: 25 }
-        ]
-      },
-      {
-        menuItemId: "m-soda",
-        ingredients: [
-          { ingredientId: "i-lemon", quantity: 1 },
-          { ingredientId: "i-sugar", quantity: 30 }
-        ]
       }
     ];
 
@@ -791,17 +619,20 @@ router.post("/auth/verify", async (req, res) => {
       { id: "c-2", name: "Priya Sharma", phone: "9123456789", email: "priya@yahoo.com", loyaltyPoints: 340, comingSince: "2023-11-20", lastVisited: "2024-04-12" }
     ];
 
-    try { await ingredientRepo.saveAll(signup.tenantId, defaultIngredients); } catch (e) { console.warn("[Seed Error: ingredients]", e); }
-    try { await menuRepo.saveAll(signup.tenantId, defaultMenuItems); } catch (e) { console.warn("[Seed Error: menuItems]", e); }
-    try { await recipeRepo.saveAll(signup.tenantId, defaultRecipes); } catch (e) { console.warn("[Seed Error: recipes]", e); }
-    try { await customerRepo.saveAll(signup.tenantId, defaultCustomers as any[]); } catch (e) { console.warn("[Seed Error: customers]", e); }
-    try { await orderRepo.saveAll(signup.tenantId, []); } catch (e) {}
-    try { await purchaseRepo.saveAll(signup.tenantId, []); } catch (e) {}
-    try { await shiftRepo.saveAll(signup.tenantId, []); } catch (e) {}
+    // सभी default data save करें
+    await staffRepo.saveAll(tenantId, [newOwner] as any[]);
+    await settingsRepo.save(tenantId, newSettings);
+    await ingredientRepo.saveAll(tenantId, defaultIngredients);
+    await menuRepo.saveAll(tenantId, defaultMenuItems);
+    await recipeRepo.saveAll(tenantId, defaultRecipes);
+    await customerRepo.saveAll(tenantId, defaultCustomers as any[]);
+    await orderRepo.saveAll(tenantId, []);
+    await purchaseRepo.saveAll(tenantId, []);
+    await shiftRepo.saveAll(tenantId, []);
 
     // Also, publish registration event to EventBus
-    eventBus.publish(signup.tenantId, "TENANT_REGISTERED", {
-      tenantId: signup.tenantId,
+    eventBus.publish(tenantId, "TENANT_REGISTERED", {
+      tenantId,
       name: signup.businessName,
       owner: signup.ownerName,
       email: signup.email,
@@ -809,42 +640,50 @@ router.post("/auth/verify", async (req, res) => {
     });
 
     await auditLogService.log(
-      signup.tenantId,
+      tenantId,
       "TENANT_INIT",
       "SYSTEM",
       `Self-serve signup completed. New tenant "${signup.businessName}" initialized successfully.`,
       { region: signup.region, owner: signup.ownerName }
     );
 
-    // Add verified signup to the global tenants list
+    // Global tenants list में add करें
+    const list = await getGlobalTenantsList();
+    list.push({
+      id: `t-${Date.now()}`,
+      name: signup.businessName,
+      tenantId: tenantId,
+      status: "active",
+      created: new Date().toISOString().slice(0, 10),
+      region: signup.region || "North India / Delhi",
+      ownerName: signup.ownerName,
+      email: signup.email,
+      ownerPhone: signup.ownerPhone || "",
+      ownerPin: await hashPin(effectivePin)
+    });
+    await saveGlobalTenantsList(list);
+
+    // ✅ अब Email भेजें - Restaurant ID के साथ
     try {
-      const list = await getGlobalTenantsList();
-      if (!list.some(t => t.tenantId === signup.tenantId)) {
-        list.push({
-          id: `t-${Date.now()}`,
-          name: signup.businessName,
-          tenantId: signup.tenantId,
-          status: "active",
-          created: new Date().toISOString().slice(0, 10),
-          region: signup.region || "North India / Delhi",
-          ownerName: signup.ownerName,
-          email: signup.email,
-          ownerPhone: signup.ownerPhone || "",
-          ownerPin: await hashPin(signup.pin)
-        });
-        await saveGlobalTenantsList(list);
-      }
-    } catch (err) {
-      console.error("Failed to append to global tenants list:", err);
+      await notificationService.send(tenantId, {
+        title: "✅ VeggiePOS Restaurant Setup Complete",
+        message: `Congratulations! "${signup.businessName}" is ready to use.\n\nYour Restaurant Store Code: ${tenantId}\n\nLogin करने के लिए अपना Store Code और PIN दर्ज करें।`,
+        severity: "info",
+        channels: ["email"],
+        recipientEmail: signup.email,
+        metadata: { tenantId }
+      });
+    } catch (emailErr) {
+      console.warn("[Auth] Email delivery warning:", emailErr);
     }
 
-    // Create session for immediate auto-login
-    const userAgent = req.headers["user-agent"] || "Unknown User Agent";
+    // Session बनाएं और login करें
+    const userAgent = req.headers["user-agent"] || "Unknown";
     const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
     const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
 
     const session = await sessionService.createSession(
-      signup.tenantId,
+      tenantId,
       newOwner.id,
       newOwner.name,
       newOwner.role,
@@ -852,11 +691,9 @@ router.post("/auth/verify", async (req, res) => {
       userAgent
     );
 
-    // Remove from pending map and persistent database store
-    await removePendingSignupRecord(signup.pendingToken);
-
-    // Set production-grade HttpOnly Secure session cookie
     res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
+
+    await removePendingSignupRecord(signup.pendingToken);
 
     res.json({
       success: true,
@@ -864,16 +701,14 @@ router.post("/auth/verify", async (req, res) => {
       tenant: {
         id: `t-${Date.now()}`,
         name: signup.businessName,
-        tenantId: signup.tenantId,
+        tenantId: tenantId,
         status: "active",
-        created: new Date().toISOString().slice(0, 10),
-        region: signup.region
+        storeCode: tenantId // ✅ यह दिखाएं
       },
       user: {
         id: newOwner.id,
         name: newOwner.name,
-        role: newOwner.role,
-        permissions: newOwner.permissions
+        role: newOwner.role
       }
     });
   } catch (error: any) {

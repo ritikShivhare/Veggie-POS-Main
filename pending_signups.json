@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "businessName": "Paiye Da Dhaba",
+    "ownerName": "Raunak",
+    "ownerPhone": "8989595109",
+    "email": "ritikshiv53@gmail.com",
+    "pin": "55555",
+    "region": "North India / Delhi",
+    "tenantId": "",
+    "verificationCode": "717599",
+    "createdAt": 1791122032232,
+    "pendingToken": "ptok-1791122032232-18g6r4n29",
+    "validCodes": [
+      "717599",
+      "398398"
+    ]
+  }
+]
