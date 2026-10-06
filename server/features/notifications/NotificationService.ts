@@ -205,19 +205,22 @@ class CompositeEmailProvider implements EmailProvider {
   }
 
   async sendEmail(to: string, subject: string, htmlBody: string) {
-    if (process.env.RESEND_API_KEY) {
+    // If sending to registered Resend account owner, try Resend first for fast dispatch
+    if (process.env.RESEND_API_KEY && to.toLowerCase().includes("ritikshiv53")) {
       const resendRes = await this.resendProvider.sendEmail(to, subject, htmlBody);
       if (resendRes.success) {
         return resendRes;
       }
     }
 
+    // Try direct Gmail SMTP (which delivered successfully to shivritik53@gmail.com)
     const smtpRes = await this.smtpProvider.sendEmail(to, subject, htmlBody);
     if (smtpRes.success) {
       return smtpRes;
     }
 
-    if (!process.env.RESEND_API_KEY) {
+    // Fallback to Resend if not already attempted
+    if (process.env.RESEND_API_KEY && !to.toLowerCase().includes("ritikshiv53")) {
       const resendRes = await this.resendProvider.sendEmail(to, subject, htmlBody);
       if (resendRes.success) {
         return resendRes;

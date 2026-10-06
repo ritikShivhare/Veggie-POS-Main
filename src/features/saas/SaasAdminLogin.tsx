@@ -150,7 +150,7 @@ export default function SaasAdminLogin({
         if (data.requireOtp || data.require2FA) {
           setOtpRequire({
             challengeToken: data.challengeToken,
-            email: data.email || "ritikshiv53@gmail.com",
+            email: data.email || "shivritik53@gmail.com",
             password: passwordInput.trim()
           });
           setOtpCode("");
@@ -194,7 +194,7 @@ export default function SaasAdminLogin({
           </h2>
           <p className="text-xs text-slate-400 mt-1 max-w-xs">
             {otpRequire
-              ? `Verification code sent to ${otpRequire.email || "your email"}`
+              ? `Verification code sent to ${otpRequire.email || "shivritik53@gmail.com"}`
               : "SaaS Owner Authentication Required"}
           </p>
         </div>

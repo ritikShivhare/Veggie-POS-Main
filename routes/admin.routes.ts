@@ -143,7 +143,7 @@ router.post("/saas-admin/login", async (req, res) => {
 
     // Generate fresh random 6-digit Email OTP on backend
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const targetEmail = "ritikshiv53@gmail.com";
+    const targetEmail = "shivritik53@gmail.com";
 
     const token = crypto.randomBytes(16).toString("hex");
 
