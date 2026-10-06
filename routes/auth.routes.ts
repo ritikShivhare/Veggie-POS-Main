@@ -550,82 +550,13 @@ router.post("/auth/verify", async (req, res) => {
       quickPinRequired: false
     };
 
-    // Seed default inventory, menu items, recipes, and customers
-    const defaultIngredients = [
-      { id: "i-paneer", name: "Paneer", unit: "g", currentStock: 2200, minStock: 2000, costPerUnit: 0.4 },
-      { id: "i-butter", name: "Amul Butter", unit: "g", currentStock: 1400, minStock: 1000, costPerUnit: 0.6 },
-      { id: "i-rice", name: "Basmati Rice", unit: "g", currentStock: 8500, minStock: 5000, costPerUnit: 0.1 },
-      { id: "i-tomato", name: "Tomato", unit: "g", currentStock: 3850, minStock: 3000, costPerUnit: 0.05 },
-      { id: "i-onion", name: "Onion", unit: "g", currentStock: 12000, minStock: 8000, costPerUnit: 0.04 },
-      { id: "i-garlic", name: "Garlic", unit: "g", currentStock: 2000, minStock: 1000, costPerUnit: 0.2 },
-      { id: "i-maida", name: "Maida Flour", unit: "g", currentStock: 6000, minStock: 4000, costPerUnit: 0.08 },
-      { id: "i-milk", name: "Fresh Milk / Cream", unit: "ml", currentStock: 5000, minStock: 2000, costPerUnit: 0.06 },
-      { id: "i-lemon", name: "Fresh Lemon", unit: "pcs", currentStock: 60, minStock: 20, costPerUnit: 5 },
-      { id: "i-sugar", name: "Sugar", unit: "g", currentStock: 4500, minStock: 2000, costPerUnit: 0.04 },
-      { id: "i-tea-coffee", name: "Tea Leaves & Coffee", unit: "g", currentStock: 1200, minStock: 500, costPerUnit: 0.3 }
-    ];
-
-    const defaultMenuItems = [
-      { id: "m-thali", name: "Special Thali", nameHindi: "स्पेशल थाली", price: 220, category: "Recommended", imageUrl: "🍱", isVegetarian: true, isAvailable: true },
-      { id: "m-paneer-butter", name: "Paneer Butter Masala", nameHindi: "पनीर बटर मसाला", price: 180, category: "Main Course", imageUrl: "🥘", isVegetarian: true, isAvailable: true },
-      { id: "m-paneer-tikka", name: "Paneer Tikka", nameHindi: "पनीर टिक्का", price: 150, category: "Starters", imageUrl: "🍢", isVegetarian: true, isAvailable: true },
-      { id: "m-manchurian", name: "Veg Manchurian Dry", nameHindi: "वेज मंचूरियन", price: 140, category: "Chinese", imageUrl: "🧆", isVegetarian: true, isAvailable: true },
-      { id: "m-crispy-corn", name: "Crispy Corn", nameHindi: "क्रिस्पी कॉर्न", price: 130, category: "Starters", imageUrl: "🌽", isVegetarian: true, isAvailable: true },
-      { id: "m-hara-bhara", name: "Hara Bhara Kabab", nameHindi: "हरा भरा कबाब", price: 150, category: "Starters", imageUrl: "🥙", isVegetarian: true, isAvailable: true },
-      { id: "m-dal-makhani", name: "Dal Makhani", nameHindi: "दाल मखनी", price: 160, category: "Main Course", imageUrl: "🍲", isVegetarian: true, isAvailable: true },
-      { id: "m-dal-tadka", name: "Dal Tadka", nameHindi: "दाल तड़का", price: 140, category: "Main Course", imageUrl: "🥣", isVegetarian: true, isAvailable: true },
-      { id: "m-kadhai-paneer", name: "Kadhai Paneer", nameHindi: "कढ़ाई पनीर", price: 190, category: "Main Course", imageUrl: "🥘", isVegetarian: true, isAvailable: true },
-      { id: "m-veg-biryani", name: "Veg Biryani", nameHindi: "वेज बिरयानी", price: 250, category: "Rice & Biryani", imageUrl: "🍛", isVegetarian: true, isAvailable: true },
-      { id: "m-jeera-rice", name: "Jeera Rice", nameHindi: "जीरा राइस", price: 180, category: "Rice & Biryani", imageUrl: "🍚", isVegetarian: true, isAvailable: true },
-      { id: "m-butter-naan", name: "Butter Naan", nameHindi: "बटर नान", price: 50, category: "Breads", imageUrl: "🫓", isVegetarian: true, isAvailable: true },
-      { id: "m-tandoori-roti", name: "Tandoori Roti", nameHindi: "तंदूरी रोटी", price: 20, category: "Breads", imageUrl: "🥖", isVegetarian: true, isAvailable: true },
-      { id: "m-gulab-jamun", name: "Gulab Jamun (2pcs)", nameHindi: "गुलाब जामुन", price: 50, category: "Desserts", imageUrl: "🥯", isVegetarian: true, isAvailable: true },
-      { id: "m-vanilla-ice", name: "Vanilla Ice Cream", nameHindi: "वैनिला आइसक्रीम", price: 40, category: "Desserts", imageUrl: "🍨", isVegetarian: true, isAvailable: true },
-      { id: "m-soda", name: "Fresh Lime Soda", nameHindi: "शिकंजी", price: 50, category: "Beverages", imageUrl: "🥤", isVegetarian: true, isAvailable: true }
-    ];
-
-    const defaultRecipes = [
-      {
-        menuItemId: "m-thali",
-        ingredients: [
-          { ingredientId: "i-paneer", quantity: 100 },
-          { ingredientId: "i-butter", quantity: 20 },
-          { ingredientId: "i-rice", quantity: 120 },
-          { ingredientId: "i-tomato", quantity: 40 },
-          { ingredientId: "i-onion", quantity: 40 }
-        ]
-      },
-      {
-        menuItemId: "m-paneer-butter",
-        ingredients: [
-          { ingredientId: "i-paneer", quantity: 200 },
-          { ingredientId: "i-butter", quantity: 50 },
-          { ingredientId: "i-tomato", quantity: 80 },
-          { ingredientId: "i-onion", quantity: 50 }
-        ]
-      },
-      {
-        menuItemId: "m-paneer-tikka",
-        ingredients: [
-          { ingredientId: "i-paneer", quantity: 180 },
-          { ingredientId: "i-onion", quantity: 40 },
-          { ingredientId: "i-tomato", quantity: 30 }
-        ]
-      }
-    ];
-
-    const defaultCustomers = [
-      { id: "c-1", name: "Amit Kumar", phone: "9876543210", email: "amit@gmail.com", loyaltyPoints: 120, comingSince: "2024-01-15", lastVisited: "2024-04-10" },
-      { id: "c-2", name: "Priya Sharma", phone: "9123456789", email: "priya@yahoo.com", loyaltyPoints: 340, comingSince: "2023-11-20", lastVisited: "2024-04-12" }
-    ];
-
-    // सभी default data save करें
+    // Save new tenant owner account and initial settings with clean empty collections
     await staffRepo.saveAll(tenantId, [newOwner] as any[]);
     await settingsRepo.save(tenantId, newSettings);
-    await ingredientRepo.saveAll(tenantId, defaultIngredients);
-    await menuRepo.saveAll(tenantId, defaultMenuItems);
-    await recipeRepo.saveAll(tenantId, defaultRecipes);
-    await customerRepo.saveAll(tenantId, defaultCustomers as any[]);
+    await ingredientRepo.saveAll(tenantId, []);
+    await menuRepo.saveAll(tenantId, []);
+    await recipeRepo.saveAll(tenantId, []);
+    await customerRepo.saveAll(tenantId, []);
     await orderRepo.saveAll(tenantId, []);
     await purchaseRepo.saveAll(tenantId, []);
     await shiftRepo.saveAll(tenantId, []);

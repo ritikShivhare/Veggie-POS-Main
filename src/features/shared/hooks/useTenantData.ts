@@ -71,7 +71,16 @@ export function useTenantData() {
       );
       if (found) return found;
     }
-    return currentTenants[0];
+
+    const defaultTenant: RestaurantTenant = {
+      id: "t-outlet",
+      name: "My Restaurant",
+      tenantId: "my-restaurant",
+      status: "active",
+      created: new Date().toISOString().slice(0, 10),
+      region: "North India"
+    };
+    return currentTenants[0] || defaultTenant;
   });
 
   const [activeQrToken, setActiveQrToken] = useState<string>(() => {

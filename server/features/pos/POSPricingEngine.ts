@@ -4,7 +4,6 @@ import { SettingsRepository } from "../shared/SettingsRepository";
 import { RecipeRepository } from "../inventory/RecipeRepository";
 import { IngredientRepository } from "../inventory/IngredientRepository";
 import { Order, OrderItem, MenuItem, Ingredient, Recipe, Customer } from "../../../src/features/shared/types";
-import { INITIAL_MENU_ITEMS } from "../../../src/features/shared/data";
 
 const menuRepo = new MenuRepository();
 const customerRepo = new CustomerRepository();
@@ -135,14 +134,7 @@ export class POSPricingEngine {
         );
       }
 
-      let authoritativeMenuItem = menuMap.get(menuItemId);
-      if (!authoritativeMenuItem) {
-        const defaultItem = INITIAL_MENU_ITEMS.find((m) => m.id === menuItemId);
-        if (defaultItem) {
-          authoritativeMenuItem = defaultItem;
-        }
-      }
-
+      const authoritativeMenuItem = menuMap.get(menuItemId);
       if (!authoritativeMenuItem) {
         throw new FinancialValidationError(
           "INVALID_MENU_ITEM",

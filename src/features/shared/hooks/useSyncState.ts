@@ -2,14 +2,6 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { MenuItem, Ingredient, Recipe, Purchase, StaffMember, Shift, Order, InventorySettings, Customer } from "../types";
 import { ApiClient, SyncResponse } from "../services/api";
 import { offlineRepository, OutboxProcessor } from "../services/offline";
-import {
-  INITIAL_MENU_ITEMS,
-  INITIAL_INGREDIENTS,
-  INITIAL_RECIPES,
-  INITIAL_STAFF,
-  INITIAL_ORDERS,
-  INITIAL_CUSTOMERS
-} from "../data";
 
 interface UseSyncStateProps {
   activeTenantId: string;
@@ -22,7 +14,18 @@ function getCachedTenantData(tenantId: string) {
   try {
     const raw = localStorage.getItem(`veggiepos_sync_cache_${tenantId}`);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      // Filter out legacy demo items if previously cached
+      if (parsed.menuItems && Array.isArray(parsed.menuItems)) {
+        parsed.menuItems = parsed.menuItems.filter((m: any) => m.id !== "m-thali" && m.id !== "m-paneer-butter" && m.id !== "m-paneer-tikka");
+      }
+      if (parsed.orders && Array.isArray(parsed.orders)) {
+        parsed.orders = parsed.orders.filter((o: any) => !o.id?.startsWith("ORD-100"));
+      }
+      if (parsed.staffList && Array.isArray(parsed.staffList)) {
+        parsed.staffList = parsed.staffList.filter((s: any) => s.id !== "s-rahul" && s.id !== "s-amit" && s.id !== "s-mohan");
+      }
+      return parsed;
     }
   } catch (e) {
     console.warn("Failed to read local sync cache:", e);
@@ -34,47 +37,18 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   const isMainTenant = activeTenantId === "veg-main-001";
   const initialCache = getCachedTenantData(activeTenantId);
 
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => initialCache?.menuItems || INITIAL_MENU_ITEMS);
-  const [ingredients, setIngredients] = useState<Ingredient[]>(() => initialCache?.ingredients || INITIAL_INGREDIENTS);
-  const [recipes, setRecipes] = useState<Recipe[]>(() => initialCache?.recipes || INITIAL_RECIPES);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => initialCache?.menuItems || []);
+  const [ingredients, setIngredients] = useState<Ingredient[]>(() => initialCache?.ingredients || []);
+  const [recipes, setRecipes] = useState<Recipe[]>(() => initialCache?.recipes || []);
   const [staffList, setStaffList] = useState<StaffMember[]>(() => {
     if (initialCache?.staffList && initialCache.staffList.length > 0) return initialCache.staffList;
-    if (isMainTenant) return INITIAL_STAFF;
-    const isReetesh = activeTenantId === "veg-reetesh-dhaba";
-    const isCP = activeTenantId === "veg-cp-002";
-    let list = INITIAL_STAFF.map(s => ({ ...s, id: `${s.id}-${activeTenantId}` }));
-    if (isReetesh) {
-      list = list.map(s => s.role === "Owner" ? { ...s, name: "Reetesh", pin: "12345" } : s);
-    } else if (isCP) {
-      list = list.map(s => s.role === "Owner" ? { ...s, name: "Amit Verma", pin: "22222" } : s);
-    }
-    return list;
+    if (currentStaff) return [currentStaff];
+    return [];
   });
-  const [orders, setOrders] = useState<Order[]>(() => initialCache?.orders || INITIAL_ORDERS);
-  const [customers, setCustomers] = useState<Customer[]>(() => initialCache?.customers || INITIAL_CUSTOMERS);
+  const [orders, setOrders] = useState<Order[]>(() => initialCache?.orders || []);
+  const [customers, setCustomers] = useState<Customer[]>(() => initialCache?.customers || []);
   const [purchases, setPurchases] = useState<Purchase[]>(() => initialCache?.purchases || []);
-  const [shifts, setShifts] = useState<Shift[]>(() => {
-    if (initialCache?.shifts) return initialCache.shifts;
-    return isMainTenant ? [
-      {
-        id: "sh-1",
-        staffId: "s-rahul",
-        staffName: "Rahul Sharma",
-        role: "Owner",
-        startTime: new Date(Date.now() - 3600000 * 4).toISOString(),
-        status: "Active"
-      },
-      {
-        id: "sh-2",
-        staffId: "s-mohan",
-        staffName: "Mohan Lal",
-        role: "Staff",
-        startTime: new Date(Date.now() - 3600000 * 5).toISOString(),
-        endTime: new Date(Date.now() - 3600000 * 1).toISOString(),
-        status: "Completed"
-      }
-    ] : [];
-  });
+  const [shifts, setShifts] = useState<Shift[]>(() => initialCache?.shifts || []);
 
   const [settings, setSettings] = useState<InventorySettings>(() => initialCache?.settings || {
     autoDeductStock: true,
@@ -139,46 +113,14 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
       if (cancelled) return;
       // Do not block UI if local state is already available
       setIsInitialSyncLoading(false);
-      const isMain = activeTenantId === "veg-main-001";
-      setMenuItems(INITIAL_MENU_ITEMS);
-      setIngredients(INITIAL_INGREDIENTS);
-      setRecipes(INITIAL_RECIPES);
-      setOrders(INITIAL_ORDERS);
-      setCustomers(INITIAL_CUSTOMERS);
+      setMenuItems([]);
+      setIngredients([]);
+      setRecipes([]);
+      setOrders([]);
+      setCustomers([]);
       setPurchases([]);
-      
-      let list = INITIAL_STAFF;
-      if (!isMain) {
-        const isReetesh = activeTenantId === "veg-reetesh-dhaba";
-        const isCP = activeTenantId === "veg-cp-002";
-        list = INITIAL_STAFF.map(s => ({ ...s, id: `${s.id}-${activeTenantId}` }));
-        if (isReetesh) {
-          list = list.map(s => s.role === "Owner" ? { ...s, name: "Reetesh", pin: "12345" } : s);
-        } else if (isCP) {
-          list = list.map(s => s.role === "Owner" ? { ...s, name: "Amit Verma", pin: "22222" } : s);
-        }
-      }
-      setStaffList(list);
-
-      setShifts(isMain ? [
-        {
-          id: "sh-1",
-          staffId: "s-rahul",
-          staffName: "Rahul Sharma",
-          role: "Owner",
-          startTime: new Date(Date.now() - 3600000 * 4).toISOString(),
-          status: "Active"
-        },
-        {
-          id: "sh-2",
-          staffId: "s-mohan",
-          staffName: "Mohan Lal",
-          role: "Staff",
-          startTime: new Date(Date.now() - 3600000 * 5).toISOString(),
-          endTime: new Date(Date.now() - 3600000 * 1).toISOString(),
-          status: "Completed"
-        }
-      ] : []);
+      setStaffList(currentStaff ? [currentStaff] : []);
+      setShifts([]);
       
       setSettings({
         autoDeductStock: true,
@@ -334,66 +276,23 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
           isLoadedRef.current = true;
           setIsInitialSyncLoading(false);
         } else if (json.success && !json.initialized) {
-          const isMainTenant = activeTenantId === "veg-main-001";
-          
-          let initialStaffList = isMainTenant ? INITIAL_STAFF : INITIAL_STAFF.map(s => ({ ...s, id: `${s.id}-${activeTenantId}` }));
-          if (activeTenantId === "veg-reetesh-dhaba") {
-            initialStaffList = initialStaffList.map(s => {
-              if (s.role === "Owner") {
-                return {
-                  ...s,
-                  name: "Reetesh",
-                  pin: "12345"
-                };
-              }
-              return s;
-            });
-          } else if (activeTenantId === "veg-cp-002") {
-            initialStaffList = initialStaffList.map(s => {
-              if (s.role === "Owner") {
-                return {
-                  ...s,
-                  name: "Amit Verma",
-                  pin: "22222"
-                };
-              }
-              return s;
-            });
-          }
+          let initialStaffList: StaffMember[] = [];
           if (pendingOwnerRef.current) {
-            initialStaffList = [pendingOwnerRef.current, ...initialStaffList.filter(s => s.role !== "Owner")];
+            initialStaffList = [pendingOwnerRef.current];
             pendingOwnerRef.current = null;
+          } else if (currentStaff) {
+            initialStaffList = [currentStaff];
           }
 
           const initialPayload = {
-            menuItems: INITIAL_MENU_ITEMS.map(m => ({ ...m, version: m.version ?? 1 })),
-            ingredients: INITIAL_INGREDIENTS.map(i => ({ ...i, version: (i as any).version ?? 1 })),
-            recipes: INITIAL_RECIPES,
+            menuItems: [],
+            ingredients: [],
+            recipes: [],
             staffList: initialStaffList.map(s => ({ ...s, version: s.version ?? 1 })),
-            orders: INITIAL_ORDERS.map(o => ({ ...o, version: o.version ?? 1 })),
-            customers: INITIAL_CUSTOMERS.map(c => ({ ...c, version: (c as any).version ?? 1 })),
+            orders: [],
+            customers: [],
             purchases: [],
-            shifts: isMainTenant ? [
-              {
-                id: "sh-1",
-                staffId: "s-rahul",
-                staffName: "Rahul Sharma",
-                role: "Owner" as const,
-                startTime: new Date(Date.now() - 3600000 * 4).toISOString(),
-                status: "Active" as const,
-                version: 1
-              }
-            ] : [
-              {
-                id: "sh-1",
-                staffId: `s-rahul-${activeTenantId}`,
-                staffName: activeTenantId === "veg-reetesh-dhaba" ? "Reetesh" : "Amit Verma",
-                role: "Owner" as const,
-                startTime: new Date(Date.now() - 3600000 * 4).toISOString(),
-                status: "Active" as const,
-                version: 1
-              }
-            ],
+            shifts: [],
             settings: {
               autoDeductStock: true,
               blockOrdersIfInsufficient: true,

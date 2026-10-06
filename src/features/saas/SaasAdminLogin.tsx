@@ -22,6 +22,8 @@ export default function SaasAdminLogin({
   const [mfaRequire, setMfaRequire] = useState<{ password: string } | null>(null);
   const [mfaCode, setMfaCode] = useState<string>("");
   const [mfaError, setMfaError] = useState<string>("");
+  const [loginError, setLoginError] = useState<string>("");
+  const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
 
   const isSaaSSubdomain = () => {
     const hostname = window.location.hostname;
@@ -132,6 +134,8 @@ export default function SaasAdminLogin({
           <form onSubmit={async (e) => {
             e.preventDefault();
             const inputPassword = (e.currentTarget.elements.namedItem("adminPassword") as HTMLInputElement).value;
+            setLoginError("");
+            setIsLoggingIn(true);
             try {
               const res = await fetch("/api/saas-admin/login", {
                 method: "POST",
@@ -156,15 +160,16 @@ export default function SaasAdminLogin({
                   setCurrentSessionId(data.session.sessionId);
                   setCurrentStaff(data.user);
                   setActiveTab("saas-admin");
-                  alert("Access Granted. Welcome, SaaS Owner!");
                 } else {
-                  alert(data.message || "Invalid response. Access Denied.");
+                  setLoginError(data.message || "Invalid response. Access Denied.");
                 }
               } else {
-                alert(data.message || "Invalid Super-Admin Password. Access Denied.");
+                setLoginError(data.message || "Invalid Super-Admin Password. Access Denied.");
               }
             } catch (err: any) {
-              alert(err.message || "Connection error.");
+              setLoginError(err.message || "Connection error. Please try again.");
+            } finally {
+              setIsLoggingIn(false);
             }
           }} className="space-y-4">
             <div className="space-y-1">
@@ -173,16 +178,24 @@ export default function SaasAdminLogin({
                 name="adminPassword"
                 type="password"
                 required
+                disabled={isLoggingIn}
+                onChange={() => setLoginError("")}
                 placeholder="••••••••"
                 className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3 px-4 text-center text-lg font-sans text-white focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
               />
+              {loginError && (
+                <p className="text-rose-500 text-xs font-semibold text-center mt-1">
+                  {loginError}
+                </p>
+              )}
             </div>
 
             <button
               type="submit"
-              className="w-full py-3.5 bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-pink-500/10 cursor-pointer"
+              disabled={isLoggingIn}
+              className="w-full py-3.5 bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-pink-500/10 cursor-pointer disabled:opacity-50"
             >
-              Unlock SaaS Dashboard
+              {isLoggingIn ? "Verifying..." : "Unlock SaaS Dashboard"}
             </button>
 
             {!isSaaSSubdomain() && (
