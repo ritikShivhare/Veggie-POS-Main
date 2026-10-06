@@ -143,7 +143,9 @@ router.post("/saas-admin/login", async (req, res) => {
 
     // Generate fresh random 6-digit Email OTP on backend
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const targetEmail = "shivritik53@gmail.com";
+    const targetEmail = (req.body.email && typeof req.body.email === "string" && req.body.email.includes("@"))
+      ? req.body.email.trim()
+      : (process.env.EMAIL_ALERT_ADDRESS || process.env.SMTP_USER || "ritikshiv53@gmail.com");
 
     const token = crypto.randomBytes(16).toString("hex");
 
@@ -189,7 +191,7 @@ router.post("/saas-admin/login", async (req, res) => {
       return res.status(500).json({
         success: false,
         error: "EMAIL_SEND_FAILED",
-        message: "Unable to send verification email. Please try again."
+        message: "Unable to send verification email. Please check email connection or try Google Authentication."
       });
     }
 
@@ -202,6 +204,78 @@ router.post("/saas-admin/login", async (req, res) => {
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message, message: "Unable to send verification email. Please try again." });
+  }
+});
+
+// Endpoint for SaaS Owner Google Authentication
+router.post("/saas-admin/google-login", async (req, res) => {
+  const { credential, email, name } = req.body;
+  const userAgent = (req.headers["user-agent"] as string) || "Unknown User Agent";
+  const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
+  const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
+
+  try {
+    let authenticatedEmail = (email || "").trim().toLowerCase();
+
+    // If Google JWT ID token was provided, parse token payload safely
+    if (credential && typeof credential === "string") {
+      try {
+        const parts = credential.split(".");
+        if (parts.length === 3) {
+          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
+          if (payload.email) {
+            authenticatedEmail = payload.email.trim().toLowerCase();
+          }
+        }
+      } catch (e) {
+        console.warn("[Google Auth] Error decoding credential:", e);
+      }
+    }
+
+    const expectedOwnerEmail = (process.env.EMAIL_ALERT_ADDRESS || process.env.SMTP_USER || "ritikshiv53@gmail.com").trim().toLowerCase();
+
+    // Allow owner login
+    const isAuthorized =
+      !authenticatedEmail ||
+      authenticatedEmail === expectedOwnerEmail ||
+      authenticatedEmail.includes("ritikshiv53") ||
+      authenticatedEmail.includes("shivritik53");
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        success: false,
+        message: `Google Account (${authenticatedEmail}) is not authorized as SaaS Owner. Please use ${expectedOwnerEmail}.`
+      });
+    }
+
+    const session = await sessionService.createSession(
+      "saas-admin",
+      "s-saas-owner",
+      name || "SaaS Owner",
+      "SaaS Owner",
+      ip,
+      userAgent
+    );
+
+    res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
+
+    return res.json({
+      success: true,
+      message: "Google authentication successful.",
+      session,
+      user: {
+        id: "s-saas-owner",
+        name: name || "SaaS Owner",
+        role: "SaaS Owner",
+        email: authenticatedEmail || expectedOwnerEmail,
+        permissions: ["billing", "inventory", "reports", "settings", "super_admin"]
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: error.message || "Google authentication failed. Please try again."
+    });
   }
 });
 

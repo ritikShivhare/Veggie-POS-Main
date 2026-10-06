@@ -205,26 +205,26 @@ class CompositeEmailProvider implements EmailProvider {
   }
 
   async sendEmail(to: string, subject: string, htmlBody: string) {
-    // If sending to registered Resend account owner, try Resend first for fast dispatch
-    if (process.env.RESEND_API_KEY && to.toLowerCase().includes("ritikshiv53")) {
-      const resendRes = await this.resendProvider.sendEmail(to, subject, htmlBody);
-      if (resendRes.success) {
-        return resendRes;
+    // 1. Try Resend first for sub-second HTTP delivery if API key is present
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const resendRes = await this.resendProvider.sendEmail(to, subject, htmlBody);
+        if (resendRes.success) {
+          return resendRes;
+        }
+      } catch (err) {
+        console.warn("[CompositeEmailProvider] Resend delivery encountered error, falling back to SMTP:", err);
       }
     }
 
-    // Try direct Gmail SMTP (which delivered successfully to shivritik53@gmail.com)
-    const smtpRes = await this.smtpProvider.sendEmail(to, subject, htmlBody);
-    if (smtpRes.success) {
-      return smtpRes;
-    }
-
-    // Fallback to Resend if not already attempted
-    if (process.env.RESEND_API_KEY && !to.toLowerCase().includes("ritikshiv53")) {
-      const resendRes = await this.resendProvider.sendEmail(to, subject, htmlBody);
-      if (resendRes.success) {
-        return resendRes;
+    // 2. Try direct Nodemailer SMTP as reliable transport
+    try {
+      const smtpRes = await this.smtpProvider.sendEmail(to, subject, htmlBody);
+      if (smtpRes.success) {
+        return smtpRes;
       }
+    } catch (err) {
+      console.warn("[CompositeEmailProvider] SMTP delivery encountered error:", err);
     }
 
     console.error(`[NotificationService] All configured email providers failed for recipient ${to}.`);
