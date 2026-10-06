@@ -1,18 +1,16 @@
 [
   {
-    "businessName": "Paiye Da Dhaba",
-    "ownerName": "Raunak",
-    "ownerPhone": "8989595109",
+    "businessName": "Green Valley Kitchen",
+    "ownerName": "Ritik Shiv",
+    "ownerPhone": "9876543210",
     "email": "ritikshiv53@gmail.com",
-    "pin": "55555",
+    "pin": "54321",
     "region": "North India / Delhi",
     "tenantId": "",
-    "verificationCode": "717599",
-    "createdAt": 1791122032232,
-    "pendingToken": "ptok-1791122032232-18g6r4n29",
-    "validCodes": [
-      "717599",
-      "398398"
-    ]
+    "verificationCode": "189059",
+    "createdAt": 1791268014583,
+    "expiresAt": 1791268614583,
+    "lastSentAt": 1791268014583,
+    "pendingToken": "ptok-1791268014583-8sheamob8"
   }
 ]

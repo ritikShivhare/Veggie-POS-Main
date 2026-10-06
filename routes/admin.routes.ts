@@ -58,12 +58,6 @@ router.post("/saas-admin/login", async (req, res) => {
   const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
 
   try {
-    const configuredMaster = process.env.MASTER_VERIFICATION_CODE ? process.env.MASTER_VERIFICATION_CODE.trim() : "";
-    const isMasterCode = (code: string) => {
-      const clean = String(code || "").trim();
-      return clean === "123456" || clean === "000000" || (Boolean(configuredMaster) && clean === configuredMaster);
-    };
-
     const hashToUse = process.env.SAAS_OWNER_PASSWORD_HASH;
     const inputOtp = (otp || totp || "").toString().trim();
 
@@ -71,35 +65,36 @@ router.post("/saas-admin/login", async (req, res) => {
     // STEP 2: VERIFY 6-DIGIT EMAIL OTP
     // ----------------------------------------------------
     if (inputOtp) {
-      let isOtpValid = false;
-
-      // Master bypass code is always accepted
-      if (isMasterCode(inputOtp)) {
-        isOtpValid = true;
-      } else if (challengeToken && pendingAdminOtps.has(challengeToken)) {
-        const record = pendingAdminOtps.get(challengeToken)!;
-        if (record.otp === inputOtp && record.expiresAt > Date.now()) {
-          isOtpValid = true;
-        }
-      } else {
-        // Check any active pending OTP across current memory
-        for (const record of pendingAdminOtps.values()) {
-          if (record.otp === inputOtp && record.expiresAt > Date.now()) {
-            isOtpValid = true;
-            break;
-          }
-        }
-      }
-
-      if (!isOtpValid) {
+      if (!challengeToken || !pendingAdminOtps.has(challengeToken)) {
         return res.status(401).json({
           success: false,
-          error: "INVALID_OTP",
-          message: "Invalid or expired verification code. Use code from email, click Resend, or enter 123456."
+          error: "OTP_NOT_FOUND",
+          message: "Verification code expired. Please request a new code."
         });
       }
 
-      // OTP verified successfully - Issue Super-Admin Session
+      const record = pendingAdminOtps.get(challengeToken)!;
+      if (Date.now() > record.expiresAt) {
+        pendingAdminOtps.delete(challengeToken);
+        return res.status(401).json({
+          success: false,
+          error: "OTP_EXPIRED",
+          message: "Verification code expired. Please request a new code."
+        });
+      }
+
+      if (record.otp !== inputOtp) {
+        return res.status(401).json({
+          success: false,
+          error: "INVALID_OTP",
+          message: "Invalid verification code."
+        });
+      }
+
+      // Valid OTP confirmed: Invalidate so code cannot be reused
+      pendingAdminOtps.delete(challengeToken);
+
+      // Issue Super-Admin Session
       const session = await sessionService.createSession(
         "saas-admin",
         "s-saas-owner",
@@ -113,6 +108,7 @@ router.post("/saas-admin/login", async (req, res) => {
 
       return res.json({
         success: true,
+        message: "Verification successful.",
         session,
         user: {
           id: "s-saas-owner",
@@ -130,31 +126,6 @@ router.post("/saas-admin/login", async (req, res) => {
       return res.status(400).json({ success: false, message: "Super-Admin Password is required." });
     }
 
-    // If user enters 123456 or master code directly in password field, bypass OTP and log in directly
-    if (isMasterCode(inputPin)) {
-      const session = await sessionService.createSession(
-        "saas-admin",
-        "s-saas-owner",
-        "SaaS Owner",
-        "SaaS Owner",
-        ip,
-        userAgent
-      );
-
-      res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
-
-      return res.json({
-        success: true,
-        session,
-        user: {
-          id: "s-saas-owner",
-          name: "SaaS Owner",
-          role: "SaaS Owner",
-          permissions: ["billing", "inventory", "reports", "settings", "super_admin"]
-        }
-      });
-    }
-
     let isPasswordMatch = false;
     if (inputPin === "admin123" || inputPin === "superadmin") {
       isPasswordMatch = true;
@@ -170,63 +141,69 @@ router.post("/saas-admin/login", async (req, res) => {
       });
     }
 
-    // Generate fresh 6-digit Email OTP
+    // Generate fresh random 6-digit Email OTP on backend
     const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const token = crypto.randomBytes(16).toString("hex");
-    
-    // Ensure both inboxes receive the email
-    const recipientSet = new Set<string>([
-      "ritikshiv53@gmail.com",
-      "shivritik53@gmail.com"
-    ]);
-    if (process.env.EMAIL_ALERT_ADDRESS) recipientSet.add(process.env.EMAIL_ALERT_ADDRESS);
-    if (process.env.SMTP_USER) recipientSet.add(process.env.SMTP_USER);
-    const recipients = Array.from(recipientSet).filter(Boolean);
+    const targetEmail = (req.body.email && typeof req.body.email === "string" && req.body.email.includes("@"))
+      ? req.body.email.trim()
+      : (process.env.EMAIL_ALERT_ADDRESS || process.env.SMTP_USER || "ritikshiv53@gmail.com");
 
+    const token = crypto.randomBytes(16).toString("hex");
+
+    // Store OTP securely associated with challengeToken and target email (10 minutes expiry)
     pendingAdminOtps.set(token, {
       otp: generatedOtp,
-      expiresAt: Date.now() + 15 * 60 * 1000,
-      email: "ritikshiv53@gmail.com",
+      expiresAt: Date.now() + 10 * 60 * 1000,
+      email: targetEmail,
       lastSentAt: Date.now()
     });
 
-    // Dispatch OTP Email to all registered addresses
-    for (const toEmail of recipients) {
-      notificationService.send("saas-admin", {
-        title: "🔐 Your VeggiePOS Super-Admin Login Code",
-        message: `Your VeggiePOS Super-Admin login verification code is: ${generatedOtp}\n\nThis code will expire in 15 minutes.\nIf you did not request this login, please secure your account immediately.`,
-        severity: "warning",
-        channels: ["email"],
-        recipientEmail: toEmail,
-        htmlBody: `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
-            <div style="text-align: center; margin-bottom: 24px;">
-              <div style="display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #ec4899, #6366f1); line-height: 48px; color: #ffffff; font-weight: 800; font-size: 20px;">V</div>
-              <h2 style="color: #0f172a; margin: 12px 0 4px; font-size: 20px;">Super-Admin Verification</h2>
-              <p style="color: #64748b; font-size: 13px; margin: 0;">VeggiePOS SaaS Multi-Tenant Control Panel</p>
-            </div>
-            <p style="color: #334155; font-size: 14px; line-height: 1.5;">Enter the following 6-digit one-time code to complete your Super-Admin login:</p>
-            <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0;">
-              <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #db2777; font-family: 'Courier New', Courier, monospace;">${generatedOtp}</span>
-            </div>
-            <p style="color: #64748b; font-size: 12px; line-height: 1.5;">⏳ This code expires in <strong>15 minutes</strong>. You can also use bypass code <strong>123456</strong>.</p>
-            <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
-            <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${toEmail} for VeggiePOS SaaS Security</p>
+    // Send the exact generated OTP to user's email using existing notification/email service
+    const sendResult = await notificationService.send("saas-admin", {
+      title: "Your VeggiePOS Verification Code",
+      message: `Your VeggiePOS Super-Admin verification code is: ${generatedOtp}. This code will expire in 10 minutes.`,
+      severity: "info",
+      channels: ["email"],
+      recipientEmail: targetEmail,
+      htmlBody: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <div style="display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #ec4899, #6366f1); line-height: 48px; color: #ffffff; font-weight: 800; font-size: 20px;">V</div>
+            <h2 style="color: #0f172a; margin: 12px 0 4px; font-size: 20px;">Super-Admin Verification</h2>
+            <p style="color: #64748b; font-size: 13px; margin: 0;">VeggiePOS SaaS Multi-Tenant Control Panel</p>
           </div>
-        `
-      }).catch((err) => console.warn("[AdminAuth] Email OTP dispatch warning:", err));
+          <p style="color: #334155; font-size: 14px; line-height: 1.5;">Enter the following 6-digit one-time code to complete your Super-Admin login:</p>
+          <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #db2777; font-family: 'Courier New', Courier, monospace;">${generatedOtp}</span>
+          </div>
+          <p style="color: #64748b; font-size: 12px; line-height: 1.5;">This code expires in <strong>10 minutes</strong>. Never share this code with anyone.</p>
+          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${targetEmail} for VeggiePOS SaaS Security</p>
+        </div>
+      `
+    });
+
+    const emailSent = sendResult.dispatchedChannels.some(
+      (c) => c.channel === "email" && c.status === "success"
+    );
+
+    if (!emailSent) {
+      pendingAdminOtps.delete(token);
+      return res.status(500).json({
+        success: false,
+        error: "EMAIL_SEND_FAILED",
+        message: "Unable to send verification email. Please try again."
+      });
     }
 
     return res.json({
       success: true,
       requireOtp: true,
       challengeToken: token,
-      email: "ritikshiv53@gmail.com",
-      devCode: generatedOtp,
-      message: `Verification code sent to ritikshiv53@gmail.com.`
+      email: targetEmail,
+      message: "Verification code sent to your email."
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, error: error.message, message: "Unable to send verification email. Please try again." });
   }
 });
 
@@ -234,59 +211,74 @@ router.post("/saas-admin/login", async (req, res) => {
 router.post("/saas-admin/resend-otp", async (req, res) => {
   const { challengeToken } = req.body;
   try {
-    let token = challengeToken;
-    let record = token ? pendingAdminOtps.get(token) : null;
-
-    if (record && Date.now() - record.lastSentAt < 5000) {
-      return res.status(429).json({
+    if (!challengeToken || !pendingAdminOtps.has(challengeToken)) {
+      return res.status(400).json({
         success: false,
-        message: "Please wait 5 seconds before requesting another code."
+        message: "Verification code expired. Please request a new code."
       });
     }
 
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    if (!token || !record) {
-      token = crypto.randomBytes(16).toString("hex");
-      record = {
-        otp: newOtp,
-        expiresAt: Date.now() + 15 * 60 * 1000,
-        email: "ritikshiv53@gmail.com",
-        lastSentAt: Date.now()
-      };
-      pendingAdminOtps.set(token, record);
-    } else {
-      record.otp = newOtp;
-      record.expiresAt = Date.now() + 15 * 60 * 1000;
-      record.lastSentAt = Date.now();
+    const record = pendingAdminOtps.get(challengeToken)!;
+
+    // Cooldown check (15 seconds)
+    if (Date.now() - record.lastSentAt < 15000) {
+      const waitSec = Math.ceil((15000 - (Date.now() - record.lastSentAt)) / 1000);
+      return res.status(429).json({
+        success: false,
+        message: `Please wait ${waitSec} seconds before requesting another code.`
+      });
     }
 
-    const recipientSet = new Set<string>([
-      record.email,
-      "ritikshiv53@gmail.com",
-      "shivritik53@gmail.com"
-    ]);
-    if (process.env.EMAIL_ALERT_ADDRESS) recipientSet.add(process.env.EMAIL_ALERT_ADDRESS);
-    if (process.env.SMTP_USER) recipientSet.add(process.env.SMTP_USER);
-    const recipients = Array.from(recipientSet).filter(Boolean);
+    // 1. Generate a completely new 6-digit OTP
+    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    for (const toEmail of recipients) {
-      notificationService.send("saas-admin", {
-        title: "🔐 Your VeggiePOS Super-Admin Login Code (Resent)",
-        message: `Your new VeggiePOS Super-Admin verification code is: ${newOtp}\n\nThis code will expire in 15 minutes.\nYou may also use bypass code 123456.`,
-        severity: "warning",
-        channels: ["email"],
-        recipientEmail: toEmail
-      }).catch((err) => console.warn("[AdminAuth] Resend delivery warning:", err));
+    // 2. Replace previous OTP and update expiration to 10 minutes
+    record.otp = newOtp;
+    record.expiresAt = Date.now() + 10 * 60 * 1000;
+    record.lastSentAt = Date.now();
+
+    // 3. Send new OTP to user's email
+    const sendResult = await notificationService.send("saas-admin", {
+      title: "Your VeggiePOS Verification Code (Resent)",
+      message: `Your new VeggiePOS Super-Admin verification code is: ${newOtp}. This code will expire in 10 minutes.`,
+      severity: "info",
+      channels: ["email"],
+      recipientEmail: record.email,
+      htmlBody: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <div style="display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #ec4899, #6366f1); line-height: 48px; color: #ffffff; font-weight: 800; font-size: 20px;">V</div>
+            <h2 style="color: #0f172a; margin: 12px 0 4px; font-size: 20px;">Super-Admin Verification</h2>
+            <p style="color: #64748b; font-size: 13px; margin: 0;">VeggiePOS SaaS Multi-Tenant Control Panel</p>
+          </div>
+          <p style="color: #334155; font-size: 14px; line-height: 1.5;">Enter the following new 6-digit one-time code to complete your Super-Admin login:</p>
+          <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #db2777; font-family: 'Courier New', Courier, monospace;">${newOtp}</span>
+          </div>
+          <p style="color: #64748b; font-size: 12px; line-height: 1.5;">This code expires in <strong>10 minutes</strong>. Only the newest code is valid.</p>
+          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${record.email} for VeggiePOS SaaS Security</p>
+        </div>
+      `
+    });
+
+    const emailSent = sendResult.dispatchedChannels.some(
+      (c) => c.channel === "email" && c.status === "success"
+    );
+
+    if (!emailSent) {
+      return res.status(500).json({
+        success: false,
+        message: "Unable to send verification email. Please try again."
+      });
     }
 
     return res.json({
       success: true,
-      challengeToken: token,
-      devCode: newOtp,
-      message: `A new verification code was sent to ${record.email}.`
+      message: "Verification code sent to your email."
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    res.status(500).json({ success: false, message: error.message || "Unable to send verification email. Please try again." });
   }
 });
 

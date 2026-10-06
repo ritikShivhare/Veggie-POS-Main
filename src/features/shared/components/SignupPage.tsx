@@ -57,11 +57,22 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
   // Verification states
   const [pendingToken, setPendingToken] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
-  const [devOtpCode, setDevOtpCode] = useState("");
   const [sentEmail, setSentEmail] = useState("");
   const [generatedTenantId, setGeneratedTenantId] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [isResending, setIsResending] = useState(false);
 
   const otpInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Timer for resend cooldown
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   // Restore any pending verification session on mount (so user checking email in another tab doesn't lose state)
   useEffect(() => {
@@ -77,7 +88,6 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
           if (parsed.ownerName) setOwnerName(parsed.ownerName);
           if (parsed.pin) setPin(parsed.pin);
           setGeneratedTenantId(parsed.generatedTenantId || "");
-          if (parsed.devOtpCode) setDevOtpCode(parsed.devOtpCode);
           setPhase("verify");
         } else {
           sessionStorage.removeItem("veggiepos_pending_verify");
@@ -92,13 +102,6 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
       otpInputRef.current.focus();
     }
   }, [phase]);
-
-  // Zero-Tap / Low-Tap Auto Verification when 6 digits entered
-  useEffect(() => {
-    if (phase === "verify" && verificationCode.trim().length === 6 && !isLoading) {
-      handleVerifySubmitWithCode(verificationCode.trim());
-    }
-  }, [verificationCode, phase]);
 
   useEffect(() => {
     if (initialData) {
@@ -127,7 +130,6 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
           setPendingToken(data.pendingToken);
           setSentEmail(data.email);
           setGeneratedTenantId(data.tenantId);
-          if (data.devOtp) setDevOtpCode(data.devOtp);
           setPhase("verify");
         } catch (err: any) {
           setError(err.message || "Something went wrong. Please check your network and try again.");
@@ -174,7 +176,6 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
       setPendingToken(data.pendingToken);
       setSentEmail(data.email);
       setGeneratedTenantId(data.tenantId);
-      if (data.devOtp) setDevOtpCode(data.devOtp);
       try {
         sessionStorage.setItem("veggiepos_pending_verify", JSON.stringify({
           pendingToken: data.pendingToken,
@@ -183,7 +184,6 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
           ownerName,
           pin,
           generatedTenantId: data.tenantId,
-          devOtpCode: data.devOtp || "",
           savedAt: Date.now()
         }));
       } catch {}
@@ -249,44 +249,30 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
 
   // Resend Verification Code handler
   const handleResendCode = async () => {
+    if (resendCooldown > 0 || isResending) return;
     setError("");
-    setIsLoading(true);
+    setSuccessMessage("");
+    setIsResending(true);
     try {
-      const res = await fetch("/api/auth/signup", {
+      const res = await fetch("/api/auth/resend-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          businessName,
-          ownerName,
-          ownerPhone,
-          email,
-          pin,
-          region
+          pendingToken,
+          email: sentEmail || email
         })
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || "Failed to resend code.");
+        throw new Error(data.message || data.error || "Unable to send verification email. Please try again.");
       }
-      setPendingToken(data.pendingToken);
-      if (data.devOtp) setDevOtpCode(data.devOtp);
-      try {
-        sessionStorage.setItem("veggiepos_pending_verify", JSON.stringify({
-          pendingToken: data.pendingToken,
-          sentEmail: data.email || email,
-          businessName,
-          ownerName,
-          pin,
-          generatedTenantId: data.tenantId,
-          devOtpCode: data.devOtp || "",
-          savedAt: Date.now()
-        }));
-      } catch {}
-      alert(`A fresh verification code has been dispatched to ${email}!`);
+      if (data.pendingToken) setPendingToken(data.pendingToken);
+      setResendCooldown(15);
+      setSuccessMessage("Verification code sent to your email.");
     } catch (err: any) {
-      setError(err.message || "Failed to resend verification code.");
+      setError(err.message || "Unable to send verification email. Please try again.");
     } finally {
-      setIsLoading(false);
+      setIsResending(false);
     }
   };
 
@@ -503,9 +489,12 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
           {phase === "verify" && (
             <div className="space-y-6">
               <div className="text-center border-b border-slate-800 pb-4">
-                <h2 className="text-lg font-bold text-white">Verify Your Email</h2>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  We sent a 6-digit verification code to <span className="font-semibold text-slate-200">{sentEmail}</span>
+                <div className="w-12 h-12 bg-pink-500/10 border border-pink-500/20 rounded-2xl flex items-center justify-center mx-auto mb-3 text-pink-400">
+                  <Mail className="w-6 h-6" />
+                </div>
+                <h2 className="text-lg font-bold text-white">Email Verification</h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  Verification code sent to <span className="font-semibold text-slate-200">{sentEmail || email}</span>
                 </p>
               </div>
 
@@ -516,51 +505,30 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
                 </div>
               )}
 
-              {devOtpCode && (
-                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-300 text-xs space-y-2">
-                  <div className="flex items-center justify-between font-bold">
-                    <span className="flex items-center gap-1.5 text-amber-400 text-[11px]">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      Zero-Cost Instant OTP Helper:
-                    </span>
-                    <span className="font-mono text-sm font-extrabold tracking-widest text-amber-200 bg-amber-950/90 px-2 py-0.5 rounded-lg border border-amber-500/40">
-                      {devOtpCode}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-[10px] text-amber-400/90 pt-0.5 border-t border-amber-500/20">
-                    <span>Zero-Cost Active</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setVerificationCode(devOtpCode);
-                        handleVerifySubmitWithCode(devOtpCode);
-                      }}
-                      className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold rounded-lg text-[10px] uppercase tracking-wider transition cursor-pointer shadow-sm flex items-center gap-1"
-                    >
-                      ⚡ Auto-Fill & Verify Now
-                    </button>
-                  </div>
+              {successMessage && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs font-semibold text-center">
+                  {successMessage}
                 </div>
               )}
 
               <form onSubmit={handleVerifySubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono text-left block">
-                      6-Digit Verification Code
-                    </label>
-                    <span className="text-[9px] text-emerald-400 font-mono font-medium">
-                      ⚡ Auto-submits on 6th digit
-                    </span>
-                  </div>
+                  <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono text-center block">
+                    Enter 6-Digit Verification Code
+                  </label>
                   <input
                     ref={otpInputRef}
                     type="text"
                     maxLength={6}
                     required
-                    placeholder="• • • • • •"
+                    disabled={isLoading}
+                    placeholder="000000"
                     value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
+                    onChange={(e) => {
+                      setVerificationCode(e.target.value.replace(/\D/g, ""));
+                      setError("");
+                      setSuccessMessage("");
+                    }}
                     className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3.5 px-3 text-center text-xl tracking-widest font-mono font-extrabold focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 text-slate-100 transition placeholder-slate-700"
                   />
                 </div>
@@ -568,6 +536,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
                 <div className="flex justify-between items-center text-[10px] font-bold font-mono uppercase tracking-wider text-slate-400 px-1">
                   <button
                     type="button"
+                    disabled={isLoading}
                     onClick={() => {
                       try {
                         sessionStorage.removeItem("veggiepos_pending_verify");
@@ -579,19 +548,13 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
                     <ChevronLeft className="w-4 h-4" />
                     <span>Change Details</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleResendCode}
-                    className="hover:text-pink-400 text-pink-500 transition cursor-pointer"
-                  >
-                    Resend Code
-                  </button>
                 </div>
 
+                {/* Primary Action Button */}
                 <button
                   type="submit"
-                  disabled={isLoading}
-                  className="w-full mt-2 py-3 bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-pink-500/10 active:scale-98 disabled:opacity-50 transition cursor-pointer flex items-center justify-center gap-1.5"
+                  disabled={isLoading || verificationCode.length < 6}
+                  className="w-full mt-2 py-3.5 bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-700 hover:to-indigo-700 text-white text-xs font-bold rounded-xl shadow-lg shadow-pink-500/10 active:scale-98 disabled:opacity-50 transition cursor-pointer flex items-center justify-center gap-2"
                 >
                   {isLoading ? (
                     <>
@@ -599,12 +562,28 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
                       <span>Verifying...</span>
                     </>
                   ) : (
-                    <>
-                      <span>Verify & Initialize Restaurant</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
+                    <span>Verify & Login</span>
                   )}
                 </button>
+
+                {/* Resend Verification Code Button */}
+                <div className="pt-2 border-t border-slate-800/80">
+                  <button
+                    type="button"
+                    onClick={handleResendCode}
+                    disabled={resendCooldown > 0 || isResending}
+                    className="w-full py-2.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-pink-400 hover:text-pink-300 disabled:text-slate-500 disabled:border-slate-800 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isResending ? "animate-spin" : ""}`} />
+                    <span>
+                      {resendCooldown > 0
+                        ? `Resend Code in ${resendCooldown}s`
+                        : isResending
+                        ? "Sending Code..."
+                        : "Resend Verification Code"}
+                    </span>
+                  </button>
+                </div>
               </form>
             </div>
           )}

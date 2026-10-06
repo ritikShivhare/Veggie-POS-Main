@@ -23,7 +23,6 @@ export default function SaasAdminLogin({
     password?: string;
     challengeToken?: string;
     email?: string;
-    devCode?: string;
   } | null>(null);
 
   const [otpCode, setOtpCode] = useState<string>("");
@@ -57,8 +56,9 @@ export default function SaasAdminLogin({
     );
   };
 
-  const handleVerifyOtpWithCode = async (codeToVerify: string) => {
-    const cleanCode = codeToVerify.trim();
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanCode = otpCode.trim();
     if (!cleanCode || cleanCode.length < 6) {
       setOtpError("Please enter the 6-digit verification code.");
       return;
@@ -91,7 +91,7 @@ export default function SaasAdminLogin({
         setCurrentStaff(data.user);
         setActiveTab("saas-admin");
       } else {
-        setOtpError(data.message || "Invalid or expired verification code. Access Denied.");
+        setOtpError(data.message || "Invalid verification code.");
       }
     } catch (err: any) {
       setOtpError(err.message || "Connection error. Please try again.");
@@ -100,20 +100,8 @@ export default function SaasAdminLogin({
     }
   };
 
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await handleVerifyOtpWithCode(otpCode);
-  };
-
-  // Auto-submit when user reaches 6 digits
-  useEffect(() => {
-    if (otpRequire && otpCode.trim().length === 6 && !isLoggingIn) {
-      handleVerifyOtpWithCode(otpCode.trim());
-    }
-  }, [otpCode, otpRequire]);
-
   const handleResendOtp = async () => {
-    if (resendCooldown > 0 || isResending) return;
+    if (resendCooldown > 0 || isResending || !otpRequire?.challengeToken) return;
     setIsResending(true);
     setOtpError("");
     setOtpSuccessMessage("");
@@ -123,22 +111,15 @@ export default function SaasAdminLogin({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ challengeToken: otpRequire?.challengeToken })
+        body: JSON.stringify({ challengeToken: otpRequire.challengeToken })
       });
       const data = await res.json();
 
       if (data.success) {
-        setResendCooldown(5);
-        if (data.challengeToken && otpRequire) {
-          setOtpRequire({
-            ...otpRequire,
-            challengeToken: data.challengeToken,
-            devCode: data.devCode || otpRequire.devCode
-          });
-        }
-        setOtpSuccessMessage(data.message || "A new 6-digit code has been sent to your email.");
+        setResendCooldown(15);
+        setOtpSuccessMessage(data.message || "Verification code sent to your email.");
       } else {
-        setOtpError(data.message || "Failed to resend code.");
+        setOtpError(data.message || "Unable to send verification email. Please try again.");
       }
     } catch (err: any) {
       setOtpError("Network error while resending code.");
@@ -170,13 +151,12 @@ export default function SaasAdminLogin({
           setOtpRequire({
             challengeToken: data.challengeToken,
             email: data.email || "ritikshiv53@gmail.com",
-            devCode: data.devCode,
             password: passwordInput.trim()
           });
           setOtpCode("");
           setOtpError("");
-          setOtpSuccessMessage(data.message || "Verification code dispatched.");
-          setResendCooldown(5);
+          setOtpSuccessMessage("");
+          setResendCooldown(15);
         } else if (data.user?.role === "SaaS Owner") {
           try {
             localStorage.removeItem("veggiepos_current_session_id");
@@ -190,7 +170,7 @@ export default function SaasAdminLogin({
           setLoginError(data.message || "Invalid response. Access Denied.");
         }
       } else {
-        setLoginError(data.message || "Invalid Super-Admin Password. Access Denied.");
+        setLoginError(data.message || "Incorrect Super-Admin Password.");
       }
     } catch (err: any) {
       setLoginError(err.message || "Connection error. Please check your network.");
@@ -214,44 +194,17 @@ export default function SaasAdminLogin({
           </h2>
           <p className="text-xs text-slate-400 mt-1 max-w-xs">
             {otpRequire
-              ? `Verification code dispatched to ${otpRequire.email || "registered email"}`
+              ? `Verification code sent to ${otpRequire.email || "your email"}`
               : "SaaS Owner Authentication Required"}
           </p>
         </div>
 
         {otpRequire ? (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
-            {/* Quick Helper Badge for 123456 / Dev Code */}
-            <div className="p-3 bg-pink-950/40 border border-pink-500/30 rounded-2xl text-xs space-y-2">
-              <div className="flex items-center justify-between font-bold">
-                <span className="flex items-center gap-1.5 text-pink-400 text-[11px]">
-                  Master Bypass Code:
-                </span>
-                <span className="font-mono text-sm font-extrabold tracking-widest text-pink-200 bg-pink-900/60 px-2 py-0.5 rounded-lg border border-pink-500/40">
-                  {otpRequire.devCode || "123456"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-pink-300/80 pt-1 border-t border-pink-500/20">
-                <span>Direct Verification Active</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const code = otpRequire.devCode || "123456";
-                    setOtpCode(code);
-                    handleVerifyOtpWithCode(code);
-                  }}
-                  className="px-2.5 py-1 bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-500 hover:to-indigo-500 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition cursor-pointer shadow-sm"
-                >
-                  ⚡ Auto-Fill & Verify
-                </button>
-              </div>
-            </div>
-
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-[10px] uppercase font-mono font-bold text-slate-400 px-1">
-                <span>Enter 6-Digit Email Code</span>
-                <span className="text-pink-400">⚡ Auto-submits on 6th digit</span>
-              </div>
+              <label className="text-[10px] uppercase font-mono font-bold text-slate-400 block text-center">
+                Enter 6-Digit Email Code
+              </label>
               <input
                 type="text"
                 maxLength={6}
@@ -264,7 +217,7 @@ export default function SaasAdminLogin({
                   setOtpError("");
                   setOtpSuccessMessage("");
                 }}
-                placeholder="123456"
+                placeholder="000000"
                 className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3 px-4 text-center text-xl tracking-[0.8em] font-mono text-white focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
               />
 
@@ -309,7 +262,7 @@ export default function SaasAdminLogin({
               </button>
             </div>
 
-            {/* Prominent Resend Code Button as Requested */}
+            {/* Resend Verification Code Button */}
             <div className="pt-2 border-t border-slate-800/80">
               <button
                 type="button"
@@ -323,7 +276,7 @@ export default function SaasAdminLogin({
                   {resendCooldown > 0
                     ? `Resend Code in ${resendCooldown}s`
                     : isResending
-                    ? "Dispatching New Code..."
+                    ? "Sending Code..."
                     : "Resend Verification Code"}
                 </span>
               </button>
@@ -333,7 +286,7 @@ export default function SaasAdminLogin({
           <form onSubmit={handlePasswordSubmit} className="space-y-4">
             <div className="space-y-1">
               <label className="text-[10px] font-bold uppercase font-mono text-slate-400 tracking-wider">
-                Enter Super-Admin Password or Master Code
+                Enter Super-Admin Password
               </label>
               <input
                 name="adminPassword"
@@ -345,7 +298,7 @@ export default function SaasAdminLogin({
                   setPasswordInput(e.target.value);
                   setLoginError("");
                 }}
-                placeholder="•••••••• or 123456"
+                placeholder="••••••••"
                 className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3 px-4 text-center text-lg font-sans text-white focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
               />
               {loginError && (
@@ -363,7 +316,7 @@ export default function SaasAdminLogin({
               disabled={isLoggingIn}
               className="w-full py-3.5 bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-pink-500/10 cursor-pointer disabled:opacity-50"
             >
-              {isLoggingIn ? "Authenticating..." : "Login / Send Verification Code"}
+              {isLoggingIn ? "Checking Password..." : "Send Verification Code"}
             </button>
 
             {!isSaaSSubdomain() && (

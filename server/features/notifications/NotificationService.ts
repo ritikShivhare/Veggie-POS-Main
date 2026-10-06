@@ -95,11 +95,40 @@ class SmtpEmailProvider implements EmailProvider {
         console.warn("[SMTP Email Provider] Transport setup warning:", err);
       }
     } else {
-      console.log("[SMTP Email Provider] Real SMTP credentials not configured (placeholder detected). Operating in mock console delivery mode.");
+      console.warn("[SMTP Email Provider] Real SMTP credentials not configured (placeholder detected).");
+    }
+  }
+
+  private initTransporter() {
+    const user = process.env.SMTP_USER || process.env.GMAIL_USER;
+    const pass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
+    const host = process.env.SMTP_HOST || "smtp.gmail.com";
+    const port = parseInt(process.env.SMTP_PORT || "465", 10);
+
+    if (user && pass && !isPlaceholderCredential(user) && !isPlaceholderCredential(pass)) {
+      try {
+        this.transporter = nodemailer.createTransport({
+          host,
+          port,
+          secure: port === 465,
+          auth: { user, pass },
+          connectionTimeout: 8000,
+          greetingTimeout: 5000,
+          socketTimeout: 10000
+        });
+        console.log(`[SMTP Email Provider] Initialized Nodemailer SMTP via ${host}:${port} for ${user}`);
+      } catch (err) {
+        console.warn("[SMTP Email Provider] Transport setup warning:", err);
+      }
+    } else {
+      console.warn("[SMTP Email Provider] Real SMTP credentials not configured.");
     }
   }
 
   async sendEmail(to: string, subject: string, htmlBody: string) {
+    if (!this.transporter) {
+      this.initTransporter();
+    }
     if (!this.transporter) {
       return { success: false, providerId: "" };
     }
@@ -112,16 +141,10 @@ class SmtpEmailProvider implements EmailProvider {
         subject,
         html: htmlBody
       });
-      console.log(`[SMTP Email Provider] Free Gmail/SMTP Email sent to ${to}. ID: ${info.messageId}`);
+      console.log(`[SMTP Email Provider] Real Email sent to ${to}. ID: ${info.messageId}`);
       return { success: true, providerId: info.messageId };
     } catch (error: any) {
-      const errMsg = error?.message || String(error);
-      if (errMsg.includes("535") || errMsg.includes("Username and Password not accepted") || error?.code === "EAUTH") {
-        console.warn(`[SMTP Email Provider] SMTP authentication failed (${errMsg}). Disabling SMTP provider to prevent repeated auth failures.`);
-        this.transporter = null;
-      } else {
-        console.warn("[SMTP Email Provider] Error dispatching email via SMTP:", errMsg);
-      }
+      console.warn("[SMTP Email Provider] Error dispatching email via SMTP:", error?.message || error);
       return { success: false, providerId: "" };
     }
   }
@@ -170,7 +193,7 @@ class ResendEmailProvider implements EmailProvider {
 }
 
 /**
- * Composite Email Provider combining free Nodemailer SMTP, Resend API, and Mock Console Delivery
+ * Composite Email Provider combining free Nodemailer SMTP and Resend API
  */
 class CompositeEmailProvider implements EmailProvider {
   private smtpProvider: SmtpEmailProvider;
@@ -182,22 +205,27 @@ class CompositeEmailProvider implements EmailProvider {
   }
 
   async sendEmail(to: string, subject: string, htmlBody: string) {
+    if (process.env.RESEND_API_KEY) {
+      const resendRes = await this.resendProvider.sendEmail(to, subject, htmlBody);
+      if (resendRes.success) {
+        return resendRes;
+      }
+    }
+
     const smtpRes = await this.smtpProvider.sendEmail(to, subject, htmlBody);
     if (smtpRes.success) {
       return smtpRes;
     }
-    const resendRes = await this.resendProvider.sendEmail(to, subject, htmlBody);
-    if (resendRes.success) {
-      return resendRes;
+
+    if (!process.env.RESEND_API_KEY) {
+      const resendRes = await this.resendProvider.sendEmail(to, subject, htmlBody);
+      if (resendRes.success) {
+        return resendRes;
+      }
     }
 
-    // Mock console delivery fallback when external email providers are unconfigured or unavailable
-    if (process.env.NODE_ENV !== "production") {
-      console.log(`\n============================================\n📧 [EMAIL DELIVERED (CONSOLE FALLBACK)]\nTo: ${to}\nSubject: ${subject}\nBody:\n${htmlBody}\n============================================\n`);
-    } else {
-      console.log(`[NotificationService] Email dispatched to ${to} (Subject: "${subject}") via fallback.`);
-    }
-    return { success: true, providerId: `mock-${Date.now()}` };
+    console.error(`[NotificationService] All configured email providers failed for recipient ${to}.`);
+    return { success: false, providerId: "" };
   }
 }
 

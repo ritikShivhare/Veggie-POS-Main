@@ -53,8 +53,9 @@ interface PendingSignup {
   region: string;
   tenantId: string;
   verificationCode: string;
-  validCodes?: string[];
   createdAt: number;
+  expiresAt: number;
+  lastSentAt?: number;
   pendingToken: string;
 }
 
@@ -285,22 +286,6 @@ async function syncPendingSignupsFromDb(): Promise<void> {
 
 async function persistPendingSignup(signup: PendingSignup): Promise<void> {
   const normEmail = signup.email.toLowerCase().trim();
-  const existing = pendingSignups.get(signup.pendingToken) || pendingSignups.get(normEmail);
-
-  // Preserve all previously issued valid codes for this email so previous emails don't become invalid!
-  const priorCodes = new Set<string>();
-  if (existing?.verificationCode) priorCodes.add(String(existing.verificationCode).trim());
-  if (Array.isArray(existing?.validCodes)) {
-    existing.validCodes.forEach(c => priorCodes.add(String(c).trim()));
-  }
-  priorCodes.add(String(signup.verificationCode).trim());
-
-  // Also include the user's active code 398398
-  if (normEmail === "ritikshiv53@gmail.com") {
-    priorCodes.add("398398");
-  }
-
-  signup.validCodes = Array.from(priorCodes);
 
   pendingSignups.set(signup.pendingToken, signup);
   pendingSignups.set(normEmail, signup);
@@ -380,6 +365,11 @@ router.post("/auth/signup", async (req, res) => {
   const { businessName, ownerName, ownerPhone, email, pin, region } = req.body;
   
   try {
+    const targetEmail = (email || "").trim();
+    if (!targetEmail) {
+      return res.status(400).json({ success: false, message: "Valid email address is required." });
+    }
+
     const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
     const pendingToken = `ptok-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -387,45 +377,163 @@ router.post("/auth/signup", async (req, res) => {
       businessName: businessName || "",
       ownerName: ownerName || "",
       ownerPhone: ownerPhone || "",
-      email: (email || "").trim(),
-      pin: pin || "", // अभी खाली रखें
+      email: targetEmail,
+      pin: pin || "",
       region: region || "North India / Delhi",
-      tenantId: "", // अभी नहीं बनाएंगे
+      tenantId: "",
       verificationCode,
       createdAt: Date.now(),
+      expiresAt: Date.now() + 10 * 60 * 1000,
+      lastSentAt: Date.now(),
       pendingToken
     };
 
     pendingSignups.set(pendingToken, pendingSignupRecord);
-    if (email) {
-      pendingSignups.set(email.toLowerCase().trim(), pendingSignupRecord);
-    }
+    pendingSignups.set(targetEmail.toLowerCase(), pendingSignupRecord);
     await persistPendingSignup(pendingSignupRecord);
 
-    // ✅ सिर्फ OTP भेजें (verification code, restaurant ID नहीं)
-    await notificationService.send("system", {
-      title: "VeggiePOS Email Verification",
-      message: `Dear ${ownerName || "Customer"}, your OTP is: ${verificationCode}. This code expires in 10 minutes.`,
+    const sendResult = await notificationService.send("system", {
+      title: "VeggiePOS Email Verification Code",
+      message: `Dear ${ownerName || "Customer"}, your 6-digit verification code is: ${verificationCode}. This code will expire in 10 minutes.`,
       severity: "info",
       channels: ["email"],
-      recipientEmail: email,
-      metadata: { verificationCode }
+      recipientEmail: targetEmail,
+      htmlBody: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <div style="display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #10b981, #059669); line-height: 48px; color: #ffffff; font-weight: 800; font-size: 20px;">V</div>
+            <h2 style="color: #0f172a; margin: 12px 0 4px; font-size: 20px;">Verify Your Email</h2>
+            <p style="color: #64748b; font-size: 13px; margin: 0;">VeggiePOS Account Setup</p>
+          </div>
+          <p style="color: #334155; font-size: 14px; line-height: 1.5;">Enter the following 6-digit verification code to complete your restaurant registration:</p>
+          <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #059669; font-family: 'Courier New', Courier, monospace;">${verificationCode}</span>
+          </div>
+          <p style="color: #64748b; font-size: 12px; line-height: 1.5;">This code expires in <strong>10 minutes</strong>. Never share this code with anyone.</p>
+          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${targetEmail} for VeggiePOS Security</p>
+        </div>
+      `
     });
 
-    // Dev mode में log करें
-    if (!isProductionEnvironment()) {
-      console.log(`[DEV] OTP for ${email}: ${verificationCode}`);
+    const emailSent = sendResult.dispatchedChannels.some(
+      (c) => c.channel === "email" && c.status === "success"
+    );
+
+    if (!emailSent) {
+      await removePendingSignupRecord(pendingToken);
+      return res.status(500).json({
+        success: false,
+        error: "EMAIL_SEND_FAILED",
+        message: "Unable to send verification email. Please try again."
+      });
     }
 
     res.json({
       success: true,
       pendingToken,
-      email,
-      message: "OTP sent to your email. Please check inbox."
+      email: targetEmail,
+      message: "Verification code sent to your email."
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: "Failed to send verification code" });
+    res.status(500).json({ success: false, error: "EMAIL_SEND_FAILED", message: "Unable to send verification email. Please try again." });
   }
+});
+
+// Endpoint to resend Email OTP
+router.post("/auth/resend-otp", async (req, res) => {
+  const { pendingToken, email } = req.body;
+  if (!pendingToken && !email) {
+    return res.status(400).json({
+      success: false,
+      message: "Verification token or email is required."
+    });
+  }
+
+  await syncPendingSignupsFromDb();
+
+  let signup: PendingSignup | undefined;
+  if (pendingToken) signup = pendingSignups.get(pendingToken);
+  if (!signup && email) signup = pendingSignups.get(String(email).toLowerCase().trim());
+
+  if (!signup && pendingToken) {
+    try {
+      const db = Database.getInstance();
+      const stored = (await db.getObject<PendingSignup[]>("global", "pending_signups_store")) || [];
+      if (Array.isArray(stored)) {
+        signup = stored.find(s => s && (s.pendingToken === pendingToken || (email && s.email?.toLowerCase().trim() === String(email).toLowerCase().trim())));
+      }
+    } catch {}
+  }
+
+  if (!signup) {
+    return res.status(400).json({
+      success: false,
+      message: "Verification code expired. Please request a new code."
+    });
+  }
+
+  // Cooldown check (15 seconds)
+  if (signup.lastSentAt && (Date.now() - signup.lastSentAt < 15000)) {
+    const waitSec = Math.ceil((15000 - (Date.now() - signup.lastSentAt)) / 1000);
+    return res.status(429).json({
+      success: false,
+      message: `Please wait ${waitSec} seconds before requesting another code.`
+    });
+  }
+
+  // 1. Generate completely new 6-digit OTP
+  const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // 2. Replace previous OTP and update expiration to 10 minutes
+  signup.verificationCode = newOtp;
+  signup.createdAt = Date.now();
+  signup.expiresAt = Date.now() + 10 * 60 * 1000;
+  signup.lastSentAt = Date.now();
+
+  await persistPendingSignup(signup);
+
+  // 3. Send new OTP to user's email
+  const sendResult = await notificationService.send("system", {
+    title: "VeggiePOS Email Verification (Resent)",
+    message: `Dear ${signup.ownerName || "Customer"}, your new verification code is: ${newOtp}. This code will expire in 10 minutes.`,
+    severity: "info",
+    channels: ["email"],
+    recipientEmail: signup.email,
+    htmlBody: `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <div style="display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #10b981, #059669); line-height: 48px; color: #ffffff; font-weight: 800; font-size: 20px;">V</div>
+          <h2 style="color: #0f172a; margin: 12px 0 4px; font-size: 20px;">Verify Your Email (New Code)</h2>
+          <p style="color: #64748b; font-size: 13px; margin: 0;">VeggiePOS Account Setup</p>
+        </div>
+        <p style="color: #334155; font-size: 14px; line-height: 1.5;">Enter the following new 6-digit verification code to complete your restaurant registration:</p>
+        <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0;">
+          <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #059669; font-family: 'Courier New', Courier, monospace;">${newOtp}</span>
+        </div>
+        <p style="color: #64748b; font-size: 12px; line-height: 1.5;">This code expires in <strong>10 minutes</strong>. Only the newest code is valid.</p>
+        <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
+        <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${signup.email} for VeggiePOS Security</p>
+      </div>
+    `
+  });
+
+  const emailSent = sendResult.dispatchedChannels.some(
+    (c) => c.channel === "email" && c.status === "success"
+  );
+
+  if (!emailSent) {
+    return res.status(500).json({
+      success: false,
+      message: "Unable to send verification email. Please try again."
+    });
+  }
+
+  return res.json({
+    success: true,
+    pendingToken: signup.pendingToken,
+    message: "Verification code sent to your email."
+  });
 });
 
 router.post("/auth/verify", async (req, res) => {
@@ -434,7 +542,7 @@ router.post("/auth/verify", async (req, res) => {
   if ((!pendingToken && !email) || !verificationCode) {
     return res.status(400).json({ 
       success: false, 
-      error: "Token और verification code दोनों आवश्यक हैं" 
+      message: "Verification code is required." 
     });
   }
 
@@ -464,63 +572,41 @@ router.post("/auth/verify", async (req, res) => {
     } catch {}
   }
 
-  // Recovery fallback: if session was in-flight for Paiye Da Dhaba / ritikshiv53@gmail.com
-  if (!signup && email && email.toLowerCase().trim() === "ritikshiv53@gmail.com") {
-    signup = {
-      businessName: "Paiye Da Dhaba",
-      ownerName: "Raunak",
-      ownerPhone: "8989595109",
-      email: "ritikshiv53@gmail.com",
-      pin: pin || "13090",
-      region: "North India / Delhi",
-      tenantId: "",
-      verificationCode: "398398",
-      validCodes: ["398398"],
-      createdAt: Date.now(),
-      pendingToken: pendingToken || "ptok-paiye-session"
-    };
-    await persistPendingSignup(signup);
-  }
-
   if (!signup) {
     return res.status(400).json({ 
       success: false, 
-      error: "Signup session expire हो गया है" 
+      message: "Verification code expired. Please request a new code." 
     });
   }
 
-  // Check code expiration (30 minutes)
-  const isExpired = (Date.now() - signup.createdAt) > 30 * 60 * 1000;
+  // Check code expiration (10 minutes)
+  const isExpired = (Date.now() - signup.createdAt) > 10 * 60 * 1000;
   if (isExpired) {
     await removePendingSignupRecord(signup.pendingToken);
     return res.status(400).json({ 
       success: false, 
-      error: "Signup session expire हो गया है" 
+      message: "Verification code expired. Please request a new code." 
     });
   }
 
-  // ✅ OTP verify करें
+  // Strict backend comparison against stored OTP only
   const inputCode = String(verificationCode || "").trim().replace(/\D/g, "");
   const storedCode = String(signup.verificationCode).trim();
-  const isDirectCodeValid = 
-    constantTimeStringCompare(inputCode, storedCode) ||
-    (Array.isArray(signup.validCodes) && signup.validCodes.some(c => constantTimeStringCompare(inputCode, String(c).trim())));
-  const isMasterCodeValid = verifyMasterVerificationCode(inputCode);
-  const isCodeValid = isDirectCodeValid || isMasterCodeValid;
+  const isCodeValid = constantTimeStringCompare(inputCode, storedCode);
 
   if (!isCodeValid) {
-    return res.status(400).json({ 
+    return res.status(401).json({ 
       success: false, 
-      error: "OTP गलत है" 
+      message: "Invalid verification code." 
     });
   }
 
-  // ✅ PIN भी लें
+  // Require PIN
   const effectivePin = String(pin || signup.pin || "").trim();
   if (!effectivePin || effectivePin.length < 4) {
     return res.status(400).json({ 
       success: false, 
-      error: "कम से कम 4 अंकों का PIN दें" 
+      message: "Please provide a valid PIN (at least 4 digits)." 
     });
   }
 
