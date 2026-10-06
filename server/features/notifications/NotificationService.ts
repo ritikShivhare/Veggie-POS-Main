@@ -85,7 +85,10 @@ class SmtpEmailProvider implements EmailProvider {
           host,
           port,
           secure: port === 465,
-          auth: { user, pass }
+          auth: { user, pass },
+          connectionTimeout: 8000,
+          greetingTimeout: 5000,
+          socketTimeout: 10000
         });
         console.log(`[SMTP Email Provider] Initialized Nodemailer SMTP via ${host}:${port} for ${user}`);
       } catch (err) {

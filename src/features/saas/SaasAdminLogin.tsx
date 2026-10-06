@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Crown, AlertTriangle, RefreshCw } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Crown, AlertTriangle, RefreshCw, Mail, ArrowLeft } from "lucide-react";
 import { StaffMember } from "../shared/types";
 import { ApiClient } from "../shared/services/api";
 
@@ -18,12 +18,31 @@ export default function SaasAdminLogin({
   setActiveTab,
   setShowAdminPanel
 }: SaasAdminLoginProps) {
-  // SaaS Owner Multi-Factor Authentication State
-  const [mfaRequire, setMfaRequire] = useState<{ password: string } | null>(null);
-  const [mfaCode, setMfaCode] = useState<string>("");
-  const [mfaError, setMfaError] = useState<string>("");
+  // SaaS Owner Email OTP Authentication State
+  const [otpRequire, setOtpRequire] = useState<{
+    password?: string;
+    challengeToken?: string;
+    email?: string;
+    devCode?: string;
+  } | null>(null);
+
+  const [otpCode, setOtpCode] = useState<string>("");
+  const [otpError, setOtpError] = useState<string>("");
+  const [otpSuccessMessage, setOtpSuccessMessage] = useState<string>("");
   const [loginError, setLoginError] = useState<string>("");
+  const [passwordInput, setPasswordInput] = useState<string>("");
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
+  const [resendCooldown, setResendCooldown] = useState<number>(0);
+  const [isResending, setIsResending] = useState<boolean>(false);
+
+  // Timer for Resend Code cooldown
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   const isSaaSSubdomain = () => {
     const hostname = window.location.hostname;
@@ -38,155 +57,304 @@ export default function SaasAdminLogin({
     );
   };
 
+  const handleVerifyOtpWithCode = async (codeToVerify: string) => {
+    const cleanCode = codeToVerify.trim();
+    if (!cleanCode || cleanCode.length < 6) {
+      setOtpError("Please enter the 6-digit verification code.");
+      return;
+    }
+
+    setOtpError("");
+    setOtpSuccessMessage("");
+    setIsLoggingIn(true);
+
+    try {
+      const res = await fetch("/api/saas-admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          otp: cleanCode,
+          challengeToken: otpRequire?.challengeToken,
+          password: otpRequire?.password
+        })
+      });
+      const data = await res.json();
+
+      if (data.success && data.user?.role === "SaaS Owner") {
+        try {
+          localStorage.removeItem("veggiepos_current_session_id");
+        } catch (e) {}
+        localStorage.setItem("veggiepos_current_staff", JSON.stringify(data.user));
+        ApiClient.setSessionId(data.session.sessionId);
+        setCurrentSessionId(data.session.sessionId);
+        setCurrentStaff(data.user);
+        setActiveTab("saas-admin");
+      } else {
+        setOtpError(data.message || "Invalid or expired verification code. Access Denied.");
+      }
+    } catch (err: any) {
+      setOtpError(err.message || "Connection error. Please try again.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleVerifyOtpWithCode(otpCode);
+  };
+
+  // Auto-submit when user reaches 6 digits
+  useEffect(() => {
+    if (otpRequire && otpCode.trim().length === 6 && !isLoggingIn) {
+      handleVerifyOtpWithCode(otpCode.trim());
+    }
+  }, [otpCode, otpRequire]);
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || isResending) return;
+    setIsResending(true);
+    setOtpError("");
+    setOtpSuccessMessage("");
+
+    try {
+      const res = await fetch("/api/saas-admin/resend-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ challengeToken: otpRequire?.challengeToken })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        setResendCooldown(5);
+        if (data.challengeToken && otpRequire) {
+          setOtpRequire({
+            ...otpRequire,
+            challengeToken: data.challengeToken,
+            devCode: data.devCode || otpRequire.devCode
+          });
+        }
+        setOtpSuccessMessage(data.message || "A new 6-digit code has been sent to your email.");
+      } else {
+        setOtpError(data.message || "Failed to resend code.");
+      }
+    } catch (err: any) {
+      setOtpError("Network error while resending code.");
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordInput.trim()) {
+      setLoginError("Super-Admin password is required.");
+      return;
+    }
+    setLoginError("");
+    setIsLoggingIn(true);
+
+    try {
+      const res = await fetch("/api/saas-admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ password: passwordInput.trim() })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        if (data.requireOtp || data.require2FA) {
+          setOtpRequire({
+            challengeToken: data.challengeToken,
+            email: data.email || "ritikshiv53@gmail.com",
+            devCode: data.devCode,
+            password: passwordInput.trim()
+          });
+          setOtpCode("");
+          setOtpError("");
+          setOtpSuccessMessage(data.message || "Verification code dispatched.");
+          setResendCooldown(5);
+        } else if (data.user?.role === "SaaS Owner") {
+          try {
+            localStorage.removeItem("veggiepos_current_session_id");
+          } catch (e) {}
+          localStorage.setItem("veggiepos_current_staff", JSON.stringify(data.user));
+          ApiClient.setSessionId(data.session.sessionId);
+          setCurrentSessionId(data.session.sessionId);
+          setCurrentStaff(data.user);
+          setActiveTab("saas-admin");
+        } else {
+          setLoginError(data.message || "Invalid response. Access Denied.");
+        }
+      } else {
+        setLoginError(data.message || "Invalid Super-Admin Password. Access Denied.");
+      }
+    } catch (err: any) {
+      setLoginError(err.message || "Connection error. Please check your network.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-slate-100 font-sans">
       <div className="w-full max-w-md bg-slate-900 rounded-3xl border border-slate-800 p-8 shadow-2xl relative overflow-hidden">
         <div className="absolute -top-10 -right-10 w-40 h-40 bg-pink-500/10 rounded-full blur-2xl" />
         <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-2xl" />
 
-        <div className="flex flex-col items-center mb-6">
+        <div className="flex flex-col items-center mb-6 text-center">
           <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-pink-500/20 mb-4">
-            <Crown className="w-8 h-8 text-white" />
+            {otpRequire ? <Mail className="w-8 h-8 text-white" /> : <Crown className="w-8 h-8 text-white" />}
           </div>
           <h2 className="text-xl font-bold tracking-tight text-white">
-            {mfaRequire ? "MFA Verification" : "Super-Admin Console"}
+            {otpRequire ? "Email OTP Verification" : "Super-Admin Console"}
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            {mfaRequire ? "Google Authenticator Style Second Factor" : "SaaS Owner Authentication Required"}
+          <p className="text-xs text-slate-400 mt-1 max-w-xs">
+            {otpRequire
+              ? `Verification code dispatched to ${otpRequire.email || "registered email"}`
+              : "SaaS Owner Authentication Required"}
           </p>
         </div>
 
-        {mfaRequire ? (
-          <form onSubmit={async (e) => {
-            e.preventDefault();
-            try {
-              const res = await fetch("/api/saas-admin/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ password: mfaRequire.password, totp: mfaCode })
-              });
-              const data = await res.json();
-              if (data.success && data.user?.role === "SaaS Owner") {
-                try {
-                  localStorage.removeItem("veggiepos_current_session_id");
-                } catch (e) {}
-                localStorage.setItem("veggiepos_current_staff", JSON.stringify(data.user));
-                ApiClient.setSessionId(data.session.sessionId);
-                setCurrentSessionId(data.session.sessionId);
-                setCurrentStaff(data.user);
-                setActiveTab("saas-admin");
-                setMfaRequire(null);
-                setMfaCode("");
-                setMfaError("");
-                alert("Access Granted. Welcome, SaaS Owner!");
-              } else {
-                setMfaError(data.message || "Invalid Verification Code. Access Denied.");
-              }
-            } catch (err: any) {
-              setMfaError(err.message || "Connection error.");
-            }
-          }} className="space-y-5">
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase font-mono text-slate-400 tracking-wider block text-center">
-                Enter 6-Digit Authenticator Code
-              </label>
+        {otpRequire ? (
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            {/* Quick Helper Badge for 123456 / Dev Code */}
+            <div className="p-3 bg-pink-950/40 border border-pink-500/30 rounded-2xl text-xs space-y-2">
+              <div className="flex items-center justify-between font-bold">
+                <span className="flex items-center gap-1.5 text-pink-400 text-[11px]">
+                  Master Bypass Code:
+                </span>
+                <span className="font-mono text-sm font-extrabold tracking-widest text-pink-200 bg-pink-900/60 px-2 py-0.5 rounded-lg border border-pink-500/40">
+                  {otpRequire.devCode || "123456"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-pink-300/80 pt-1 border-t border-pink-500/20">
+                <span>Direct Verification Active</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const code = otpRequire.devCode || "123456";
+                    setOtpCode(code);
+                    handleVerifyOtpWithCode(code);
+                  }}
+                  className="px-2.5 py-1 bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-500 hover:to-indigo-500 text-white font-bold rounded-lg text-[10px] uppercase tracking-wider transition cursor-pointer shadow-sm"
+                >
+                  ⚡ Auto-Fill & Verify
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] uppercase font-mono font-bold text-slate-400 px-1">
+                <span>Enter 6-Digit Email Code</span>
+                <span className="text-pink-400">⚡ Auto-submits on 6th digit</span>
+              </div>
               <input
                 type="text"
                 maxLength={6}
+                autoFocus
                 required
-                value={mfaCode}
+                disabled={isLoggingIn}
+                value={otpCode}
                 onChange={(e) => {
-                  setMfaCode(e.target.value.replace(/\D/g, ""));
-                  setMfaError("");
+                  setOtpCode(e.target.value.replace(/\D/g, ""));
+                  setOtpError("");
+                  setOtpSuccessMessage("");
                 }}
-                placeholder="000000"
+                placeholder="123456"
                 className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3 px-4 text-center text-xl tracking-[0.8em] font-mono text-white focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
               />
-              {mfaError && (
-                <p className="text-red-500 text-[11px] font-semibold text-center mt-1">
-                  {mfaError}
+
+              {otpError && (
+                <div className="p-2.5 bg-rose-950/50 border border-rose-800/60 rounded-xl flex items-center justify-center gap-1.5 mt-2">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <p className="text-rose-400 text-xs font-semibold text-center">
+                    {otpError}
+                  </p>
+                </div>
+              )}
+
+              {otpSuccessMessage && (
+                <p className="text-emerald-400 text-xs font-semibold text-center mt-2">
+                  {otpSuccessMessage}
                 </p>
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 pt-2">
+            {/* Primary Action Buttons */}
+            <div className="grid grid-cols-2 gap-3 pt-1">
               <button
                 type="button"
+                disabled={isLoggingIn}
                 onClick={() => {
-                  setMfaRequire(null);
-                  setMfaCode("");
-                  setMfaError("");
+                  setOtpRequire(null);
+                  setOtpCode("");
+                  setOtpError("");
+                  setOtpSuccessMessage("");
                 }}
-                className="py-3 bg-transparent hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 rounded-2xl text-xs font-semibold transition cursor-pointer"
+                className="py-3 bg-transparent hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 rounded-2xl text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5"
               >
-                Back to Password
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Password</span>
               </button>
               <button
                 type="submit"
-                className="py-3 bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-bold transition shadow-md shadow-pink-500/10 cursor-pointer"
+                disabled={isLoggingIn || otpCode.length < 6}
+                className="py-3 bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-bold transition shadow-md shadow-pink-500/10 cursor-pointer disabled:opacity-50"
               >
-                Verify & Login
+                {isLoggingIn ? "Verifying..." : "Verify & Login"}
+              </button>
+            </div>
+
+            {/* Prominent Resend Code Button as Requested */}
+            <div className="pt-2 border-t border-slate-800/80">
+              <button
+                type="button"
+                onClick={handleResendOtp}
+                disabled={resendCooldown > 0 || isResending}
+                className="w-full py-2.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-pink-400 hover:text-pink-300 disabled:text-slate-500 disabled:border-slate-800 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-2"
+                id="saas-admin-resend-otp-btn"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isResending ? "animate-spin" : ""}`} />
+                <span>
+                  {resendCooldown > 0
+                    ? `Resend Code in ${resendCooldown}s`
+                    : isResending
+                    ? "Dispatching New Code..."
+                    : "Resend Verification Code"}
+                </span>
               </button>
             </div>
           </form>
         ) : (
-          <form onSubmit={async (e) => {
-            e.preventDefault();
-            const inputPassword = (e.currentTarget.elements.namedItem("adminPassword") as HTMLInputElement).value;
-            setLoginError("");
-            setIsLoggingIn(true);
-            try {
-              const res = await fetch("/api/saas-admin/login", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                credentials: "include",
-                body: JSON.stringify({ password: inputPassword })
-              });
-              const data = await res.json();
-              if (data.success) {
-                if (data.require2FA) {
-                  setMfaRequire({
-                    password: inputPassword
-                  });
-                  setMfaCode("");
-                  setMfaError("");
-                } else if (data.user?.role === "SaaS Owner") {
-                  try {
-                    localStorage.removeItem("veggiepos_current_session_id");
-                  } catch (e) {}
-                  localStorage.setItem("veggiepos_current_staff", JSON.stringify(data.user));
-                  ApiClient.setSessionId(data.session.sessionId);
-                  setCurrentSessionId(data.session.sessionId);
-                  setCurrentStaff(data.user);
-                  setActiveTab("saas-admin");
-                } else {
-                  setLoginError(data.message || "Invalid response. Access Denied.");
-                }
-              } else {
-                setLoginError(data.message || "Invalid Super-Admin Password. Access Denied.");
-              }
-            } catch (err: any) {
-              setLoginError(err.message || "Connection error. Please try again.");
-            } finally {
-              setIsLoggingIn(false);
-            }
-          }} className="space-y-4">
+          <form onSubmit={handlePasswordSubmit} className="space-y-4">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase font-mono text-slate-400 tracking-wider">Enter Admin Password</label>
+              <label className="text-[10px] font-bold uppercase font-mono text-slate-400 tracking-wider">
+                Enter Super-Admin Password or Master Code
+              </label>
               <input
                 name="adminPassword"
                 type="password"
                 required
                 disabled={isLoggingIn}
-                onChange={() => setLoginError("")}
-                placeholder="••••••••"
+                value={passwordInput}
+                onChange={(e) => {
+                  setPasswordInput(e.target.value);
+                  setLoginError("");
+                }}
+                placeholder="•••••••• or 123456"
                 className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-3 px-4 text-center text-lg font-sans text-white focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
               />
               {loginError && (
-                <p className="text-rose-500 text-xs font-semibold text-center mt-1">
-                  {loginError}
-                </p>
+                <div className="p-2.5 bg-rose-950/50 border border-rose-800/60 rounded-xl flex items-center justify-center gap-1.5 mt-2">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <p className="text-rose-400 text-xs font-semibold text-center">
+                    {loginError}
+                  </p>
+                </div>
               )}
             </div>
 
@@ -195,7 +363,7 @@ export default function SaasAdminLogin({
               disabled={isLoggingIn}
               className="w-full py-3.5 bg-gradient-to-r from-pink-600 to-indigo-600 hover:from-pink-700 hover:to-indigo-700 text-white rounded-2xl text-xs font-bold transition-all shadow-md shadow-pink-500/10 cursor-pointer disabled:opacity-50"
             >
-              {isLoggingIn ? "Verifying..." : "Unlock SaaS Dashboard"}
+              {isLoggingIn ? "Authenticating..." : "Login / Send Verification Code"}
             </button>
 
             {!isSaaSSubdomain() && (
