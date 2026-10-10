@@ -56,7 +56,7 @@ export default function InventoryManagement({
   const [editingIngId, setEditingIngId] = useState<string | null>(null);
 
   // Purchase Form State
-  const [newPur, setNewPur] = useState({ ingredientId: "", quantity: 0, cost: 0, supplier: "", invoiceNumber: "" });
+  const [newPur, setNewPur] = useState({ ingredientId: "", quantity: 0, cost: 0, ratePerUnit: 0, supplier: "", invoiceNumber: "" });
 
   // Recipe Form State
   const [selectedRecipeMenuItemId, setSelectedRecipeMenuItemId] = useState("");
@@ -239,28 +239,49 @@ export default function InventoryManagement({
     const selectedIng = ingredients.find((i) => i.id === newPur.ingredientId);
     if (!selectedIng || newPur.quantity <= 0) return;
 
+    const purchaseQty = Number(newPur.quantity);
+    const purchaseCost = Number(newPur.cost);
+    const currentStockValid = Math.max(0, selectedIng.currentStock);
+    const newStock = Number((selectedIng.currentStock + purchaseQty).toFixed(3));
+
+    // Weighted Average Cost (WAC): (Current Value + Purchase Cost) / (Current Stock + Purchase Qty)
+    let newCostPerUnit = selectedIng.costPerUnit;
+    if (purchaseQty > 0 && purchaseCost > 0) {
+      if (currentStockValid > 0 && selectedIng.costPerUnit > 0) {
+        const currentValue = currentStockValid * selectedIng.costPerUnit;
+        newCostPerUnit = Number(((currentValue + purchaseCost) / (currentStockValid + purchaseQty)).toFixed(2));
+      } else {
+        newCostPerUnit = Number((purchaseCost / purchaseQty).toFixed(2));
+      }
+    }
+
     const purchaseEntry: Purchase = {
       id: `pur-${Date.now()}`,
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
       ingredientId: newPur.ingredientId,
       ingredientName: selectedIng.name,
-      quantity: Number(newPur.quantity),
-      cost: Number(newPur.cost),
+      quantity: purchaseQty,
+      cost: purchaseCost,
       supplier: newPur.supplier || "Direct",
       invoiceNumber: newPur.invoiceNumber || undefined
     };
 
     onAddPurchase(purchaseEntry);
 
-    // Increase current stock in inventory
+    // Increase current stock & update costPerUnit with weighted average in inventory
     const updatedIngredients = ingredients.map((ing) =>
       ing.id === newPur.ingredientId
-        ? { ...ing, currentStock: ing.currentStock + Number(newPur.quantity) }
+        ? {
+            ...ing,
+            currentStock: newStock,
+            costPerUnit: newCostPerUnit,
+            updated_at: new Date().toISOString()
+          }
         : ing
     );
     onUpdateIngredients(updatedIngredients);
 
-    setNewPur({ ingredientId: "", quantity: 0, cost: 0, supplier: "", invoiceNumber: "" });
+    setNewPur({ ingredientId: "", quantity: 0, cost: 0, ratePerUnit: 0, supplier: "", invoiceNumber: "" });
     setShowAddPurchaseModal(false);
   };
 
@@ -415,7 +436,7 @@ export default function InventoryManagement({
                     <th className="p-4">Material Name</th>
                     <th className="p-4">Current Stock</th>
                     <th className="p-4">Min. Alert Stock</th>
-                    <th className="p-4">Est. Cost / Unit</th>
+                    <th className="p-4">Avg. Cost / Unit</th>
                     <th className="p-4">Holding Valuation</th>
                     <th className="p-4">Status Alert</th>
                     {isManagerOrOwner && <th className="p-4 text-right">Actions</th>}
@@ -434,7 +455,12 @@ export default function InventoryManagement({
                         <td className="p-4 font-mono text-slate-400">
                           {ing.minStock.toLocaleString()} {ing.unit}
                         </td>
-                        <td className="p-4 font-mono">INR {ing.costPerUnit.toFixed(2)}</td>
+                        <td className="p-4 font-mono">
+                          <div className="flex flex-col">
+                            <span className="text-white font-semibold">INR {ing.costPerUnit.toFixed(2)}</span>
+                            <span className="text-[10px] text-slate-400 font-sans">per {ing.unit} (WAC)</span>
+                          </div>
+                        </td>
                         <td className="p-4 font-mono text-emerald-400">
                           INR {(ing.currentStock * ing.costPerUnit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
@@ -699,7 +725,15 @@ export default function InventoryManagement({
               {canAddPurchase && (
                 <button
                   onClick={() => {
-                    setNewPur({ ingredientId: ingredients[0]?.id || "", quantity: 0, cost: 0, supplier: "", invoiceNumber: "" });
+                    const first = ingredients[0];
+                    setNewPur({
+                      ingredientId: first?.id || "",
+                      quantity: 0,
+                      cost: 0,
+                      ratePerUnit: first ? first.costPerUnit : 0,
+                      supplier: "",
+                      invoiceNumber: ""
+                    });
                     setShowAddPurchaseModal(true);
                   }}
                   className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-3 py-2 rounded-xl text-xs flex items-center space-x-1.5 shadow"
@@ -719,6 +753,7 @@ export default function InventoryManagement({
                     <th className="p-4">Purchase Date</th>
                     <th className="p-4">Ingredient Name</th>
                     <th className="p-4">Purchased Qty</th>
+                    <th className="p-4">Purchase Rate</th>
                     <th className="p-4">Total Cost</th>
                     <th className="p-4">Supplier</th>
                     <th className="p-4">Invoice Number</th>
@@ -727,21 +762,27 @@ export default function InventoryManagement({
                 <tbody className="divide-y divide-slate-800/40">
                   {purchases.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center p-8 text-slate-500 font-sans italic">
+                      <td colSpan={7} className="text-center p-8 text-slate-500 font-sans italic">
                         No supply purchase entries logged yet. Click "Log Stock Purchase" to receive new stock.
                       </td>
                     </tr>
                   ) : (
-                    purchases.map((purchase) => (
-                      <tr key={purchase.id} className="hover:bg-slate-850/20 text-slate-300">
-                        <td className="p-4 text-slate-400 font-mono">{purchase.date}</td>
-                        <td className="p-4 font-semibold text-white">{purchase.ingredientName}</td>
-                        <td className="p-4 font-mono">{purchase.quantity}</td>
-                        <td className="p-4 font-bold text-emerald-400">INR {purchase.cost.toLocaleString()}</td>
-                        <td className="p-4 text-slate-400">{purchase.supplier}</td>
-                        <td className="p-4 text-slate-500 font-mono">{purchase.invoiceNumber || "-"}</td>
-                      </tr>
-                    ))
+                    purchases.map((purchase) => {
+                      const ing = ingredients.find((i) => i.id === purchase.ingredientId);
+                      const unitStr = ing ? ing.unit : "Unit";
+                      const unitRate = purchase.quantity > 0 ? (purchase.cost / purchase.quantity) : 0;
+                      return (
+                        <tr key={purchase.id} className="hover:bg-slate-850/20 text-slate-300">
+                          <td className="p-4 text-slate-400 font-mono">{purchase.date}</td>
+                          <td className="p-4 font-semibold text-white">{purchase.ingredientName}</td>
+                          <td className="p-4 font-mono font-bold text-emerald-400">+{purchase.quantity} {unitStr}</td>
+                          <td className="p-4 font-mono text-slate-200">INR {unitRate.toFixed(2)} /{unitStr}</td>
+                          <td className="p-4 font-bold text-emerald-400 font-mono">INR {purchase.cost.toLocaleString()}</td>
+                          <td className="p-4 text-slate-400">{purchase.supplier}</td>
+                          <td className="p-4 text-slate-500 font-mono">{purchase.invoiceNumber || "-"}</td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -1045,101 +1086,213 @@ export default function InventoryManagement({
       )}
 
       {/* FORM MODAL: RECEIVE VENDOR PURCHASE */}
-      {showAddPurchaseModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl">
-            <h3 className="text-base font-display font-bold text-white mb-4">Receive Supply Delivery</h3>
+      {showAddPurchaseModal && (() => {
+        const selectedPurIng = ingredients.find((i) => i.id === newPur.ingredientId);
+        const curStock = selectedPurIng ? Math.max(0, selectedPurIng.currentStock) : 0;
+        const curCost = selectedPurIng ? selectedPurIng.costPerUnit : 0;
+        const curVal = curStock * curCost;
+        const purQty = Number(newPur.quantity) || 0;
+        const purCost = Number(newPur.cost) || 0;
+        const purRate = purQty > 0 ? (purCost / purQty) : (newPur.ratePerUnit || 0);
+        const newCombinedStock = Number((curStock + purQty).toFixed(3));
+        const newCombinedVal = curVal + purCost;
+        const previewWac = newCombinedStock > 0
+          ? (curStock > 0 && curCost > 0 ? Number((newCombinedVal / newCombinedStock).toFixed(2)) : Number(purRate.toFixed(2)))
+          : curCost;
 
-            <div className="space-y-4 text-xs">
-              <div className="space-y-1">
-                <label className="text-slate-400 font-medium">Select Ingredient *</label>
-                <select
-                  value={newPur.ingredientId}
-                  onChange={(e) => setNewPur({ ...newPur, ingredientId: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none"
-                >
-                  <option value="">-- Choose Ingredient --</option>
-                  {ingredients.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.name} ({i.unit})
-                    </option>
-                  ))}
-                </select>
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div>
+                  <h3 className="text-base font-display font-bold text-white">Log Supply Delivery</h3>
+                  <p className="text-xs text-slate-400">Stock arrival & Weighted Average Cost (WAC) update</p>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3.5 text-xs">
                 <div className="space-y-1">
-                  <label className="text-slate-400 font-medium">Delivered Quantity *</label>
-                  <input
-                    type="number"
-                    value={newPur.quantity || ""}
+                  <label className="text-slate-400 font-medium">Select Ingredient *</label>
+                  <select
+                    value={newPur.ingredientId}
                     onChange={(e) => {
-                      const qty = Number(e.target.value);
-                      const selectedIng = ingredients.find(i => i.id === newPur.ingredientId);
-                      const estimatedCost = selectedIng ? selectedIng.costPerUnit * qty : 0;
-                      setNewPur({ ...newPur, quantity: qty, cost: estimatedCost });
+                      const selId = e.target.value;
+                      const ing = ingredients.find((i) => i.id === selId);
+                      const rate = ing ? ing.costPerUnit : 0;
+                      setNewPur({
+                        ...newPur,
+                        ingredientId: selId,
+                        ratePerUnit: rate,
+                        cost: newPur.quantity > 0 && rate > 0 ? Number((newPur.quantity * rate).toFixed(2)) : newPur.cost
+                      });
                     }}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
-                  />
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none"
+                  >
+                    <option value="">-- Choose Ingredient --</option>
+                    {ingredients.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name} ({i.unit}) — Current: {i.currentStock} {i.unit} @ ₹{i.costPerUnit.toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-slate-400 font-medium">Delivered Invoice Cost (INR)</label>
-                  <input
-                    type="number"
-                    value={newPur.cost || ""}
-                    onChange={(e) => setNewPur({ ...newPur, cost: Number(e.target.value) })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
-                  />
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-medium">Delivered Qty *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="e.g. 10"
+                      value={newPur.quantity || ""}
+                      onChange={(e) => {
+                        const qty = Number(e.target.value);
+                        const rate = newPur.ratePerUnit > 0 ? newPur.ratePerUnit : (selectedPurIng ? selectedPurIng.costPerUnit : 0);
+                        setNewPur({
+                          ...newPur,
+                          quantity: qty,
+                          ratePerUnit: rate,
+                          cost: qty > 0 && rate > 0 ? Number((qty * rate).toFixed(2)) : newPur.cost
+                        });
+                      }}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-medium">Rate / {selectedPurIng ? selectedPurIng.unit : "Unit"} (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="e.g. 20"
+                      value={newPur.ratePerUnit || ""}
+                      onChange={(e) => {
+                        const rate = Number(e.target.value);
+                        const qty = Number(newPur.quantity) || 0;
+                        setNewPur({
+                          ...newPur,
+                          ratePerUnit: rate,
+                          cost: qty > 0 ? Number((qty * rate).toFixed(2)) : newPur.cost
+                        });
+                      }}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-medium">Total Cost (₹)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="e.g. 200"
+                      value={newPur.cost || ""}
+                      onChange={(e) => {
+                        const cost = Number(e.target.value);
+                        const qty = Number(newPur.quantity) || 0;
+                        const derivedRate = qty > 0 ? Number((cost / qty).toFixed(2)) : newPur.ratePerUnit;
+                        setNewPur({
+                          ...newPur,
+                          cost,
+                          ratePerUnit: derivedRate
+                        });
+                      }}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono text-xs"
+                    />
+                  </div>
+                </div>
+
+                {selectedPurIng && (
+                  <div className="bg-slate-950/80 border border-emerald-500/25 rounded-2xl p-3 space-y-2">
+                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                      <span className="text-[11px] font-bold text-emerald-400">Weighted Average Cost (WAC) Preview</span>
+                      <span className="text-[10px] text-slate-400 font-mono">वेटेज एवरेज गणना</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                      <div className="bg-slate-900/60 p-2 rounded-xl border border-slate-850">
+                        <span className="text-slate-400 block font-medium">Current Stock in Hand:</span>
+                        <span className="font-bold text-white font-mono">{curStock} {selectedPurIng.unit}</span>
+                        <span className="text-slate-400 block font-mono">@ ₹{curCost.toFixed(2)} / {selectedPurIng.unit}</span>
+                        <span className="text-emerald-400/90 font-mono block">Value: ₹{curVal.toFixed(2)}</span>
+                      </div>
+
+                      <div className="bg-slate-900/60 p-2 rounded-xl border border-slate-850">
+                        <span className="text-slate-400 block font-medium">Incoming Purchase:</span>
+                        <span className="font-bold text-emerald-400 font-mono">+{purQty} {selectedPurIng.unit}</span>
+                        <span className="text-slate-400 block font-mono">@ ₹{purRate.toFixed(2)} / {selectedPurIng.unit}</span>
+                        <span className="text-emerald-400/90 font-mono block">Cost: ₹{purCost.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5 flex items-center justify-between">
+                      <div>
+                        <span className="text-[9px] uppercase font-bold text-emerald-400 tracking-wider block">New Total Stock</span>
+                        <span className="font-mono font-bold text-white text-xs">{newCombinedStock} {selectedPurIng.unit}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] uppercase font-bold text-emerald-400 tracking-wider block">New Avg. Cost per {selectedPurIng.unit}</span>
+                        <span className="font-mono font-bold text-emerald-300 text-sm">₹{previewWac.toFixed(2)} / {selectedPurIng.unit}</span>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-slate-500 italic">
+                      Formula: (Current ₹{curVal.toFixed(0)} + Purchase ₹{purCost.toFixed(0)}) ÷ {newCombinedStock || 1} {selectedPurIng.unit} = ₹{previewWac.toFixed(2)} / {selectedPurIng.unit}
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-medium">Supplier / Vendor</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. ABC Farm Wholesale"
+                      value={newPur.supplier}
+                      onChange={(e) => setNewPur({ ...newPur, supplier: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-slate-400 font-medium">Invoice Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. INV-9021"
+                      value={newPur.invoiceNumber}
+                      onChange={(e) => setNewPur({ ...newPur, invoiceNumber: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-slate-400 font-medium">Supplier / Vendor Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. ABC Dairy Wholesale"
-                  value={newPur.supplier}
-                  onChange={(e) => setNewPur({ ...newPur, supplier: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
-                />
+              <div className="flex space-x-3 pt-2">
+                <button
+                  onClick={() => setShowAddPurchaseModal(false)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 font-semibold rounded-xl text-xs transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddPurchaseSubmit}
+                  disabled={!newPur.ingredientId || newPur.quantity <= 0}
+                  className={`flex-1 py-2.5 font-bold rounded-xl text-xs transition ${
+                    !newPur.ingredientId || newPur.quantity <= 0
+                      ? "bg-slate-800 text-slate-500 cursor-not-allowed"
+                      : "bg-emerald-500 hover:bg-emerald-600 text-slate-950 shadow-lg shadow-emerald-500/20"
+                  }`}
+                  id="save-purchase-submit-btn"
+                >
+                  Add Inventory & Update Cost
+                </button>
               </div>
-
-              <div className="space-y-1">
-                <label className="text-slate-400 font-medium">Invoice Number</label>
-                <input
-                  type="text"
-                  placeholder="e.g. INV-2026-904"
-                  value={newPur.invoiceNumber}
-                  onChange={(e) => setNewPur({ ...newPur, invoiceNumber: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex space-x-3 mt-6">
-              <button
-                onClick={() => setShowAddPurchaseModal(false)}
-                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 font-semibold rounded-xl text-xs transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddPurchaseSubmit}
-                disabled={!newPur.ingredientId || newPur.quantity <= 0}
-                className={`flex-1 py-2.5 font-bold rounded-xl text-xs transition ${
-                  !newPur.ingredientId || newPur.quantity <= 0
-                    ? "bg-slate-800 text-slate-500 cursor-not-allowed"
-                    : "bg-emerald-500 hover:bg-emerald-600 text-slate-950"
-                }`}
-                id="save-purchase-submit-btn"
-              >
-                Add Inventory
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* FORM MODAL: MAP RECIPES */}
       {showEditRecipeModal && (

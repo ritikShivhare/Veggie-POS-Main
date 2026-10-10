@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { StaffMember, RestaurantTenant } from "../shared/types";
 import {
   AlertCircle,
@@ -52,6 +52,16 @@ export default function PinLogin({
   const [switchError, setSwitchError] = useState<string>("");
   const [isSwitching, setIsSwitching] = useState<boolean>(false);
   const [isShaking, setIsShaking] = useState<boolean>(false);
+  const autoSubmitTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Clear pending debounced auto-submit on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSubmitTimerRef.current) {
+        clearTimeout(autoSubmitTimerRef.current);
+      }
+    };
+  }, []);
 
   // Rate Limiting & Lockout States
   const [isLocked, setIsLocked] = useState<boolean>(false);
@@ -107,6 +117,10 @@ export default function PinLogin({
   }, [cooldownSeconds, isLocked]);
 
   const triggerLogin = useCallback((enteredPin: string) => {
+    if (autoSubmitTimerRef.current) {
+      clearTimeout(autoSubmitTimerRef.current);
+      autoSubmitTimerRef.current = null;
+    }
     if (!enteredPin || enteredPin.length < 4 || isSubmitting || isLocked) return;
     setIsSubmitting(true);
     setError("");
@@ -166,26 +180,62 @@ export default function PinLogin({
       });
   }, [tenantId, restaurantName, qrToken, isSubmitting, isLocked, onLoginSuccess, staffList]);
 
+  // Universal Smart Auto-Submit Key Press Handler (Tenant Agnostic)
   const handleKeyPress = useCallback((num: string) => {
-    if (isLocked) return;
+    if (isLocked || isSubmitting) return;
     setError("");
+
+    // Clear any pending debounced auto-submit
+    if (autoSubmitTimerRef.current) {
+      clearTimeout(autoSubmitTimerRef.current);
+      autoSubmitTimerRef.current = null;
+    }
+
     setPin((prev) => {
-      if (prev.length < 6) {
-        const next = prev + num;
-        if (next.length === 5 && tenantId === "veg-reetesh-dhaba") {
-          setTimeout(() => triggerLogin(next), 50);
-        }
-        return next;
+      if (prev.length >= 6) return prev;
+      const nextPin = prev + num;
+
+      // 1. Instant auto-submit if max PIN length (6 digits) reached
+      if (nextPin.length === 6) {
+        setTimeout(() => triggerLogin(nextPin), 40);
+        return nextPin;
       }
-      return prev;
+
+      // 2. Intelligent debounced auto-submit for 4-5 digit PINs:
+      // If user stops typing for 500ms, auto-submit.
+      // If user types another digit within 500ms, this timer gets cleared and reset.
+      if (nextPin.length >= 4) {
+        autoSubmitTimerRef.current = setTimeout(() => {
+          triggerLogin(nextPin);
+        }, 500);
+      }
+
+      return nextPin;
     });
-  }, [tenantId, triggerLogin, isLocked]);
+  }, [isLocked, isSubmitting, triggerLogin]);
 
   const handleBackspace = useCallback(() => {
-    if (isLocked) return;
+    if (isLocked || isSubmitting) return;
     setError("");
+    if (autoSubmitTimerRef.current) {
+      clearTimeout(autoSubmitTimerRef.current);
+      autoSubmitTimerRef.current = null;
+    }
     setPin((prev) => (prev.length > 0 ? prev.slice(0, -1) : ""));
-  }, [isLocked]);
+  }, [isLocked, isSubmitting]);
+
+  const handleManualSubmit = useCallback(() => {
+    if (autoSubmitTimerRef.current) {
+      clearTimeout(autoSubmitTimerRef.current);
+      autoSubmitTimerRef.current = null;
+    }
+    if (pin.length >= 4) {
+      triggerLogin(pin);
+    } else {
+      setPin("");
+      setError("");
+    }
+  }, [pin, triggerLogin]);
 
   // Physical Keyboard Support for fast counter terminal usage
   useEffect(() => {
@@ -202,11 +252,13 @@ export default function PinLogin({
         handleBackspace();
       } else if (e.key === "Enter") {
         e.preventDefault();
-        if (pin.length >= 4) {
-          triggerLogin(pin);
-        }
+        handleManualSubmit();
       } else if (e.key === "Escape") {
         e.preventDefault();
+        if (autoSubmitTimerRef.current) {
+          clearTimeout(autoSubmitTimerRef.current);
+          autoSubmitTimerRef.current = null;
+        }
         setPin("");
         setError("");
       }
@@ -214,7 +266,7 @@ export default function PinLogin({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyPress, handleBackspace, pin, triggerLogin, isLocked]);
+  }, [handleKeyPress, handleBackspace, handleManualSubmit, isLocked]);
 
   // Handle manual switch outlet submission
   const handleManualSwitchSubmit = async (e: React.FormEvent) => {
@@ -405,6 +457,9 @@ export default function PinLogin({
             <div className="flex items-center gap-1.5 mb-2 text-[#787F74] font-bold text-[10px] uppercase font-mono tracking-widest">
               <Keyboard className="w-3.5 h-3.5" />
               <span>Enter 4-6 Digit Staff PIN</span>
+              <span className="text-[9px] text-[#6E8F45] font-semibold lowercase bg-[#EBF2E4] px-1.5 py-0.5 rounded-md border border-[#D5E3C8]">
+                auto-submits
+              </span>
             </div>
 
             {/* Password Dot Indicators */}
@@ -446,7 +501,7 @@ export default function PinLogin({
               ))}
               
               <button
-                onClick={pin.length >= 4 ? () => triggerLogin(pin) : () => setPin("")}
+                onClick={handleManualSubmit}
                 disabled={isSubmitting || isLocked}
                 className={`h-12 text-xs font-bold rounded-2xl flex items-center justify-center transition border cursor-pointer disabled:opacity-40 ${
                   pin.length >= 4
@@ -454,8 +509,9 @@ export default function PinLogin({
                     : "bg-[#FBF9F5] hover:bg-[#EAE5DA] text-[#5A6056] border-[#EAE5DA]"
                 }`}
                 id="keypad-ok-clear"
+                title={pin.length >= 4 ? "Press Enter or Click to Login" : "Clear entered PIN"}
               >
-                {isSubmitting ? "Verifying..." : pin.length >= 4 ? "OK / Login" : "Clear"}
+                {isSubmitting ? "Verifying..." : pin.length >= 4 ? "OK / Login ↵" : "Clear"}
               </button>
               
               <button

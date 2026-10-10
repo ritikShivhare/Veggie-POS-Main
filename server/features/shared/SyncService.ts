@@ -154,18 +154,18 @@ export class SyncService {
       }
 
       // Business fields were modified:
-      // Timestamp check: Only update a server record if the client's version has a strictly newer timestamp
+      // 1. Enforce optimistic version check if client explicitly supplied a version
+      if (incomingVersion !== undefined && incomingVersion !== currentVersion) {
+        throw new OptimisticLockConflictError(
+          `Optimistic lock conflict on '${sliceName}' for ${idKey} '${key}': client sent version ${incomingVersion}, but server current version is ${currentVersion}. Stale update rejected.`,
+          { entityId: key, expectedVersion: incomingVersion, currentVersion }
+        );
+      }
+
+      // 2. Timestamp check: Only discard update if client's version is strictly older than existing server timestamp
       if (incomingTimestamp !== null && existingTimestamp !== null) {
-        if (incomingTimestamp > existingTimestamp) {
-          // Client has a newer timestamp -> accept update and increment version
-          result.push({
-            ...incoming,
-            version: currentVersion + 1,
-            updated_at: incoming.updated_at || incoming.updatedAt || new Date().toISOString()
-          });
-          continue;
-        } else {
-          // Client timestamp is older or equal -> Stale snapshot update!
+        if (incomingTimestamp < existingTimestamp) {
+          // Client timestamp is strictly older -> Stale snapshot update!
           // DO NOT overwrite the newer server version with stale client data
           console.warn(
             `[SyncService] Stale record skipped for ${sliceName} [${key}]: client timestamp (${incoming.updatedAt || incoming.updated_at}) <= server timestamp (${existing.updated_at || existing.updatedAt}). Preserving server record.`
@@ -175,19 +175,17 @@ export class SyncService {
         }
       }
 
-      // If timestamps are not both available to compare, enforce optimistic version check
-      if (incomingVersion !== undefined && incomingVersion !== currentVersion) {
-        throw new OptimisticLockConflictError(
-          `Optimistic lock conflict on '${sliceName}' for ${idKey} '${key}': client sent version ${incomingVersion}, but server current version is ${currentVersion}. Stale update rejected.`,
-          { entityId: key, expectedVersion: incomingVersion, currentVersion }
-        );
-      }
+      // 3. Update is accepted: increment version and determine canonical updated_at
+      const clientTsStr = incoming.updatedAt || incoming.updated_at;
+      const targetTs = (incomingTimestamp !== null && existingTimestamp !== null && incomingTimestamp > existingTimestamp && clientTsStr)
+        ? clientTsStr
+        : (clientTsStr || new Date().toISOString());
 
-      // Incoming version matches or was omitted
       result.push({
         ...incoming,
         version: currentVersion + 1,
-        updated_at: new Date().toISOString()
+        updated_at: targetTs,
+        updatedAt: targetTs
       });
     }
 
@@ -293,38 +291,36 @@ export class SyncService {
 
       for (const ord of ordersToStage) {
         const existingOrd = (existingOrders || []).find((eo: any) => eo.id === ord.id);
-        
-        // If order was already persisted on server (e.g. historical/completed/sample order),
-        // preserve it without re-validating against today's dynamic menu
-        if (existingOrd) {
-          sanitizedOrders.push({
-            ...existingOrd,
-            ...ord,
-            items: (ord.items && ord.items.length > 0) ? ord.items : existingOrd.items,
-            subtotal: ord.subtotal ?? existingOrd.subtotal,
-            tax: ord.tax ?? existingOrd.tax,
-            total: ord.total ?? existingOrd.total
-          });
-          continue;
+        const mergedOrd: any = existingOrd ? { ...existingOrd, ...ord } : { ...ord };
+
+        // Ensure incoming client timestamp is not shadowed by existingOrd's older snake_case updated_at
+        const clientTimestamp = ord.updatedAt || ord.updated_at;
+        if (clientTimestamp) {
+          mergedOrd.updatedAt = clientTimestamp;
+          mergedOrd.updated_at = clientTimestamp;
+        } else if (!ord.updatedAt && !ord.updated_at && existingOrd) {
+          // Client did not supply any timestamp: do not falsely treat existingOrd's timestamp as client's timestamp
+          delete mergedOrd.updatedAt;
+          delete mergedOrd.updated_at;
         }
 
         const itemsToValidate = (ord.items && ord.items.length > 0) ? ord.items : existingOrd?.items;
 
         if (!itemsToValidate || itemsToValidate.length === 0) {
-          sanitizedOrders.push(ord);
+          sanitizedOrders.push(mergedOrd);
           continue;
         }
 
-        // Authoritatively validate and calculate order pricing for new incoming orders
+        // Authoritatively validate and calculate order pricing for all incoming orders
         try {
           const calc = await posPricingEngine.validateAndCalculateOrder(
             tenantId,
-            { ...ord, items: itemsToValidate, recalculateTotals: true },
+            { ...mergedOrd, items: itemsToValidate, recalculateTotals: true },
             undefined,
             effectiveMenu
           );
           sanitizedOrders.push({
-            ...ord,
+            ...mergedOrd,
             items: calc.validatedItems.length > 0 ? calc.validatedItems : itemsToValidate,
             subtotal: calc.subtotal,
             tax: calc.tax,
@@ -337,7 +333,7 @@ export class SyncService {
           }
           // In bulk state synchronization, do not abort saving the whole restaurant state (menu items, ingredients, etc.)
           console.warn(`[SyncService] Order pricing check skipped during state sync (order ${ord.id}):`, err?.message);
-          sanitizedOrders.push(ord);
+          sanitizedOrders.push(mergedOrd);
         }
       }
       ordersToStage = sanitizedOrders;

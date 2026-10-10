@@ -121,7 +121,33 @@ export class StaffRepository extends BaseRepository<StaffMember> {
       return defaultStaff;
     }
 
-    return list;
+    // Universal fallback: For any other restaurant tenant without staff records,
+    // seed standard default roles so terminals and staff are always functional
+    const defaultStaff: StaffMember[] = [
+      {
+        id: `s-owner-${tenantId}`,
+        name: "Store Owner",
+        role: "Owner",
+        pin: "$2b$10$Xx13wGB3RVuvQ/AwqAK7y.gBSVVPiNrt9B8R/JA/dd/pqeWUiuBXq", // "12345"
+        permissions: ["billing", "inventory", "reports", "settings"]
+      },
+      {
+        id: `s-mgr-${tenantId}`,
+        name: "Store Manager",
+        role: "Manager",
+        pin: "$2b$10$pmJPJKtm9Eicw.KWjbWuIeeCqavg3NMmldwRH4rd28S4pFRqik7lC", // "2222"
+        permissions: ["billing", "inventory", "reports"]
+      },
+      {
+        id: `s-staff-${tenantId}`,
+        name: "Store Staff",
+        role: "Staff",
+        pin: "$2b$10$4mW6ViNBwGmmEUjQ.BuATefJF5PracmvcGD44MQiCxLcXKLQQdY8u", // "3333"
+        permissions: ["billing"]
+      }
+    ];
+    await this.saveAll(tenantId, defaultStaff);
+    return defaultStaff;
   }
 }
 

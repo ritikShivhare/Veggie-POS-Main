@@ -5,6 +5,7 @@ import { app } from "../server";
 import {
   staffRepo,
   orderRepo,
+  menuRepo,
   settingsRepo,
   getGlobalTenantsList,
   saveGlobalTenantsList,
@@ -74,7 +75,7 @@ describe("End-to-End Smoke Tests: Multi-Tenant Lifecycle, Security & Realtime Is
 
     await saveGlobalTenantsList(globalTenants);
 
-    // 3. Initialize Settings for T1 and T2
+    // 3. Initialize Settings & Menu for T1 and T2
     const defaultSettings = {
       autoDeductStock: true,
       blockOrdersIfInsufficient: true,
@@ -85,6 +86,17 @@ describe("End-to-End Smoke Tests: Multi-Tenant Lifecycle, Security & Realtime Is
     };
     await settingsRepo.save(TENANT_T1, defaultSettings);
     await settingsRepo.save(TENANT_T2, defaultSettings);
+
+    await menuRepo.saveAll(TENANT_T1, [
+      {
+        id: "m-thali",
+        name: "Special Thali",
+        price: 220,
+        category: "Main Course",
+        isAvailable: true,
+        isVegetarian: true
+      }
+    ]);
 
     // 4. Create Owner user in T1 and Cashier user in T2
     const hashedOwnerPin = await hashPin(OWNER_T1_PIN);

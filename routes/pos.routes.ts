@@ -5,6 +5,8 @@ import {
   orderRepo,
   customerRepo,
   shiftRepo,
+  purchaseRepo,
+  ingredientRepo,
   auditLogService,
   authMiddleware,
   idempotencyMiddleware,
@@ -571,6 +573,47 @@ router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, r
             canonicalEntity = await shiftRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version, trx);
           } else if (operationType === "DELETE") {
             await shiftRepo.delete(tenantId, entityId, trx);
+            canonicalEntity = { id: entityId, deleted: true, version: 1 };
+          }
+          break;
+        }
+        case "purchase": {
+          if (operationType === "CREATE") {
+            const existing = await purchaseRepo.getById(tenantId, entityId);
+            if (!existing) {
+              await purchaseRepo.add(tenantId, enrichedPayload, trx);
+
+              // Update ingredient stock and calculate weighted average cost
+              const ingId = payload.ingredientId;
+              const qty = Number(payload.quantity);
+              const cost = Number(payload.cost);
+              if (ingId && !isNaN(qty) && qty > 0) {
+                const ing = await ingredientRepo.getById(tenantId, ingId);
+                if (ing) {
+                  const previousStock = ing.currentStock;
+                  const currentStockValid = Math.max(0, previousStock);
+                  const newStock = Number((previousStock + qty).toFixed(3));
+                  let newCostPerUnit = ing.costPerUnit;
+                  if (qty > 0 && cost > 0) {
+                    if (currentStockValid > 0 && ing.costPerUnit > 0) {
+                      const currentValue = currentStockValid * ing.costPerUnit;
+                      newCostPerUnit = Number(((currentValue + cost) / (currentStockValid + qty)).toFixed(2));
+                    } else {
+                      newCostPerUnit = Number((cost / qty).toFixed(2));
+                    }
+                  }
+                  await ingredientRepo.update(tenantId, {
+                    ...ing,
+                    currentStock: newStock,
+                    costPerUnit: newCostPerUnit,
+                    updated_at: new Date().toISOString()
+                  }, ing.version, trx);
+                }
+              }
+            }
+            canonicalEntity = (await purchaseRepo.getById(tenantId, entityId)) || enrichedPayload;
+          } else if (operationType === "DELETE") {
+            await purchaseRepo.delete(tenantId, entityId, trx);
             canonicalEntity = { id: entityId, deleted: true, version: 1 };
           }
           break;

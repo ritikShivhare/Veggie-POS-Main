@@ -225,11 +225,25 @@ router.post("/purchases", authMiddleware, idempotencyMiddleware, requirePermissi
     };
 
     const previousStock = ingredient.currentStock;
+    const currentStockValid = Math.max(0, previousStock);
     const newStock = Number((previousStock + quantity).toFixed(3));
+
+    // Weighted Average Cost (WAC) formula:
+    // (Existing Stock * Existing Cost + Purchased Quantity * Purchase Cost) / (Existing Stock + Purchased Quantity)
+    let newCostPerUnit = ingredient.costPerUnit;
+    if (quantity > 0 && cost > 0) {
+      if (currentStockValid > 0 && ingredient.costPerUnit > 0) {
+        const currentValue = currentStockValid * ingredient.costPerUnit;
+        newCostPerUnit = Number(((currentValue + cost) / (currentStockValid + quantity)).toFixed(2));
+      } else {
+        newCostPerUnit = Number((cost / quantity).toFixed(2));
+      }
+    }
+
     const updatedIngredient = {
       ...ingredient,
       currentStock: newStock,
-      costPerUnit: quantity > 0 && cost > 0 ? Number((cost / quantity).toFixed(2)) : ingredient.costPerUnit,
+      costPerUnit: newCostPerUnit,
       updated_at: nowIso,
       version: (ingredient.version || 1) + 1
     };

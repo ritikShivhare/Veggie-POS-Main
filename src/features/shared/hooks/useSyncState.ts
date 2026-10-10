@@ -711,9 +711,45 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     });
   };
 
-  // Handle Purchase log creation
+  // Handle Purchase log creation with Weighted Average Cost calculation
   const handleAddPurchase = (purchase: Purchase) => {
     setPurchases([purchase, ...purchases]);
+
+    if (purchase.ingredientId && purchase.quantity > 0) {
+      setIngredients((prev) => {
+        const next = prev.map((ing) => {
+          if (ing.id !== purchase.ingredientId) return ing;
+          const currentStockValid = Math.max(0, ing.currentStock);
+          const purchaseQty = Number(purchase.quantity);
+          const purchaseCost = Number(purchase.cost || 0);
+          const newStock = Number((ing.currentStock + purchaseQty).toFixed(3));
+
+          let newCostPerUnit = ing.costPerUnit;
+          if (purchaseQty > 0 && purchaseCost > 0) {
+            if (currentStockValid > 0 && ing.costPerUnit > 0) {
+              const currentVal = currentStockValid * ing.costPerUnit;
+              newCostPerUnit = Number(((currentVal + purchaseCost) / (currentStockValid + purchaseQty)).toFixed(2));
+            } else {
+              newCostPerUnit = Number((purchaseCost / purchaseQty).toFixed(2));
+            }
+          }
+
+          return {
+            ...ing,
+            currentStock: newStock,
+            costPerUnit: newCostPerUnit,
+            updated_at: new Date().toISOString()
+          };
+        });
+
+        try {
+          offlineRepository.saveIngredients(activeTenantId, next).catch((e) => console.warn(e));
+        } catch (e) {}
+
+        return next;
+      });
+    }
+
     offlineRepository.recordPurchaseOffline(activeTenantId, purchase).then(() => {
       OutboxProcessor.triggerDrain(activeTenantId);
     }).catch(err => {

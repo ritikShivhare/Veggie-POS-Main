@@ -578,29 +578,17 @@ export default function LandingPage({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono">Password</label>
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 text-slate-800"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono">5-Digit Owner PIN</label>
-                    <input
-                      type="password"
-                      maxLength={5}
-                      placeholder="e.g. 11111"
-                      value={loginPin}
-                      onChange={(e) => setLoginPin(e.target.value.replace(/\D/g, ""))}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs tracking-widest text-center font-mono font-bold focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 text-slate-800"
-                    />
-                  </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold font-mono">5-Digit Owner PIN Passcode</label>
+                  <input
+                    type="password"
+                    maxLength={5}
+                    placeholder="e.g. 11111"
+                    value={loginPin}
+                    onChange={(e) => setLoginPin(e.target.value.replace(/\D/g, ""))}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-sm tracking-widest text-center font-mono font-bold focus:bg-white focus:outline-none focus:ring-1 focus:ring-pink-500 text-slate-800"
+                  />
+                  <p className="text-[10px] text-slate-400 text-center">Owner PIN created during registration</p>
                 </div>
 
                 <button
