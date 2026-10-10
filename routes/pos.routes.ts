@@ -7,6 +7,7 @@ import {
   shiftRepo,
   purchaseRepo,
   ingredientRepo,
+  settingsRepo,
   auditLogService,
   authMiddleware,
   idempotencyMiddleware,
@@ -295,9 +296,65 @@ router.put("/orders/:id", authMiddleware, idempotencyMiddleware, async (req, res
 
 router.delete("/orders/:id", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
+  const session = (req as any).session;
+  const user = (req as any).user;
+  const orderId = req.params.id;
+
   try {
-    await orderRepo.delete(tenantId, req.params.id);
-    res.json({ success: true, message: "Order cancelled/deleted." });
+    // 1. Verify existence of the order in the current tenant boundary
+    const order = await orderRepo.getById(tenantId, orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: "NOT_FOUND",
+        message: `Order '${orderId}' not found.`
+      });
+    }
+
+    // 2. Prevent redundant cancellation
+    if (order.status === "Cancelled") {
+      return res.status(400).json({
+        success: false,
+        error: "ORDER_ALREADY_CANCELLED",
+        message: `Order #${order.orderNumber} is already cancelled.`
+      });
+    }
+
+    // 3. Extract cancellation metadata
+    const reason =
+      req.body?.reason ||
+      req.body?.cancellationReason ||
+      req.query?.reason ||
+      "Order voided and cancelled via DELETE /api/orders endpoint";
+    const cancelledBy =
+      session?.name ||
+      user?.name ||
+      req.body?.cancelledBy ||
+      "Manager";
+
+    // 4. Authoritatively execute order cancellation:
+    // Transitions status to 'Cancelled', restocks inventory (with unit conversion),
+    // refunds payments, logs audit trail, and preserves fiscal record.
+    const cancelledOrder = await financialTransactionService.executeOrderCancellation(
+      tenantId,
+      orderId,
+      {
+        cancelledBy,
+        reason: String(reason).trim(),
+        expectedVersion: req.body?.version
+      }
+    );
+
+    try {
+      realtimeService.broadcastToTenant(tenantId, "order:updated", { entityId: orderId, slice: "orders" });
+      realtimeService.broadcastToTenant(tenantId, "inventory:updated", { slice: "ingredients" });
+    } catch {}
+
+    res.json({
+      success: true,
+      message: `Order #${cancelledOrder.orderNumber} successfully voided and cancelled. Raw materials restocked to inventory and audit entry recorded.`,
+      data: cancelledOrder
+    });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -518,8 +575,20 @@ router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, r
               canonicalEntity = await orderRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version, trx);
             }
           } else if (operationType === "DELETE") {
-            await orderRepo.delete(tenantId, entityId, trx);
-            canonicalEntity = { id: entityId, deleted: true, version: 1 };
+            const existingOrder = await orderRepo.getById(tenantId, entityId);
+            if (existingOrder && existingOrder.status !== "Cancelled") {
+              canonicalEntity = await financialTransactionService.executeOrderCancellation(
+                tenantId,
+                entityId,
+                {
+                  cancelledBy: payload.cancelledBy || "Offline Terminal",
+                  reason: payload.cancellationReason || payload.reason || "Voided via Offline Outbox",
+                  expectedVersion: payload.version
+                }
+              );
+            } else {
+              canonicalEntity = existingOrder || { id: entityId, status: "Cancelled", version: 1 };
+            }
           }
           break;
         }
@@ -750,40 +819,150 @@ router.post("/orders/:id/cancel", authMiddleware, requireRole("Owner", "Manager"
   }
 });
 
-// Problem 2: Audit Discount Application & Custom Price Edits
+// Problem 2: Audit Discount Application & Custom Price Edits with Robust Validation
 router.post("/orders/audit-discount", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { orderId, originalAmount, discountAmount, finalAmount, managerPin, reason = "Custom Discount" } = req.body;
 
-  if (!managerPin) {
+  // 1. Validate Manager PIN presence
+  if (!managerPin || typeof managerPin !== "string" || managerPin.trim().length === 0) {
     return res.status(401).json({ success: false, error: "PIN_REQUIRED", message: "Owner/Manager PIN is required to authorize discounts." });
   }
 
-  try {
-    const staffList = (await staffRepo.getAll(tenantId)) || [];
-    const authorizedStaff = staffList.filter((s) => s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("apply_discount" as any));
-    const manager = await findStaffByPinConstantTime(authorizedStaff, managerPin);
+  // 2. Validate original amount
+  const numOrig = Number(originalAmount);
+  if (isNaN(numOrig) || !isFinite(numOrig) || numOrig <= 0) {
+    return res.status(400).json({
+      success: false,
+      error: "INVALID_ORIGINAL_AMOUNT",
+      message: "Original order amount must be a positive finite number."
+    });
+  }
 
-    if (!manager) {
-      return res.status(403).json({ success: false, error: "UNAUTHORIZED_PIN", message: "Invalid Owner/Manager PIN or insufficient privilege to apply discounts." });
+  // 3. Validate discount amount
+  const numDiscount = Number(discountAmount);
+  if (isNaN(numDiscount) || !isFinite(numDiscount) || numDiscount <= 0) {
+    return res.status(400).json({
+      success: false,
+      error: "INVALID_DISCOUNT_AMOUNT",
+      message: "Discount amount must be a positive finite number greater than 0."
+    });
+  }
+
+  // 4. Ceiling check: discount cannot exceed original order amount
+  if (numDiscount > numOrig) {
+    return res.status(400).json({
+      success: false,
+      error: "DISCOUNT_EXCEEDS_TOTAL",
+      message: `Discount amount (₹${numDiscount}) cannot exceed original order amount (₹${numOrig}).`
+    });
+  }
+
+  // 5. Final amount calculation check (if supplied by client)
+  const expectedFinal = Number((numOrig - numDiscount).toFixed(2));
+  if (finalAmount !== undefined && finalAmount !== null) {
+    const numFinal = Number(finalAmount);
+    if (isNaN(numFinal) || Math.abs(numFinal - expectedFinal) > 0.05) {
+      return res.status(400).json({
+        success: false,
+        error: "INVALID_FINAL_AMOUNT",
+        message: `Final amount (₹${numFinal}) does not match original minus discount (₹${expectedFinal}).`
+      });
+    }
+  }
+
+  // 6. Mandatory reason check
+  const cleanReason = typeof reason === "string" ? reason.trim() : "";
+  if (!cleanReason) {
+    return res.status(400).json({
+      success: false,
+      error: "REASON_REQUIRED",
+      message: "A valid business reason is mandatory for auditing discount approvals."
+    });
+  }
+
+  try {
+    // 7. Check restaurant maximum discount percentage policy
+    const settings = (await settingsRepo.get(tenantId)) || ({} as any);
+    if (settings.maxDiscountPercentage !== undefined && settings.maxDiscountPercentage > 0 && settings.maxDiscountPercentage < 100) {
+      const maxPolicyDiscount = Number((numOrig * (settings.maxDiscountPercentage / 100)).toFixed(2));
+      if (numDiscount > maxPolicyDiscount) {
+        return res.status(400).json({
+          success: false,
+          error: "DISCOUNT_EXCEEDS_MAX_PERCENTAGE",
+          message: `Discount (₹${numDiscount}) exceeds restaurant maximum discount policy of ${settings.maxDiscountPercentage}% (₹${maxPolicyDiscount}).`
+        });
+      }
     }
 
+    // 8. Constant-time Manager/Owner PIN verification
+    const staffList = (await staffRepo.getAll(tenantId)) || [];
+    const authorizedStaff = staffList.filter((s) => s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("apply_discount" as any));
+    const manager = await findStaffByPinConstantTime(authorizedStaff, managerPin.trim());
+
+    if (!manager) {
+      return res.status(403).json({
+        success: false,
+        error: "UNAUTHORIZED_PIN",
+        message: "Invalid Owner/Manager PIN or insufficient privilege to apply discounts."
+      });
+    }
+
+    // 9. If orderId is provided, validate order lifecycle state and update if active
+    let targetOrder: any = null;
+    if (orderId && orderId !== "cart" && !String(orderId).startsWith("temp")) {
+      targetOrder = await orderRepo.get(tenantId, orderId);
+      if (targetOrder) {
+        if (targetOrder.status === "Cancelled") {
+          return res.status(400).json({
+            success: false,
+            error: "ORDER_CANCELLED",
+            message: "Cannot apply discount to a cancelled order."
+          });
+        }
+        if (targetOrder.status === "Completed" && targetOrder.paidAt) {
+          return res.status(400).json({
+            success: false,
+            error: "ORDER_ALREADY_PAID",
+            message: "Cannot apply discount to an already paid and completed order."
+          });
+        }
+
+        // Apply discount to the existing order in storage
+        targetOrder.discount = numDiscount;
+        targetOrder.total = expectedFinal;
+        targetOrder.updated_at = new Date().toISOString();
+        await orderRepo.save(tenantId, targetOrder);
+        try {
+          realtimeService.broadcastToTenant(tenantId, "order:updated", { entityId: targetOrder.id, slice: "orders" });
+        } catch (e) {}
+      }
+    }
+
+    // 10. Audit log recording
     await auditLogService.log(
       tenantId,
       "DISCOUNT_APPLIED",
       manager.name,
-      `Discount of INR ${discountAmount} applied by ${manager.name} (Original: INR ${originalAmount} -> Final: INR ${finalAmount}). Reason: "${reason}"`,
+      `Discount of INR ${numDiscount.toFixed(2)} applied by ${manager.name} (Original: INR ${numOrig.toFixed(2)} -> Final: INR ${expectedFinal.toFixed(2)}). Reason: "${cleanReason}"`,
       {
-        orderId,
-        originalAmount,
-        discountAmount,
-        finalAmount,
-        reason,
+        orderId: targetOrder?.id || orderId || "cart",
+        originalAmount: numOrig,
+        discountAmount: numDiscount,
+        finalAmount: expectedFinal,
+        reason: cleanReason,
         authorizer: manager.name
       }
     );
 
-    res.json({ success: true, message: "Discount authorization audit recorded successfully.", authorizer: manager.name });
+    res.json({
+      success: true,
+      message: "Discount authorization audit recorded successfully.",
+      authorizer: manager.name,
+      originalAmount: numOrig,
+      discountAmount: numDiscount,
+      finalAmount: expectedFinal
+    });
   } catch (error: any) {
     handleApiError(res, error);
   }

@@ -29,6 +29,19 @@ export abstract class BaseRepository<T, KeyType = string> {
     return items.find(item => (item[this.idKey] as any) === id) || null;
   }
 
+  async get(tenantId: string, id: KeyType): Promise<T | null> {
+    return this.getById(tenantId, id);
+  }
+
+  async save(tenantId: string, item: T, trx?: DatabaseTransaction): Promise<void> {
+    const existing = await this.getById(tenantId, item[this.idKey] as any);
+    if (existing) {
+      await this.update(tenantId, item, undefined, trx);
+    } else {
+      await this.add(tenantId, item, trx);
+    }
+  }
+
   async add(tenantId: string, item: T, trx?: DatabaseTransaction): Promise<void> {
     const existing = (await this.getAll(tenantId)) || [];
     const items = [...existing];

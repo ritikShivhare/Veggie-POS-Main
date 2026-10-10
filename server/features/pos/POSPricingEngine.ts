@@ -3,13 +3,17 @@ import { CustomerRepository } from "../crm/CustomerRepository";
 import { SettingsRepository } from "../shared/SettingsRepository";
 import { RecipeRepository } from "../inventory/RecipeRepository";
 import { IngredientRepository } from "../inventory/IngredientRepository";
+import { StaffRepository } from "../staff/StaffRepository";
+import { findStaffByPinConstantTime } from "../auth/PinSecurityService";
 import { Order, OrderItem, MenuItem, Ingredient, Recipe, Customer } from "../../../src/features/shared/types";
+import { convertRecipeQuantityToIngredientStock } from "../../../src/features/shared/utils/unitConversion";
 
 const menuRepo = new MenuRepository();
 const customerRepo = new CustomerRepository();
 const settingsRepo = new SettingsRepository();
 const recipeRepo = new RecipeRepository();
 const ingredientRepo = new IngredientRepository();
+const staffRepo = new StaffRepository();
 
 export class FinancialValidationError extends Error {
   public code: string;
@@ -68,6 +72,8 @@ export class POSPricingEngine {
     tenantId: string,
     rawOrder: Partial<Order> & {
       appliedDiscount?: number;
+      discountAmount?: number;
+      discountPercentage?: number;
       redeemPoints?: boolean;
       selectedCustomerId?: string;
       managerPin?: string;
@@ -234,10 +240,10 @@ export class POSPricingEngine {
     }
 
     // 3. Authoritative Tax Calculation (Based on tenant settings or order tax context)
-    const tenantSettings = await settingsRepo.get(tenantId);
+    const settings = (await settingsRepo.get(tenantId)) || ({} as any);
     let gstRate = 0;
-    if (tenantSettings && (tenantSettings as any).gstPercentage !== undefined) {
-      gstRate = Number((tenantSettings as any).gstPercentage) / 100;
+    if (settings && (settings as any).gstPercentage !== undefined) {
+      gstRate = Number((settings as any).gstPercentage) / 100;
     } else if (rawOrder.tax !== undefined && Number(rawOrder.tax) > 0) {
       gstRate = 0.05;
     } else {
@@ -274,26 +280,67 @@ export class POSPricingEngine {
     }
 
     let manualDiscount = 0;
-    if (rawOrder.discount !== undefined || rawOrder.appliedDiscount !== undefined) {
-      const requestedDiscount = Number(rawOrder.discount ?? rawOrder.appliedDiscount ?? 0);
-      if (isNaN(requestedDiscount) || requestedDiscount < 0) {
-        throw new FinancialValidationError("INVALID_DISCOUNT", "Discount amount cannot be negative.", 400);
+    if (
+      rawOrder.discount !== undefined ||
+      rawOrder.appliedDiscount !== undefined ||
+      (rawOrder as any).discountAmount !== undefined ||
+      (rawOrder as any).discountPercentage !== undefined
+    ) {
+      let requestedDiscount = 0;
+      if (
+        (rawOrder as any).discountPercentage !== undefined &&
+        (rawOrder as any).discountPercentage !== null &&
+        Number((rawOrder as any).discountPercentage) > 0
+      ) {
+        const pct = Number((rawOrder as any).discountPercentage);
+        if (isNaN(pct) || !isFinite(pct) || pct < 0 || pct > 100) {
+          throw new FinancialValidationError("INVALID_DISCOUNT", "Discount percentage must be between 0% and 100%.", 400);
+        }
+        const grossAmount = calculatedSubtotal + calculatedTax;
+        requestedDiscount = Number((grossAmount * (pct / 100)).toFixed(2));
+      } else {
+        const rawVal = rawOrder.discount ?? rawOrder.appliedDiscount ?? (rawOrder as any).discountAmount ?? 0;
+        requestedDiscount = Number(Number(rawVal).toFixed(2));
+      }
+
+      if (isNaN(requestedDiscount) || !isFinite(requestedDiscount) || requestedDiscount < 0) {
+        throw new FinancialValidationError("INVALID_DISCOUNT", "Discount amount cannot be negative, NaN, or non-finite.", 400);
       }
 
       if (requestedDiscount > 0) {
+        // Cannot apply discount to an empty order
+        if (calculatedSubtotal <= 0) {
+          throw new FinancialValidationError("INVALID_DISCOUNT", "Cannot apply discount to an empty order.", 400);
+        }
+
         // Authorization check for manual discount:
-        // Must be Owner or Manager role, or have apply_discount permission, or provide a valid managerPin
+        // Must be Owner or Manager role, or have apply_discount permission, or provide a verified managerPin
         const userRole = userContext?.role;
         const isAuthorizedRole = userRole === "Owner" || userRole === "Manager" || userRole === "SaaS Owner";
         const hasPermission = userContext?.permissions && userContext.permissions.includes("apply_discount");
-        const hasPin = Boolean(rawOrder.managerPin);
 
-        if (!isAuthorizedRole && !hasPermission && !hasPin) {
-          throw new FinancialValidationError(
-            "UNAUTHORIZED_DISCOUNT",
-            "Manual discount application requires Owner or Manager authorization.",
-            403
+        if (!isAuthorizedRole && !hasPermission) {
+          if (!rawOrder.managerPin) {
+            throw new FinancialValidationError(
+              "UNAUTHORIZED_DISCOUNT",
+              "Manual discount application requires Owner or Manager authorization or Manager PIN.",
+              403
+            );
+          }
+
+          // Authoritatively verify the managerPin against StaffRepository in constant-time
+          const staffList = (await staffRepo.getAll(tenantId)) || [];
+          const authorizedStaff = staffList.filter(
+            (s) => s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("apply_discount" as any)
           );
+          const authorizer = await findStaffByPinConstantTime(authorizedStaff, String(rawOrder.managerPin));
+          if (!authorizer) {
+            throw new FinancialValidationError(
+              "INVALID_MANAGER_PIN",
+              "Invalid Manager/Owner PIN for manual discount authorization.",
+              403
+            );
+          }
         }
       }
 
@@ -306,6 +353,20 @@ export class POSPricingEngine {
           400
         );
       }
+
+      // Check restaurant settings max discount percentage policy if configured
+      if (settings.maxDiscountPercentage !== undefined && settings.maxDiscountPercentage > 0 && settings.maxDiscountPercentage < 100) {
+        const grossAmount = calculatedSubtotal + calculatedTax;
+        const maxPolicyDiscount = Number((grossAmount * (settings.maxDiscountPercentage / 100)).toFixed(2));
+        if (requestedDiscount > maxPolicyDiscount) {
+          throw new FinancialValidationError(
+            "DISCOUNT_EXCEEDS_MAX_PERCENTAGE",
+            `Discount (₹${requestedDiscount}) exceeds restaurant maximum discount policy of ${settings.maxDiscountPercentage}% (₹${maxPolicyDiscount}).`,
+            400
+          );
+        }
+      }
+
       manualDiscount = requestedDiscount;
     }
 
@@ -359,7 +420,6 @@ export class POSPricingEngine {
     }
 
     // 6. Server-Authoritative Inventory Requirements & Deduction Check
-    const settings = (await settingsRepo.get(tenantId)) || ({} as any);
     const recipes = (await recipeRepo.getAll(tenantId)) || [];
     const ingredients = (await ingredientRepo.getAll(tenantId)) || [];
     const ingredientMap = new Map<string, Ingredient>();
@@ -368,17 +428,26 @@ export class POSPricingEngine {
     }
 
     // Aggregate required ingredient amounts across all items in order
-    const requiredIngredientQuantities = new Map<string, { name: string; required: number }>();
+    const requiredIngredientQuantities = new Map<string, { name: string; required: number; unit?: string }>();
     for (const ci of validatedItems) {
       const recipe = recipes.find((r) => r.menuItemId === ci.menuItemId);
       if (recipe && Array.isArray(recipe.ingredients)) {
         for (const ri of recipe.ingredients) {
-          const needed = Number(ri.quantity) * ci.quantity;
+          const ing = ingredientMap.get(ri.ingredientId);
+          const ingUnit = ing?.unit || "g";
+          // Convert recipe quantity (e.g. 200g) into ingredient storage unit (e.g. 0.2kg)
+          const convertedPerPortion = convertRecipeQuantityToIngredientStock(
+            Number(ri.quantity),
+            ri.unit,
+            ingUnit
+          );
+          const needed = convertedPerPortion * ci.quantity;
           const current = requiredIngredientQuantities.get(ri.ingredientId) || {
             name: ri.ingredientId,
-            required: 0
+            required: 0,
+            unit: ingUnit
           };
-          current.required += needed;
+          current.required = Number((current.required + needed).toFixed(4));
           requiredIngredientQuantities.set(ri.ingredientId, current);
         }
       }
@@ -410,7 +479,7 @@ export class POSPricingEngine {
         const ing = ingredientMap.get(ingId);
         if (ing) {
           const previousStock = ing.currentStock;
-          const newStock = Math.max(0, Number((previousStock - req.required).toFixed(3)));
+          const newStock = Math.max(0, Number((previousStock - req.required).toFixed(4)));
           ing.currentStock = newStock;
           ing.updated_at = new Date().toISOString();
           ing.version = (ing.version || 1) + 1;

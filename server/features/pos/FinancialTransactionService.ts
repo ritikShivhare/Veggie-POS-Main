@@ -12,6 +12,7 @@ import { OrderItemRepository } from "./OrderItemRepository";
 import { PaymentRepository } from "./PaymentRepository";
 import { InventoryMovementRepository } from "../inventory/InventoryMovementRepository";
 import { Order, OrderItem, Payment, InventoryMovement, Customer, Ingredient } from "../../../src/features/shared/types";
+import { convertRecipeQuantityToIngredientStock } from "../../../src/features/shared/utils/unitConversion";
 
 export class OrderAlreadyPaidError extends Error {
   public code = "ORDER_ALREADY_PAID";
@@ -396,9 +397,14 @@ export class FinancialTransactionService {
           for (const ri of recipe.ingredients) {
             const ing = ingredientMap.get(ri.ingredientId);
             if (ing) {
-              const returnQty = Number(ri.quantity) * Number(item.quantity);
+              const convertedPerPortion = convertRecipeQuantityToIngredientStock(
+                Number(ri.quantity),
+                ri.unit,
+                ing.unit
+              );
+              const returnQty = convertedPerPortion * Number(item.quantity);
               const previousStock = ing.currentStock;
-              const newStock = Number((previousStock + returnQty).toFixed(3));
+              const newStock = Number((previousStock + returnQty).toFixed(4));
               ing.currentStock = newStock;
               ing.updated_at = nowIso;
               ing.version = (ing.version || 1) + 1;

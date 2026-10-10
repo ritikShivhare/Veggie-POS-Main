@@ -1,5 +1,11 @@
 import React, { useState, useMemo } from "react";
-import { Ingredient, MenuItem, Recipe, Purchase, InventorySettings, StaffMember } from "../shared/types";
+import { Ingredient, MenuItem, Recipe, RecipeIngredient, Purchase, InventorySettings, StaffMember } from "../shared/types";
+import {
+  convertRecipeQuantityToIngredientStock,
+  getCompatibleUnits,
+  getDefaultRecipeUnit,
+  calculatePortionCost
+} from "../shared/utils/unitConversion";
 import {
   Boxes,
   Plus,
@@ -13,7 +19,10 @@ import {
   DollarSign,
   ShoppingCart,
   Bookmark,
-  Sparkles
+  Sparkles,
+  ShieldCheck,
+  Check,
+  X
 } from "lucide-react";
 
 interface InventoryManagementProps {
@@ -51,6 +60,14 @@ export default function InventoryManagement({
   const [showEditRecipeModal, setShowEditRecipeModal] = useState(false);
   const [showAddMenuItemModal, setShowAddMenuItemModal] = useState(false);
 
+  // Raw Material Deletion & Orphan Cascade State
+  const [ingredientToDelete, setIngredientToDelete] = useState<{
+    ingredient: Ingredient;
+    affectedRecipes: { menuItemId: string; dishName: string; quantity: number }[];
+  } | null>(null);
+  const [cleaningOrphans, setCleaningOrphans] = useState(false);
+  const [orphanCleanSuccess, setOrphanCleanSuccess] = useState<string | null>(null);
+
   // Ingredient Form State
   const [newIng, setNewIng] = useState({ name: "", unit: "g", currentStock: 0, minStock: 0, costPerUnit: 0 });
   const [editingIngId, setEditingIngId] = useState<string | null>(null);
@@ -60,7 +77,7 @@ export default function InventoryManagement({
 
   // Recipe Form State
   const [selectedRecipeMenuItemId, setSelectedRecipeMenuItemId] = useState("");
-  const [recipeIngredients, setRecipeIngredients] = useState<{ ingredientId: string; quantity: number }[]>([]);
+  const [recipeIngredients, setRecipeIngredients] = useState<RecipeIngredient[]>([]);
 
   // Menu Item Form State
   const [newMenuItem, setNewMenuItem] = useState({
@@ -134,10 +151,127 @@ export default function InventoryManagement({
     setShowAddIngredientModal(true);
   };
 
+  const handleDeleteIngredientClick = (ing: Ingredient) => {
+    const affected = recipes.flatMap(r => {
+      const match = (r.ingredients || []).find(ri => ri.ingredientId === ing.id);
+      if (!match) return [];
+      const dish = menuItems.find(m => m.id === r.menuItemId);
+      return [{
+        menuItemId: r.menuItemId,
+        dishName: dish ? dish.name : r.menuItemId,
+        quantity: match.quantity
+      }];
+    });
+
+    setIngredientToDelete({
+      ingredient: ing,
+      affectedRecipes: affected
+    });
+  };
+
   const handleDeleteIngredient = (id: string) => {
-    if (confirm("Are you sure you want to delete this ingredient? It will also break any recipe mapping associated with it.")) {
-      onUpdateIngredients(ingredients.filter((i) => i.id !== id));
+    const ing = ingredients.find(i => i.id === id);
+    if (ing) {
+      handleDeleteIngredientClick(ing);
+    } else {
+      onUpdateIngredients(ingredients.filter(i => i.id !== id));
     }
+  };
+
+  const handleConfirmDeleteIngredient = async () => {
+    if (!ingredientToDelete) return;
+    const { ingredient: ing } = ingredientToDelete;
+
+    // 1. Remove raw material from ingredients list
+    onUpdateIngredients(ingredients.filter((i) => i.id !== ing.id));
+
+    // 2. Cascade unlink raw material from all recipes to prevent orphan references
+    const updatedRecipes = recipes.map(r => {
+      if (r.ingredients && r.ingredients.some(ri => ri.ingredientId === ing.id)) {
+        return {
+          ...r,
+          ingredients: r.ingredients.filter(ri => ri.ingredientId !== ing.id)
+        };
+      }
+      return r;
+    });
+    onUpdateRecipes(updatedRecipes);
+
+    // 3. Delete on backend API if available
+    const token = localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token") || localStorage.getItem("token") || sessionStorage.getItem("token");
+    if (token) {
+      try {
+        await fetch(`/api/inventory/ingredients/${ing.id}`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+      } catch (err) {
+        console.warn("Backend delete sync failed, changes saved locally:", err);
+      }
+    }
+
+    setIngredientToDelete(null);
+  };
+
+  // Audit all recipes for orphan raw material references
+  const orphanStats = useMemo(() => {
+    const validIds = new Set(ingredients.map(i => i.id));
+    let totalOrphans = 0;
+    const affectedDishes: { menuItemId: string; dishName: string; orphanCount: number }[] = [];
+
+    recipes.forEach(r => {
+      const orphans = (r.ingredients || []).filter(ri => !validIds.has(ri.ingredientId));
+      if (orphans.length > 0) {
+        totalOrphans += orphans.length;
+        const dish = menuItems.find(m => m.id === r.menuItemId);
+        affectedDishes.push({
+          menuItemId: r.menuItemId,
+          dishName: dish ? dish.name : r.menuItemId,
+          orphanCount: orphans.length
+        });
+      }
+    });
+
+    return { totalOrphans, affectedDishes };
+  }, [recipes, ingredients, menuItems]);
+
+  const handleCleanAllOrphans = async () => {
+    setCleaningOrphans(true);
+    const validIds = new Set(ingredients.map(i => i.id));
+    let removedCount = 0;
+    let modifiedRecipesCount = 0;
+
+    const cleaned = recipes.map(r => {
+      const initialLen = (r.ingredients || []).length;
+      const valid = (r.ingredients || []).filter(ri => validIds.has(ri.ingredientId));
+      if (valid.length < initialLen) {
+        removedCount += (initialLen - valid.length);
+        modifiedRecipesCount++;
+        return { ...r, ingredients: valid };
+      }
+      return r;
+    });
+
+    onUpdateRecipes(cleaned);
+
+    // Call backend endpoint if available
+    const token = localStorage.getItem("auth_token") || sessionStorage.getItem("auth_token") || localStorage.getItem("token") || sessionStorage.getItem("token");
+    if (token) {
+      try {
+        await fetch("/api/inventory/recipes/clean-orphans", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+      } catch (e) {
+        console.warn("Backend clean-orphans endpoint failed:", e);
+      }
+    }
+
+    setCleaningOrphans(false);
+    setOrphanCleanSuccess(`Successfully purged ${removedCount} orphan raw material link(s) across ${modifiedRecipesCount} recipe(s)!`);
+    setTimeout(() => setOrphanCleanSuccess(null), 4000);
   };
 
   // Existing Categories computed dynamically
@@ -289,7 +423,17 @@ export default function InventoryManagement({
   const handleEditRecipeClick = (menuItem: MenuItem) => {
     const existingRecipe = recipes.find((r) => r.menuItemId === menuItem.id);
     setSelectedRecipeMenuItemId(menuItem.id);
-    setRecipeIngredients(existingRecipe ? [...existingRecipe.ingredients] : []);
+    // Sanitize any orphan ingredient entries and set appropriate unit
+    const validMapped = (existingRecipe ? existingRecipe.ingredients : [])
+      .filter((ri) => ingredients.some((i) => i.id === ri.ingredientId))
+      .map((ri) => {
+        const ing = ingredients.find((i) => i.id === ri.ingredientId);
+        return {
+          ...ri,
+          unit: ri.unit || (ing ? getDefaultRecipeUnit(ing.unit) : "g")
+        };
+      });
+    setRecipeIngredients(validMapped);
     setShowEditRecipeModal(true);
   };
 
@@ -298,13 +442,33 @@ export default function InventoryManagement({
       (ing) => !recipeIngredients.some((ri) => ri.ingredientId === ing.id)
     );
     if (unusedIng) {
-      setRecipeIngredients([...recipeIngredients, { ingredientId: unusedIng.id, quantity: 1 }]);
+      setRecipeIngredients([
+        ...recipeIngredients,
+        {
+          ingredientId: unusedIng.id,
+          quantity: 1,
+          unit: getDefaultRecipeUnit(unusedIng.unit)
+        }
+      ]);
     }
   };
 
-  const handleUpdateRecipeRow = (index: number, key: "ingredientId" | "quantity", value: any) => {
+  const handleUpdateRecipeRow = (
+    index: number,
+    key: "ingredientId" | "quantity" | "unit",
+    value: any
+  ) => {
     const updated = [...recipeIngredients];
-    updated[index] = { ...updated[index], [key]: value };
+    if (key === "ingredientId") {
+      const newIng = ingredients.find((i) => i.id === value);
+      updated[index] = {
+        ...updated[index],
+        ingredientId: value,
+        unit: newIng ? getDefaultRecipeUnit(newIng.unit) : updated[index].unit
+      };
+    } else {
+      updated[index] = { ...updated[index], [key]: value };
+    }
     setRecipeIngredients(updated);
   };
 
@@ -313,9 +477,13 @@ export default function InventoryManagement({
   };
 
   const handleSaveRecipe = () => {
+    const validIds = new Set(ingredients.map((i) => i.id));
+    const validIngredients = recipeIngredients.filter(
+      (ri) => ri.quantity > 0 && validIds.has(ri.ingredientId)
+    );
     const updatedRecipe: Recipe = {
       menuItemId: selectedRecipeMenuItemId,
-      ingredients: recipeIngredients.filter((ri) => ri.quantity > 0)
+      ingredients: validIngredients
     };
 
     const existingIndex = recipes.findIndex((r) => r.menuItemId === selectedRecipeMenuItemId);
@@ -650,13 +818,55 @@ export default function InventoryManagement({
               Mapping dishes to their raw material components ensures that selling 1 dish automatically deducts appropriate quantities from inventory ledger logs.
             </p>
 
+            {/* Orphan Integrity Warning Banner */}
+            {orphanStats.totalOrphans > 0 && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-amber-500/5">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-amber-500/20 text-amber-400 rounded-xl shrink-0">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-amber-200">
+                      Recipe Orphan Integrity Alert: {orphanStats.totalOrphans} Broken Link(s)
+                    </h4>
+                    <p className="text-xs text-amber-300/80">
+                      Found {orphanStats.totalOrphans} raw material reference(s) across {orphanStats.affectedDishes.length} dish recipe(s) whose ingredients were deleted.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleCleanAllOrphans}
+                  disabled={cleaningOrphans}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-2 whitespace-nowrap shadow-md shadow-amber-500/20 cursor-pointer shrink-0"
+                  id="clean-all-orphans-btn"
+                >
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>{cleaningOrphans ? "Purging..." : "Purge Orphan Recipe Links"}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Orphan Cleaned Success Banner */}
+            {orphanCleanSuccess && (
+              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3.5 flex items-center gap-3 text-emerald-300 text-xs font-semibold animate-in fade-in">
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{orphanCleanSuccess}</span>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               {menuItems.map((item) => {
                 const recipe = recipes.find((r) => r.menuItemId === item.id);
+                const hasOrphansInRecipe = recipe && recipe.ingredients.some(ri => !ingredients.some(i => i.id === ri.ingredientId));
+                const cardPortionCost = recipe && recipe.ingredients ? recipe.ingredients.reduce((sum, ri) => {
+                  const ing = ingredients.find(i => i.id === ri.ingredientId);
+                  return sum + (ing ? calculatePortionCost(ri.quantity, ri.unit, ing) : 0);
+                }, 0) : 0;
+
                 return (
                   <div
                     key={item.id}
-                    className="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 flex flex-col justify-between"
+                    className={`bg-slate-900 border ${hasOrphansInRecipe ? 'border-amber-500/40' : 'border-slate-800/80'} rounded-2xl p-4 flex flex-col justify-between`}
                   >
                     <div>
                       <div className="flex justify-between items-start mb-2">
@@ -664,13 +874,27 @@ export default function InventoryManagement({
                           <span className="text-2xl">{item.imageUrl}</span>
                           <div>
                             <h3 className="font-bold text-white text-sm">{item.name}</h3>
-                            <p className="text-[10px] font-mono text-slate-500 uppercase">{item.category}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <p className="text-[10px] font-mono text-slate-500 uppercase">{item.category}</p>
+                              {recipe && recipe.ingredients.length > 0 && (
+                                <span className="text-[10px] font-mono font-semibold text-emerald-400">
+                                  • BOM Cost: ₹{cardPortionCost.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                         {recipe ? (
-                          <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md font-mono font-bold">
-                            Mapped
-                          </span>
+                          hasOrphansInRecipe ? (
+                            <span className="text-[10px] bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2 py-0.5 rounded-md font-mono font-bold flex items-center gap-1">
+                              <AlertTriangle className="w-2.5 h-2.5" />
+                              Has Orphans
+                            </span>
+                          ) : (
+                            <span className="text-[10px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-md font-mono font-bold">
+                              Mapped
+                            </span>
+                          )
                         ) : (
                           <span className="text-[10px] bg-slate-800 border border-slate-700 text-slate-400 px-2 py-0.5 rounded-md font-mono">
                             Unmapped
@@ -679,16 +903,41 @@ export default function InventoryManagement({
                       </div>
 
                       {/* Recipe Items list */}
-                      <div className="mt-3 space-y-1 max-h-24 overflow-y-auto border-t border-slate-800/50 pt-2.5">
+                      <div className="mt-3 space-y-1.5 max-h-28 overflow-y-auto border-t border-slate-800/50 pt-2.5">
                         {recipe && recipe.ingredients.length > 0 ? (
                           recipe.ingredients.map((ri, index) => {
-                            const ingName = ingredients.find((i) => i.id === ri.ingredientId)?.name || ri.ingredientId;
-                            const ingUnit = ingredients.find((i) => i.id === ri.ingredientId)?.unit || "g";
+                            const ing = ingredients.find((i) => i.id === ri.ingredientId);
+                            const isOrphan = !ing;
+                            const ingName = ing ? ing.name : `Deleted Material (${ri.ingredientId})`;
+                            const ingUnit = ing ? ing.unit : "";
+                            const recipeUnit = ri.unit || ingUnit;
+                            const convertedStock = ing ? convertRecipeQuantityToIngredientStock(ri.quantity, ri.unit, ing.unit) : ri.quantity;
+                            const showUnitDiff = ing && recipeUnit.toLowerCase() !== ing.unit.toLowerCase();
+
                             return (
-                              <div key={index} className="flex justify-between text-xs text-slate-300">
-                                <span>• {ingName}</span>
-                                <span className="font-mono font-semibold text-slate-400">
-                                  {ri.quantity} {ingUnit}
+                              <div
+                                key={index}
+                                className={`flex justify-between items-center text-xs p-1 rounded-lg ${
+                                  isOrphan
+                                    ? "bg-amber-500/10 border border-amber-500/20 text-amber-300"
+                                    : "text-slate-300"
+                                }`}
+                              >
+                                <span className="flex items-center gap-1.5 min-w-0">
+                                  {isOrphan && (
+                                    <span className="text-[9px] bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold px-1 rounded font-mono uppercase shrink-0">
+                                      Orphan
+                                    </span>
+                                  )}
+                                  <span className="truncate">• {ingName}</span>
+                                </span>
+                                <span className="font-mono font-semibold text-slate-300 shrink-0 ml-2 text-right">
+                                  {ri.quantity} {recipeUnit}
+                                  {showUnitDiff && (
+                                    <span className="text-[10px] text-emerald-400 font-normal ml-1">
+                                      ({convertedStock} {ing.unit})
+                                    </span>
+                                  )}
                                 </span>
                               </div>
                             );
@@ -702,10 +951,10 @@ export default function InventoryManagement({
                     {canEditRecipe && (
                       <button
                         onClick={() => handleEditRecipeClick(item)}
-                        className="mt-4 w-full py-2 bg-slate-850 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-xs font-bold rounded-xl text-slate-300 transition"
+                        className={`mt-4 w-full py-2 ${hasOrphansInRecipe ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-slate-850 hover:bg-slate-800 text-slate-300 border-slate-800 hover:border-slate-700'} border text-xs font-bold rounded-xl transition`}
                         id={`map-recipe-btn-${item.id}`}
                       >
-                        {recipe ? "Edit Ingredient Map" : "Map Ingredients"}
+                        {hasOrphansInRecipe ? "Fix & Edit Ingredient Map" : recipe ? "Edit Ingredient Map" : "Map Ingredients"}
                       </button>
                     )}
                   </div>
@@ -1295,91 +1544,155 @@ export default function InventoryManagement({
       })()}
 
       {/* FORM MODAL: MAP RECIPES */}
-      {showEditRecipeModal && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col max-h-[85vh]">
-            <h3 className="text-base font-display font-bold text-white mb-2 shrink-0">
-              Map Recipe Portion Deduction
-            </h3>
-            <p className="text-xs text-slate-400 mb-4 shrink-0">
-              Define the raw materials consumed when 1 portion of{" "}
-              <b className="text-white">
-                {menuItems.find((m) => m.id === selectedRecipeMenuItemId)?.name}
-              </b>{" "}
-              is sold.
-            </p>
+      {showEditRecipeModal && (() => {
+        const selectedDish = menuItems.find((m) => m.id === selectedRecipeMenuItemId);
+        const totalBOMCost = recipeIngredients.reduce((sum, row) => {
+          const ing = ingredients.find((i) => i.id === row.ingredientId);
+          return sum + (ing ? calculatePortionCost(row.quantity, row.unit, ing) : 0);
+        }, 0);
+        const profitMargin = selectedDish && selectedDish.price > 0
+          ? Math.round(((selectedDish.price - totalBOMCost) / selectedDish.price) * 100)
+          : null;
 
-            {/* List scroll */}
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs my-2">
-              {recipeIngredients.length === 0 ? (
-                <div className="text-center py-6 text-slate-500 italic bg-slate-950/30 rounded-2xl border border-slate-800 p-4">
-                  No ingredients added to this recipe yet. Click "Add Material Link" below.
+        return (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col max-h-[85vh]">
+              <div className="flex items-start justify-between mb-2 shrink-0">
+                <div>
+                  <h3 className="text-base font-display font-bold text-white">
+                    Map Recipe Portion Deduction (BOM)
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Define raw materials consumed for 1 portion of{" "}
+                    <b className="text-white">{selectedDish?.name}</b> (₹{selectedDish?.price || 0})
+                  </p>
                 </div>
-              ) : (
-                recipeIngredients.map((row, index) => (
-                  <div key={index} className="flex items-center space-x-2 bg-slate-950/40 p-2 rounded-xl border border-slate-800">
-                    <select
-                      value={row.ingredientId}
-                      onChange={(e) => handleUpdateRecipeRow(index, "ingredientId", e.target.value)}
-                      className="flex-1 bg-slate-900 border border-slate-800 rounded-lg p-1.5 text-white"
-                    >
-                      {ingredients.map((ing) => (
-                        <option key={ing.id} value={ing.id}>
-                          {ing.name} ({ing.unit})
-                        </option>
-                      ))}
-                    </select>
-
-                    <div className="flex items-center space-x-1.5 w-24">
-                      <input
-                        type="number"
-                        placeholder="Qty"
-                        value={row.quantity || ""}
-                        onChange={(e) => handleUpdateRecipeRow(index, "quantity", Number(e.target.value))}
-                        className="w-16 bg-slate-900 border border-slate-800 rounded-lg p-1.5 text-center text-white"
-                      />
-                      <span className="text-slate-500 font-mono">
-                        {ingredients.find((i) => i.id === row.ingredientId)?.unit || "g"}
-                      </span>
+                {recipeIngredients.length > 0 && (
+                  <div className="text-right shrink-0 bg-slate-950/60 border border-slate-800 px-3 py-1.5 rounded-xl">
+                    <div className="text-[10px] text-slate-400 uppercase font-mono">BOM Portion Cost</div>
+                    <div className="text-sm font-bold font-mono text-emerald-400">
+                      ₹{totalBOMCost.toFixed(2)}
+                      {profitMargin !== null && (
+                        <span className="text-[11px] text-slate-400 font-normal ml-1">({profitMargin}% margin)</span>
+                      )}
                     </div>
-
-                    <button
-                      onClick={() => handleRemoveRecipeRow(index)}
-                      className="text-slate-500 hover:text-rose-400 p-1 transition"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
-                ))
-              )}
+                )}
+              </div>
 
-              <button
-                onClick={handleAddIngredientRowToRecipe}
-                className="w-full py-2 bg-slate-950 hover:bg-slate-900 border border-slate-800/80 border-dashed rounded-xl text-[11px] font-semibold text-slate-400 hover:text-white transition flex items-center justify-center space-x-1"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Material Link</span>
-              </button>
-            </div>
+              {/* List scroll */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs my-3">
+                {recipeIngredients.length === 0 ? (
+                  <div className="text-center py-6 text-slate-500 italic bg-slate-950/30 rounded-2xl border border-slate-800 p-4">
+                    No ingredients added to this recipe yet. Click "Add Material Link" below.
+                  </div>
+                ) : (
+                  recipeIngredients.map((row, index) => {
+                    const ing = ingredients.find((i) => i.id === row.ingredientId);
+                    const currentUnit = row.unit || (ing ? getDefaultRecipeUnit(ing.unit) : "g");
+                    const compatibleUnits = ing ? getCompatibleUnits(ing.unit) : [{ value: "g", label: "g" }];
+                    const rowCost = ing ? calculatePortionCost(row.quantity, currentUnit, ing) : 0;
+                    const stockDeduction = ing ? convertRecipeQuantityToIngredientStock(row.quantity, currentUnit, ing.unit) : row.quantity;
+                    const showUnitNotice = ing && currentUnit.toLowerCase() !== ing.unit.toLowerCase();
 
-            <div className="flex space-x-3 mt-6 shrink-0">
-              <button
-                onClick={() => setShowEditRecipeModal(false)}
-                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 font-semibold rounded-xl text-xs transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveRecipe}
-                className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl text-xs transition"
-                id="save-recipe-submit-btn"
-              >
-                Save Mapping
-              </button>
+                    return (
+                      <div key={index} className="bg-slate-950/60 p-2.5 rounded-2xl border border-slate-800 space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <select
+                            value={row.ingredientId}
+                            onChange={(e) => handleUpdateRecipeRow(index, "ingredientId", e.target.value)}
+                            className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1.5 text-white text-xs"
+                          >
+                            {ingredients.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name} ({item.unit})
+                              </option>
+                            ))}
+                          </select>
+
+                          <div className="flex items-center space-x-1">
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              placeholder="Qty"
+                              value={row.quantity || ""}
+                              onChange={(e) => handleUpdateRecipeRow(index, "quantity", Number(e.target.value))}
+                              className="w-16 bg-slate-900 border border-slate-800 rounded-xl px-2 py-1.5 text-center text-white text-xs font-mono font-semibold"
+                            />
+                            <select
+                              value={currentUnit}
+                              onChange={(e) => handleUpdateRecipeRow(index, "unit", e.target.value)}
+                              className="bg-slate-900 border border-slate-800 rounded-xl px-2 py-1.5 text-emerald-400 text-xs font-mono font-bold"
+                              title="Recipe portion unit"
+                            >
+                              {compatibleUnits.map((u) => (
+                                <option key={u.value} value={u.value}>
+                                  {u.value}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <button
+                            onClick={() => handleRemoveRecipeRow(index)}
+                            className="text-slate-500 hover:text-rose-400 p-1.5 transition rounded-lg hover:bg-rose-500/10"
+                            title="Remove material link"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Conversion detail */}
+                        {ing && (
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 px-1 pt-1 border-t border-slate-900/80">
+                            <span className="font-mono text-slate-400">
+                              {showUnitNotice ? (
+                                <span className="text-emerald-400 font-semibold">
+                                  ⚡ Deducts {stockDeduction} {ing.unit} from bulk inventory
+                                </span>
+                              ) : (
+                                <span>Deducts {row.quantity} {ing.unit} from inventory</span>
+                              )}
+                            </span>
+                            <span className="font-mono text-slate-300">
+                              Est. Cost: <span className="text-white font-semibold">₹{rowCost.toFixed(2)}</span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+
+                <button
+                  onClick={handleAddIngredientRowToRecipe}
+                  className="w-full py-2 bg-slate-950 hover:bg-slate-900 border border-slate-800/80 border-dashed rounded-xl text-[11px] font-semibold text-slate-400 hover:text-white transition flex items-center justify-center space-x-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Material Link</span>
+                </button>
+              </div>
+
+              <div className="flex space-x-3 mt-4 shrink-0">
+                <button
+                  onClick={() => setShowEditRecipeModal(false)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-750 text-slate-300 font-semibold rounded-xl text-xs transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveRecipe}
+                  className="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl text-xs transition shadow-lg shadow-emerald-500/20"
+                  id="save-recipe-submit-btn"
+                >
+                  Save Mapping
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* FORM MODAL: ADD/EDIT MENU ITEM */}
       {showAddMenuItemModal && (
@@ -1531,6 +1844,87 @@ export default function InventoryManagement({
                 id="save-menu-item-submit-btn"
               >
                 {editingMenuItemId ? "Save Changes" : "Create Dish"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DELETE RAW MATERIAL CASCADE CONFIRMATION */}
+      {ingredientToDelete && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-3 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-2xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-display font-bold text-white">
+                  Delete Raw Material
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {ingredientToDelete.ingredient.name} ({ingredientToDelete.ingredient.unit})
+                </p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs my-2">
+              {ingredientToDelete.affectedRecipes.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-300">
+                    <div className="flex items-center gap-2 font-bold mb-1">
+                      <AlertTriangle className="w-4 h-4 text-amber-400" />
+                      <span>Linked in {ingredientToDelete.affectedRecipes.length} Active Recipe(s)</span>
+                    </div>
+                    <p className="text-[11px] text-amber-300/80">
+                      This raw material is currently defined in the BOM (Bill of Materials) for the following dishes:
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-950/50 rounded-2xl border border-slate-800 p-3 space-y-2 max-h-40 overflow-y-auto">
+                    {ingredientToDelete.affectedRecipes.map((aff, i) => (
+                      <div key={i} className="flex justify-between items-center text-xs py-1 border-b border-slate-800/40 last:border-0">
+                        <span className="font-semibold text-slate-200">• {aff.dishName}</span>
+                        <span className="font-mono text-slate-400">
+                          {aff.quantity} {ingredientToDelete.ingredient.unit} / portion
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="p-3 bg-slate-950/40 border border-slate-800 rounded-2xl text-slate-300">
+                    <p className="text-[11px] leading-relaxed text-slate-400">
+                      <b className="text-emerald-400">Automatic Recipe Cascade:</b> Deleting this ingredient will automatically unlink it from these recipes so no orphan data remains. Stock deductions for other ingredients in these recipes will continue normally.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 bg-slate-950/40 border border-slate-800 rounded-2xl text-slate-300 space-y-2">
+                  <p className="text-xs leading-relaxed">
+                    Are you sure you want to delete <b className="text-white">{ingredientToDelete.ingredient.name}</b> from your raw materials ledger?
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    No active recipes currently link to this raw material. It will be safely removed.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex space-x-3 mt-6 shrink-0 border-t border-slate-800 pt-4">
+              <button
+                onClick={() => setIngredientToDelete(null)}
+                className="flex-1 py-2.5 bg-slate-850 hover:bg-slate-800 text-slate-300 font-semibold rounded-xl text-xs transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDeleteIngredient}
+                className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-rose-500/20"
+                id="confirm-delete-ingredient-btn"
+              >
+                {ingredientToDelete.affectedRecipes.length > 0
+                  ? "Delete & Unlink Recipes"
+                  : "Confirm Delete"}
               </button>
             </div>
           </div>

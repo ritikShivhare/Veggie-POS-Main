@@ -657,44 +657,6 @@ export default function NotificationCenter() {
           </div>
         )}
       </div>
-
-      {/* EXTENSION / COMPLIANCE DETAILS CARD */}
-      <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-6 rounded-2xl border border-slate-800 text-white shadow-md relative overflow-hidden">
-        <div className="absolute right-0 bottom-0 translate-x-10 translate-y-10 opacity-10">
-          <Settings className="w-52 h-52 animate-spin-slow" />
-        </div>
-        
-        <div className="relative space-y-4 max-w-2xl">
-          <h3 className="text-sm font-bold text-pink-400 flex items-center gap-2 font-mono">
-            <Settings className="w-4.5 h-4.5" />
-            Extensible Production Gateway Blueprint
-          </h3>
-          <p className="text-xs text-indigo-100 leading-relaxed font-medium">
-            This module has been architecturalized strictly around a single service hub design pattern.
-            In production configurations, swapping standard mock handlers with genuine SaaS providers requires zero change to components or business domains.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-            <div className="bg-white/5 border border-white/10 p-3 rounded-xl space-y-1">
-              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-blue-400" /> SendGrid integration
-              </h4>
-              <p className="text-[11px] text-indigo-200">
-                Configured with dynamic templates, automatic transactional unsubscribes, and DKIM/SPF domain verification.
-              </p>
-            </div>
-
-            <div className="bg-white/5 border border-white/10 p-3 rounded-xl space-y-1">
-              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Smartphone className="w-3.5 h-3.5 text-emerald-400" /> Twilio SMS Gateway
-              </h4>
-              <p className="text-[11px] text-indigo-200">
-                Engineered with delivery callbacks, automated carrier route aggregation, and regional DLT registrations.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

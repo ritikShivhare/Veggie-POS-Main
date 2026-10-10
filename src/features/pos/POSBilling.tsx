@@ -27,6 +27,7 @@ import {
   FileText,
   X
 } from "lucide-react";
+import { convertRecipeQuantityToIngredientStock } from "../shared/utils/unitConversion";
 
 interface POSBillingProps {
   menuItems: MenuItem[];
@@ -102,10 +103,14 @@ export default function POSBilling({
 
   // Custom Discount Modal State (Problem 2)
   const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [discountMode, setDiscountMode] = useState<"fixed" | "percentage">("fixed");
   const [customDiscountVal, setCustomDiscountVal] = useState<string>("");
   const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
   const [discountReason, setDiscountReason] = useState("");
   const [discountManagerPin, setDiscountManagerPin] = useState("");
+  const [appliedDiscountReason, setAppliedDiscountReason] = useState("");
+  const [appliedDiscountPin, setAppliedDiscountPin] = useState("");
+  const [appliedDiscountAuthorizer, setAppliedDiscountAuthorizer] = useState("");
   const [discountError, setDiscountError] = useState<string | null>(null);
 
   // Handle Order Cancellation with Manager PIN & Reason
@@ -212,9 +217,47 @@ export default function POSBilling({
   const handleApplyDiscountSubmit = async () => {
     setDiscountError(null);
     const numVal = parseFloat(customDiscountVal);
-    if (isNaN(numVal) || numVal <= 0) {
-      setDiscountError("Please enter a valid discount amount.");
+    if (isNaN(numVal) || !isFinite(numVal) || numVal <= 0) {
+      setDiscountError(discountMode === "percentage" ? "Please enter a valid discount percentage (e.g. 10)." : "Please enter a valid discount amount.");
       return;
+    }
+
+    const origTotal = billingOrder ? (billingOrder.subtotal + (billingOrder.tax || 0)) : Number((subtotal + tax).toFixed(2));
+    if (origTotal <= 0) {
+      setDiscountError("Cannot apply discount to an empty order or zero-total bill.");
+      return;
+    }
+
+    let calculatedDiscountToApply = 0;
+    if (discountMode === "percentage") {
+      if (numVal > 100) {
+        setDiscountError("Discount percentage cannot exceed 100%.");
+        return;
+      }
+      calculatedDiscountToApply = Number((origTotal * (numVal / 100)).toFixed(2));
+    } else {
+      calculatedDiscountToApply = Number(numVal.toFixed(2));
+    }
+
+    if (calculatedDiscountToApply <= 0) {
+      setDiscountError("Calculated discount amount must be greater than ₹0.");
+      return;
+    }
+
+    if (calculatedDiscountToApply > origTotal) {
+      setDiscountError(`Discount amount (₹${calculatedDiscountToApply.toFixed(2)}) cannot exceed bill total (₹${origTotal.toFixed(2)}).`);
+      return;
+    }
+
+    // Policy percentage ceiling check
+    if (settings.maxDiscountPercentage !== undefined && settings.maxDiscountPercentage > 0 && settings.maxDiscountPercentage < 100) {
+      const maxPolicyDiscount = Number((origTotal * (settings.maxDiscountPercentage / 100)).toFixed(2));
+      if (calculatedDiscountToApply > maxPolicyDiscount) {
+        setDiscountError(
+          `Discount of ₹${calculatedDiscountToApply.toFixed(2)} exceeds restaurant maximum discount policy limit of ${settings.maxDiscountPercentage}% (₹${maxPolicyDiscount.toFixed(2)}).`
+        );
+        return;
+      }
     }
 
     if (!discountReason.trim()) {
@@ -222,32 +265,36 @@ export default function POSBilling({
       return;
     }
 
-    if (!discountManagerPin || discountManagerPin.length < 4 || discountManagerPin.length > 6) {
+    if (!discountManagerPin || discountManagerPin.trim().length < 4 || discountManagerPin.trim().length > 6) {
       setDiscountError("Please enter a valid 4 to 6-digit Owner/Manager PIN.");
       return;
     }
 
     try {
-      const origTotal = subtotal + tax;
       const sessId = ApiClient.getSessionId() || "";
       const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || "";
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (sessId) headers["x-session-id"] = sessId;
       if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
 
+      const expectedFinal = Math.max(0, Number((origTotal - calculatedDiscountToApply).toFixed(2)));
+
       const res = await fetch("/api/orders/audit-discount", {
         method: "POST",
         headers: {
           ...headers,
-          "Idempotency-Key": ApiClient.generateIdempotencyKey(`disc_${billingOrder?.id || "cart"}`)
+          "Idempotency-Key": ApiClient.generateIdempotencyKey(`disc_${billingOrder?.id || "cart"}_${Date.now()}`)
         },
         credentials: "include",
         body: JSON.stringify({
+          orderId: billingOrder?.id || "cart",
           originalAmount: origTotal,
-          discountAmount: numVal,
-          finalAmount: Math.max(0, origTotal - numVal),
-          managerPin: discountManagerPin,
+          discountAmount: calculatedDiscountToApply,
+          finalAmount: expectedFinal,
+          managerPin: discountManagerPin.trim(),
           reason: discountReason.trim(),
+          discountType: discountMode,
+          discountPercentage: discountMode === "percentage" ? numVal : undefined,
           sessionId: sessId,
           tenantId: currentTenantId
         })
@@ -259,8 +306,19 @@ export default function POSBilling({
         return;
       }
 
-      setAppliedDiscount(numVal);
-      alert(`Discount of INR ${numVal.toFixed(2)} authorized by ${data.authorizer}! Audit entry logged.`);
+      setAppliedDiscount(calculatedDiscountToApply);
+      setAppliedDiscountReason(discountReason.trim());
+      setAppliedDiscountPin(discountManagerPin.trim());
+      setAppliedDiscountAuthorizer(data.authorizer || "Authorized Manager");
+
+      if (billingOrder) {
+        setBillingOrder({
+          ...billingOrder,
+          discount: calculatedDiscountToApply,
+          total: expectedFinal
+        });
+      }
+
       setShowDiscountModal(false);
       setCustomDiscountVal("");
       setDiscountReason("");
@@ -294,7 +352,13 @@ export default function POSBilling({
     for (const req of recipe.ingredients) {
       const ing = ingredients.find((i) => i.id === req.ingredientId);
       if (!ing) continue;
-      const portions = Math.floor(ing.currentStock / req.quantity);
+      const convertedPerPortion = convertRecipeQuantityToIngredientStock(
+        req.quantity,
+        req.unit,
+        ing.unit
+      );
+      if (convertedPerPortion <= 0) continue;
+      const portions = Math.floor(ing.currentStock / convertedPerPortion);
       if (portions < maxPortions) {
         maxPortions = portions;
       }
@@ -439,7 +503,14 @@ export default function POSBilling({
       const recipe = recipes.find((r) => r.menuItemId === item.menuItem.id);
       if (recipe) {
         for (const req of recipe.ingredients) {
-          neededIngredients[req.ingredientId] = (neededIngredients[req.ingredientId] || 0) + req.quantity * item.quantity;
+          const ing = ingredients.find((i) => i.id === req.ingredientId);
+          const convertedPerPortion = convertRecipeQuantityToIngredientStock(
+            req.quantity,
+            req.unit,
+            ing?.unit || "g"
+          );
+          neededIngredients[req.ingredientId] =
+            (neededIngredients[req.ingredientId] || 0) + convertedPerPortion * item.quantity;
         }
       }
     }
@@ -450,7 +521,7 @@ export default function POSBilling({
       if (ing && ing.currentStock < qtyNeeded) {
         insufficientIngredients.push({
           name: ing.name,
-          shortBy: qtyNeeded - ing.currentStock,
+          shortBy: Number((qtyNeeded - ing.currentStock).toFixed(3)),
           unit: ing.unit
         });
       }
@@ -458,7 +529,7 @@ export default function POSBilling({
 
     if (settings.blockOrdersIfInsufficient && insufficientIngredients.length > 0) {
       const errorMsg = "Cannot send to kitchen! The following raw materials are short in inventory:\n" + 
-        insufficientIngredients.map(i => `• ${i.name} (Short by ${i.shortBy}${i.unit})`).join("\n");
+        insufficientIngredients.map(i => `• ${i.name} (Short by ${i.shortBy} ${i.unit})`).join("\n");
       setCheckoutError(errorMsg);
       return;
     }
@@ -474,13 +545,18 @@ export default function POSBilling({
           if (recipe) {
             const reqIngredient = recipe.ingredients.find((req) => req.ingredientId === ing.id);
             if (reqIngredient) {
-              totalDeduction += reqIngredient.quantity * cartItem.quantity;
+              const convertedPerPortion = convertRecipeQuantityToIngredientStock(
+                reqIngredient.quantity,
+                reqIngredient.unit,
+                ing.unit
+              );
+              totalDeduction += convertedPerPortion * cartItem.quantity;
             }
           }
         }
         return {
           ...ing,
-          currentStock: Math.max(0, ing.currentStock - totalDeduction)
+          currentStock: Math.max(0, Number((ing.currentStock - totalDeduction).toFixed(3)))
         };
       });
       onUpdateIngredients(updatedIngredients);
@@ -498,6 +574,7 @@ export default function POSBilling({
       ? crypto.randomUUID()
       : `ord_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
+    const totalOrderDiscount = Number((loyaltyDiscount + appliedDiscount).toFixed(2));
     const newOrder: Order = {
       id: orderUuid,
       orderNumber: `${randomNum}`,
@@ -505,13 +582,16 @@ export default function POSBilling({
       type: orderType,
       tableNo: orderType === "Dine-In" ? tableNo : undefined,
       customerName: customerName || undefined,
+      customerId: selectedCustomerId || undefined,
       items: finalCartItems,
       subtotal,
       tax,
+      discount: totalOrderDiscount > 0 ? totalOrderDiscount : undefined,
       total,
       status: "Pending",
       cashierId: currentStaff.id,
-      cashierName: currentStaff.name
+      cashierName: currentStaff.name,
+      managerPin: appliedDiscountPin || undefined
     };
 
     if (selectedCustomerId) {
@@ -543,6 +623,10 @@ export default function POSBilling({
     setCustomerName("");
     setSelectedCustomerId("");
     setRedeemPoints(false);
+    setAppliedDiscount(0);
+    setAppliedDiscountReason("");
+    setAppliedDiscountPin("");
+    setAppliedDiscountAuthorizer("");
     setShowCartOnMobile(false);
     // Open KOT ticket print modal for immediate kitchen ticket printing
     setKotModalOrder(newOrder);
@@ -1751,93 +1835,222 @@ export default function POSBilling({
       )}
 
       {/* CUSTOM DISCOUNT MODAL (Problem 2) */}
-      {showDiscountModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl text-slate-800 space-y-4">
-            <div className="flex items-center space-x-3 text-purple-600">
-              <span className="text-2xl">🏷️</span>
-              <div>
-                <h3 className="text-base font-display font-bold">Apply Custom Discount</h3>
-                <p className="text-xs text-slate-500 font-medium">Requires Owner/Manager PIN approval.</p>
-              </div>
-            </div>
+      {showDiscountModal && (() => {
+        const previewOrigTotal = billingOrder ? (billingOrder.subtotal + (billingOrder.tax || 0)) : Number((subtotal + tax).toFixed(2));
+        const parsedDiscountInput = parseFloat(customDiscountVal);
+        const validDiscountInput = !isNaN(parsedDiscountInput) && parsedDiscountInput > 0 ? parsedDiscountInput : 0;
+        const previewDiscountAmount = discountMode === "percentage"
+          ? Number((previewOrigTotal * (validDiscountInput / 100)).toFixed(2))
+          : validDiscountInput;
+        const previewFinalAmount = Math.max(0, Number((previewOrigTotal - previewDiscountAmount).toFixed(2)));
+        const maxPolicyDiscount = (settings.maxDiscountPercentage !== undefined && settings.maxDiscountPercentage > 0 && settings.maxDiscountPercentage < 100)
+          ? Number((previewOrigTotal * (settings.maxDiscountPercentage / 100)).toFixed(2))
+          : null;
+        const isExceedingPolicy = maxPolicyDiscount !== null && previewDiscountAmount > maxPolicyDiscount;
+        const isExceedingTotal = previewDiscountAmount > previewOrigTotal;
 
-            <div className="space-y-3 bg-purple-50/50 p-4 rounded-xl border border-purple-100 text-xs">
-              <div>
-                <label className="block text-[11px] font-bold text-purple-900 mb-1">
-                  Discount Amount (INR)*:
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  value={customDiscountVal}
-                  onChange={(e) => setCustomDiscountVal(e.target.value)}
-                  placeholder="e.g. 50"
-                  className="w-full p-2.5 bg-white border border-purple-200 rounded-lg text-sm font-bold font-mono text-slate-800 focus:outline-none focus:border-purple-500 shadow-sm"
-                  id="pos-discount-amount-input"
-                />
+        return (
+          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+            <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl text-slate-800 space-y-4">
+              <div className="flex items-center space-x-3 text-purple-600">
+                <span className="text-2xl">🏷️</span>
+                <div>
+                  <h3 className="text-base font-display font-bold">Apply Custom Discount</h3>
+                  <p className="text-xs text-slate-500 font-medium">Requires Owner/Manager PIN approval.</p>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-purple-900 mb-1">
-                  Discount Reason*:
-                </label>
-                <input
-                  type="text"
-                  value={discountReason}
-                  onChange={(e) => setDiscountReason(e.target.value)}
-                  placeholder="e.g. VIP Customer / Promotional Discount"
-                  className="w-full p-2.5 bg-white border border-purple-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:border-purple-500 shadow-sm"
-                  id="pos-discount-reason-input"
-                />
+              {/* Mode Selector */}
+              <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDiscountMode("fixed");
+                    setDiscountError(null);
+                  }}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                    discountMode === "fixed" ? "bg-white text-purple-700 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                  id="pos-discount-mode-fixed"
+                >
+                  <span>₹ Flat Amount</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDiscountMode("percentage");
+                    setDiscountError(null);
+                  }}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                    discountMode === "percentage" ? "bg-white text-purple-700 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                  id="pos-discount-mode-percent"
+                >
+                  <span>% Percentage</span>
+                </button>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-bold text-purple-900 mb-1">
-                  Manager/Owner PIN (4-6 Digits)*:
-                </label>
-                <input
-                  type="password"
-                  maxLength={6}
-                  value={discountManagerPin}
-                  onChange={(e) => setDiscountManagerPin(e.target.value)}
-                  placeholder="PIN Code"
-                  className="w-full p-2.5 bg-white border border-purple-200 rounded-lg text-sm font-bold font-mono tracking-widest text-slate-800 focus:outline-none focus:border-purple-500 text-center shadow-sm"
-                  id="pos-discount-pin-input"
-                />
+              {/* Quick Presets */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick:</span>
+                <div className="flex gap-1.5 flex-1">
+                  {discountMode === "percentage" ? (
+                    [5, 10, 15, 20].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => {
+                          setCustomDiscountVal(String(pct));
+                          setDiscountError(null);
+                        }}
+                        className="flex-1 py-1 text-[11px] font-mono font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg border border-purple-200 transition cursor-pointer"
+                      >
+                        {pct}%
+                      </button>
+                    ))
+                  ) : (
+                    [20, 50, 100, 200].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => {
+                          setCustomDiscountVal(String(amt));
+                          setDiscountError(null);
+                        }}
+                        className="flex-1 py-1 text-[11px] font-mono font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg border border-purple-200 transition cursor-pointer"
+                      >
+                        ₹{amt}
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
 
-            {discountError && (
-              <p className="text-xs text-rose-600 font-bold bg-rose-50 p-2.5 rounded-lg border border-rose-200">
-                ⚠️ {discountError}
-              </p>
-            )}
+              {/* Live Preview Box */}
+              <div className="bg-purple-50/60 p-3 rounded-xl border border-purple-100 text-xs space-y-1 font-mono">
+                <div className="flex justify-between text-slate-500">
+                  <span>Gross Order Amount:</span>
+                  <span>₹{previewOrigTotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-purple-700 font-bold">
+                  <span>Discount ({discountMode === "percentage" ? `${validDiscountInput}%` : "Flat"}):</span>
+                  <span>- ₹{previewDiscountAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-emerald-700 font-extrabold border-t border-purple-200 pt-1 text-sm">
+                  <span>Net Payable Amount:</span>
+                  <span>₹{previewFinalAmount.toFixed(2)}</span>
+                </div>
+              </div>
 
-            <div className="flex space-x-3 pt-2">
-              <button
-                onClick={() => {
-                  setShowDiscountModal(false);
-                  setCustomDiscountVal("");
-                  setDiscountReason("");
-                  setDiscountManagerPin("");
-                  setDiscountError(null);
-                }}
-                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleApplyDiscountSubmit}
-                className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-purple-600/20"
-                id="pos-confirm-discount-btn"
-              >
-                Authorize & Apply
-              </button>
+              {/* Policy ceiling notice */}
+              {maxPolicyDiscount !== null && (
+                <div className={`text-[10px] px-2.5 py-1.5 rounded-lg border font-medium flex items-center gap-1.5 ${
+                  isExceedingPolicy ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-amber-50 text-amber-700 border-amber-200"
+                }`}>
+                  <span>🛡️</span>
+                  <span>
+                    Store Policy: Max {settings.maxDiscountPercentage}% discount (Up to ₹{maxPolicyDiscount.toFixed(2)})
+                  </span>
+                </div>
+              )}
+
+              {previewOrigTotal <= 0 && (
+                <div className="text-xs bg-rose-50 text-rose-600 p-2.5 rounded-lg border border-rose-200 font-bold">
+                  ⚠️ Cart is empty. Add items before applying discounts.
+                </div>
+              )}
+
+              <div className="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    {discountMode === "percentage" ? "Discount Percentage (%)*" : "Discount Amount (INR)*"}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step={discountMode === "percentage" ? "1" : "any"}
+                      min="0"
+                      max={discountMode === "percentage" ? "100" : undefined}
+                      value={customDiscountVal}
+                      onChange={(e) => setCustomDiscountVal(e.target.value)}
+                      placeholder={discountMode === "percentage" ? "e.g. 10" : "e.g. 50"}
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm font-bold font-mono text-slate-800 focus:outline-none focus:border-purple-500 shadow-xs"
+                      id="pos-discount-amount-input"
+                    />
+                    <span className="absolute right-3 top-2.5 font-mono text-xs font-bold text-slate-400">
+                      {discountMode === "percentage" ? "%" : "₹"}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Discount Reason*:
+                  </label>
+                  <input
+                    type="text"
+                    value={discountReason}
+                    onChange={(e) => setDiscountReason(e.target.value)}
+                    placeholder="e.g. VIP Customer / Loyalty Promo"
+                    className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:border-purple-500 shadow-xs"
+                    id="pos-discount-reason-input"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Manager/Owner PIN (4-6 Digits)*:
+                  </label>
+                  <input
+                    type="password"
+                    maxLength={6}
+                    value={discountManagerPin}
+                    onChange={(e) => setDiscountManagerPin(e.target.value)}
+                    placeholder="PIN Code"
+                    className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm font-bold font-mono tracking-widest text-slate-800 focus:outline-none focus:border-purple-500 text-center shadow-xs"
+                    id="pos-discount-pin-input"
+                  />
+                </div>
+              </div>
+
+              {discountError && (
+                <p className="text-xs text-rose-600 font-bold bg-rose-50 p-2.5 rounded-lg border border-rose-200">
+                  ⚠️ {discountError}
+                </p>
+              )}
+
+              <div className="flex space-x-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDiscountModal(false);
+                    setCustomDiscountVal("");
+                    setDiscountReason("");
+                    setDiscountManagerPin("");
+                    setDiscountError(null);
+                  }}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={previewOrigTotal <= 0 || isExceedingTotal || isExceedingPolicy}
+                  onClick={handleApplyDiscountSubmit}
+                  className={`flex-1 py-2.5 text-white font-bold rounded-xl text-xs transition shadow-md ${
+                    previewOrigTotal <= 0 || isExceedingTotal || isExceedingPolicy
+                      ? "bg-slate-300 cursor-not-allowed opacity-60"
+                      : "bg-purple-600 hover:bg-purple-700 shadow-purple-600/20 cursor-pointer"
+                  }`}
+                  id="pos-confirm-discount-btn"
+                >
+                  Authorize & Apply
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* THERMAL RECEIPT & TAX INVOICE PRINT MODAL */}
       {receiptModalOrder && (

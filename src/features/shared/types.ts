@@ -24,12 +24,15 @@ export interface Ingredient {
   updated_at?: string;
 }
 
+export interface RecipeIngredient {
+  ingredientId: string;
+  quantity: number; // deduction amount when 1 portion of menuItem is ordered
+  unit?: string; // unit used in recipe definition (e.g., 'g', 'kg', 'ml', 'l', 'pcs')
+}
+
 export interface Recipe {
   menuItemId: string;
-  ingredients: {
-    ingredientId: string;
-    quantity: number; // deduction amount when 1 portion of menuItem is ordered
-  }[];
+  ingredients: RecipeIngredient[];
   version?: number;
   created_at?: string;
   updated_at?: string;
@@ -57,6 +60,8 @@ export interface StaffMember {
   role: StaffRole;
   pin: string; // 4 to 6 digit PIN
   permissions: ('billing' | 'inventory' | 'reports' | 'settings' | string)[];
+  phone?: string;
+  status?: string;
   version?: number;
   created_at?: string;
   updated_at?: string;
@@ -103,6 +108,9 @@ export interface Order {
   paidAt?: string;
   cashierId: string;
   cashierName: string;
+  managerPin?: string;
+  discountReason?: string;
+  authorizerName?: string;
   version?: number;
   created_at?: string;
   updated_at?: string;
@@ -210,6 +218,7 @@ export interface InventorySettings {
   emailAlertAddress?: string;
   enableAlerts?: boolean;
   gstPercentage?: number;
+  maxDiscountPercentage?: number;
   gstin?: string;
   upiVpa?: string;
   upiMerchantName?: string;

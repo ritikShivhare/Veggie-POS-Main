@@ -870,6 +870,33 @@ export default function SettingsPanel({
                 />
               </div>
 
+              <div className="flex items-center justify-between py-3 pt-4">
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">Maximum POS Discount Policy Limit (%)</h3>
+                  <p className="text-slate-500 mt-0.5">Ceiling on discounts staff or managers can apply (e.g. 20% or 50%). Leave blank for no percentage ceiling.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={settings.maxDiscountPercentage ?? ""}
+                    placeholder="None"
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setSettings({
+                        ...settings,
+                        maxDiscountPercentage: isNaN(val) ? undefined : Math.max(0, Math.min(100, val))
+                      });
+                    }}
+                    className="w-20 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-bold text-slate-800 text-right focus:outline-none focus:border-purple-500 focus:bg-white"
+                    id="settings-max-discount-percentage-input"
+                  />
+                  <span className="font-mono text-xs font-bold text-slate-400">%</span>
+                </div>
+              </div>
+
             </div>
 
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] text-slate-500 leading-relaxed">

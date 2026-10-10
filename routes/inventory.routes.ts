@@ -82,9 +82,29 @@ router.put("/ingredients/:id", authMiddleware, requirePermission("inventory"), a
 
 router.delete("/ingredients/:id", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
+  const ingredientId = req.params.id;
   try {
-    await ingredientRepo.delete(tenantId, req.params.id);
-    res.json({ success: true, message: "Ingredient deleted successfully." });
+    // 1. Cascade unlink ingredient from all mapped recipes to prevent orphan references
+    const unlinkedCount = await recipeRepo.unlinkIngredient(tenantId, ingredientId);
+
+    // 2. Delete the ingredient record
+    await ingredientRepo.delete(tenantId, ingredientId);
+
+    // 3. Broadcast realtime updates for both ingredients and recipes
+    try {
+      realtimeService.broadcastToTenant(tenantId, "inventory:updated", { entityId: ingredientId, slice: "ingredients" });
+      if (unlinkedCount > 0) {
+        realtimeService.broadcastToTenant(tenantId, "inventory:updated", { slice: "recipes" });
+      }
+    } catch {}
+
+    res.json({
+      success: true,
+      message: unlinkedCount > 0
+        ? `Ingredient deleted successfully and unlinked from ${unlinkedCount} recipe(s).`
+        : "Ingredient deleted successfully.",
+      unlinkedRecipesCount: unlinkedCount
+    });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -356,6 +376,32 @@ router.delete("/recipes/:menuItemId", authMiddleware, requirePermission("invento
   try {
     await recipeRepo.delete(tenantId, req.params.menuItemId);
     res.json({ success: true, message: "Recipe deleted successfully." });
+  } catch (error: any) {
+    handleApiError(res, error);
+  }
+});
+
+router.post("/recipes/clean-orphans", authMiddleware, requirePermission("inventory"), async (req, res) => {
+  const tenantId = (req as any).tenantId;
+  try {
+    const ingredients = (await ingredientRepo.getAll(tenantId)) || [];
+    const validIngredientIds = new Set(ingredients.map(i => i.id));
+    const result = await recipeRepo.cleanOrphanIngredients(tenantId, validIngredientIds);
+
+    if (result.modifiedRecipesCount > 0) {
+      try {
+        realtimeService.broadcastToTenant(tenantId, "inventory:updated", { slice: "recipes" });
+      } catch {}
+    }
+
+    const updatedRecipes = await recipeRepo.getAll(tenantId);
+    res.json({
+      success: true,
+      message: `Cleaned ${result.orphansRemovedCount} orphan ingredient link(s) across ${result.modifiedRecipesCount} recipe(s).`,
+      orphansRemovedCount: result.orphansRemovedCount,
+      modifiedRecipesCount: result.modifiedRecipesCount,
+      data: updatedRecipes
+    });
   } catch (error: any) {
     handleApiError(res, error);
   }

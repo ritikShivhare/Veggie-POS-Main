@@ -46,4 +46,65 @@ export class RecipeRepository {
     const filtered = items.filter(i => i.menuItemId !== menuItemId);
     await this.saveAll(tenantId, filtered);
   }
+
+  /**
+   * Cascade unlinks a raw material (ingredientId) from all recipes for the tenant
+   * Prevents orphan ingredient entries when a raw material is deleted.
+   * Returns the count of recipes updated.
+   */
+  async unlinkIngredient(tenantId: string, ingredientId: string, trx?: DatabaseTransaction): Promise<number> {
+    const items = (await this.getAll(tenantId)) || [];
+    let modifiedCount = 0;
+    const updated = items.map(recipe => {
+      if (!recipe.ingredients || !Array.isArray(recipe.ingredients)) return recipe;
+      const hasIngredient = recipe.ingredients.some(ri => ri.ingredientId === ingredientId);
+      if (hasIngredient) {
+        modifiedCount++;
+        return {
+          ...recipe,
+          ingredients: recipe.ingredients.filter(ri => ri.ingredientId !== ingredientId),
+          updated_at: new Date().toISOString(),
+          version: (recipe.version || 1) + 1
+        };
+      }
+      return recipe;
+    });
+
+    if (modifiedCount > 0) {
+      await this.saveAll(tenantId, updated, trx);
+    }
+    return modifiedCount;
+  }
+
+  /**
+   * Sanitizes all recipes for a tenant by removing ingredient references that don't exist in the valid set.
+   * Self-heals orphan data.
+   */
+  async cleanOrphanIngredients(tenantId: string, validIngredientIds: Set<string>, trx?: DatabaseTransaction): Promise<{ modifiedRecipesCount: number; orphansRemovedCount: number }> {
+    const items = (await this.getAll(tenantId)) || [];
+    let modifiedRecipesCount = 0;
+    let orphansRemovedCount = 0;
+
+    const updated = items.map(recipe => {
+      if (!recipe.ingredients || !Array.isArray(recipe.ingredients)) return recipe;
+      const initialCount = recipe.ingredients.length;
+      const validIngredients = recipe.ingredients.filter(ri => validIngredientIds.has(ri.ingredientId));
+      if (validIngredients.length < initialCount) {
+        modifiedRecipesCount++;
+        orphansRemovedCount += (initialCount - validIngredients.length);
+        return {
+          ...recipe,
+          ingredients: validIngredients,
+          updated_at: new Date().toISOString(),
+          version: (recipe.version || 1) + 1
+        };
+      }
+      return recipe;
+    });
+
+    if (modifiedRecipesCount > 0) {
+      await this.saveAll(tenantId, updated, trx);
+    }
+    return { modifiedRecipesCount, orphansRemovedCount };
+  }
 }
