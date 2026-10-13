@@ -375,6 +375,15 @@ export class FinancialTransactionService {
       );
     }
 
+    const payments = (await this.paymentRepo.getAll(tenantId)) || [];
+    const orderPayments = payments.filter(p => p.orderId === orderId && p.status === "Completed");
+    // Older installations stored paid bills without a settlement ledger. They
+    // cannot bypass the refund check by presenting an empty payment collection.
+    if (order.paidAt && !orderPayments.length) {
+      throw new FinancialValidationError("LEGACY_SETTLEMENT_REQUIRES_RECONCILIATION","This paid bill has no original payment record. Review its payment history before cancelling.");
+    }
+    if (orderPayments.length && !cancelDetails.refundConfirmed) throw new FinancialValidationError("REFUND_CONFIRMATION_REQUIRED","Refund the customer manually, then confirm the refund before cancelling.");
+
     const nowIso = new Date().toISOString();
     const updatedOrder: Order = {
       ...order,
@@ -402,9 +411,6 @@ export class FinancialTransactionService {
     }
 
     // Check payments for this order to mark as Refunded
-    const payments = (await this.paymentRepo.getAll(tenantId)) || [];
-    const orderPayments = payments.filter(p => p.orderId === orderId && p.status === "Completed");
-    if (orderPayments.length && !cancelDetails.refundConfirmed) throw new FinancialValidationError("REFUND_CONFIRMATION_REQUIRED","Refund the customer manually, then confirm the refund before cancelling.");
     const updatedPayments = payments.map(p => {
       if (p.orderId === orderId && p.status === "Completed") {
         return {

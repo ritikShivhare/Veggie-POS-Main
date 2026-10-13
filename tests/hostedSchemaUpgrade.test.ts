@@ -24,6 +24,48 @@ async function legacyDatabase() {
 }
 
 describe('Upgrade the observed manually-created hosted schema',()=>{
+  it('archives the bounded legacy repair exactly, denies public access, and then upgrades',async()=>{
+    const pg=await legacyDatabase();
+    try {
+      await pg.exec(`INSERT INTO staff(id,tenant_id,name,role,pin) VALUES('owner','legacy','Original owner','Owner','stored-hash');
+        INSERT INTO menu_items(id,tenant_id,name,price) VALUES('valid-menu','legacy','Valid meal',120);
+        INSERT INTO recipes("menuItemId",tenant_id,ingredients) VALUES('valid-menu','legacy','[]');
+        INSERT INTO recipes("menuItemId",tenant_id,ingredients) SELECT 'missing-menu-'||n,'legacy','[{"ingredientId":"missing-stock","quantity":2}]' FROM generate_series(1,13) n;
+        INSERT INTO shifts(id,tenant_id,"staffId","staffName",status) VALUES('orphan-shift','legacy','missing-staff','Historical name','Completed'),('valid-shift','legacy','owner','Original owner','Completed');
+        INSERT INTO orders(id,tenant_id,"cashierId",total,status) VALUES('original-bill','legacy','owner',120,'Completed');`);
+      const originalRecipes=(await pg.query<any>(`SELECT to_jsonb(r) AS original FROM recipes r WHERE "menuItemId"!='valid-menu' ORDER BY "menuItemId"`)).rows.map(r=>r.original);
+      const originalShift=(await pg.query<any>(`SELECT to_jsonb(s) AS original FROM shifts s WHERE id='orphan-shift'`)).rows[0].original;
+      const sql=await readFile('migrations/manual/archive_invalid_legacy_references.sql','utf8');
+      await pg.exec(sql);
+      expect((await pg.query<any>(`SELECT record FROM deployment_recovery_archive WHERE source_table='recipes' ORDER BY source_id`)).rows.map(r=>r.record)).toEqual(originalRecipes);
+      expect((await pg.query<any>(`SELECT record FROM deployment_recovery_archive WHERE source_table='shifts'`)).rows[0].record).toEqual(originalShift);
+      expect((await pg.query(`SELECT * FROM recipes`)).rows).toHaveLength(1);
+      expect((await pg.query(`SELECT * FROM shifts`)).rows).toHaveLength(1);
+      expect((await pg.query<any>(`SELECT total FROM orders`)).rows[0].total).toBe('120');
+      await pg.exec(sql); // Retry moves no additional rows and preserves the archive.
+      expect((await pg.query(`SELECT * FROM deployment_recovery_archive`)).rows).toHaveLength(14);
+      for(const role of ['anon','authenticated']) {
+        await pg.exec(`SET ROLE ${role}`);
+        await expect(pg.query(`SELECT * FROM deployment_recovery_archive`)).rejects.toMatchObject({code:'42501'});
+        await pg.exec('RESET ROLE');
+      }
+      await pg.exec(await readFile('migrations/008_deployment_integrity.sql','utf8'));
+      await pg.exec(await readFile('migrations/009_atomic_registration.sql','utf8'));
+      expect((await pg.query<any>(`SELECT deployment_schema_version() AS version`)).rows[0].version).toBe(9);
+      expect((await pg.query(`SELECT * FROM orders`)).rows).toHaveLength(1);
+      expect((await pg.query(`SELECT * FROM deployment_recovery_archive`)).rows).toHaveLength(14);
+    }finally{await pg.close();}
+  },30000);
+  it('rejects an unexpected recovery scope without moving records',async()=>{
+    const pg=await legacyDatabase();
+    try {
+      await pg.exec(`INSERT INTO recipes("menuItemId",tenant_id,ingredients) VALUES('unexpected','legacy','[]');`);
+      await expect(pg.exec(await readFile('migrations/manual/archive_invalid_legacy_references.sql','utf8'))).rejects.toMatchObject({code:'P0001'});
+      await pg.exec('ROLLBACK');
+      expect((await pg.query(`SELECT * FROM recipes`)).rows).toHaveLength(1);
+      expect((await pg.query<any>(`SELECT to_regclass('public.deployment_recovery_archive') AS archive`)).rows[0].archive).toBeNull();
+    }finally{await pg.close();}
+  },30000);
   it('hashes nested legacy PIN copies without changing ledger fields or array order',async()=>{
     const pg=await legacyDatabase();
     try {

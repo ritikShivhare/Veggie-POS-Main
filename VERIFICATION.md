@@ -4,8 +4,9 @@ Base: `6184b9450487b0f931a44d4221911ca8634912f5`.
 This commit repairs the audited application and records local evidence.
 It is not a certification that every hosted integration or device works.
 
-Release remains blocked: code is committed locally but has not been pushed;
-Render still runs the old commit; application migrations 008/009 and real OTP
+Code is published on `fix/aatmyam-deployment` in draft
+[PR #1](https://github.com/ritikShivhare/Veggie-POS-Main/pull/1).
+Release remains blocked: Render still runs the old main commit; application migrations 008/009 and real OTP
 delivery have not been completed. Three compatible Supabase security repairs have
 been applied and verified.
 
@@ -13,7 +14,7 @@ been applied and verified.
 
 - Clean `npm ci` with the checked-in lockfile.
 - TypeScript: `npm run lint` passed.
-- Vitest: **266 tests in 27 files passed** with two workers.
+- Vitest: **271 tests in 27 files passed** with two workers.
 - Production client and server build passed.
 - Compiled production server smoke passed against a local mock Supabase endpoint:
   client assets, app manifest/service worker, CSP, anonymous sync rejection and
@@ -27,6 +28,22 @@ been applied and verified.
 - Password checks reject both ASCII and multibyte inputs exceeding bcrypt's 72-byte
   bound. A password sharing the first 72 bytes with a valid owner/admin password
   cannot authenticate or obtain an admin OTP challenge.
+- The proposed manual recovery archive preserves all 14 original records, denies
+  public access, rejects changed scope, supports a safe repeat, and then permits
+  the complete schema upgrade. It has not been applied to hosted business data.
+- Cancellation of a legacy paid bill without its original payment ledger is
+  blocked even when a refund checkbox is supplied; the order and stock remain
+  unchanged. A completed kitchen bill that was never paid can still be cancelled.
+
+## GitHub verification
+
+The first published revision `77430e6` passed GitHub Actions: clean install,
+TypeScript, tests, dependency audit and full-stack build. Evidence:
+[CI run](https://github.com/ritikShivhare/Veggie-POS-Main/actions/runs/38377735571).
+That run validates the 266-test checkpoint. The expanded 271-test checkpoint,
+including the archive proposal and legacy payment guard, passed locally; its
+GitHub status is available on the PR's Checks tab after publication.
+The branch is not merged into main or deployed while provider/data gates remain.
 
 The former worker crash was an infinite recursion in `StaffRepository.add`:
 its override discarded the transaction parameter used by `BaseRepository.add`.
@@ -86,14 +103,20 @@ remain visible for review rather than silently replaying removed credentials.
   for the surviving menu item has valid ingredient links. Legacy snapshots did not
   provide matching missing menu/staff rows. The upgrade retains those records and
   stops safely rather than guessing a replacement.
+- The 22 legacy orders include 21 marked paid/completed without any payment ledger
+  entry. Their records are retained; no settlements or refunds have been invented.
+  The new guard requires their payment history to be reconciled before cancellation.
+  The archive proposal affects only the 13 recipes and one orphan shift.
 
 ## Still required on the hosted installation
 
 Apply migrations **008 and 009** to the existing Supabase project and configure
 Render's required environment values from [DEPLOYMENT.md](DEPLOYMENT.md).
-Resolve the historical references first. The current GitHub connection rejects
-tree creation with HTTP 403
-`Resource not accessible by integration`; no GitHub push or new CI run is claimed.
+Resolve the historical references first. A bounded archive option is prepared in
+`migrations/manual/README.md` and its SQL file; user approval is pending because
+it moves a historical shift out of active reports. The earlier GitHub connector's
+write 403 was resolved for this task through owner-authorized GitHub CLI access;
+the repair branch and draft PR are now published.
 The new server refuses production startup if the database/schema or email setup
 is missing. A passing old `/api/health` that only reports time does not prove the
 new schema is installed.

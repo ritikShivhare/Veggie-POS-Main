@@ -122,6 +122,18 @@ describe('Deployment audit: expected secure and consistent behavior', () => {
     await financialTransactionService.executeOrderCancellation(tid, 'audit-no-deduct', { cancelledBy: 'Owner', reason: 'Audit' });
     expect((await ingredientRepo.getById(tid, 'audit-ing'))?.currentStock).toBe(10);
   });
+  it.each([false,true])('blocks legacy paid-bill cancellation without its original payment record',async(refundConfirmed)=>{
+    await orderRepo.saveAll(tid,[order('legacy-paid',{status:'Completed',paymentMethod:'Cash',paidAt:new Date().toISOString()}) as any]);
+    await expect(financialTransactionService.executeOrderCancellation(tid,'legacy-paid',{cancelledBy:'Owner',reason:'Audit',refundConfirmed})).rejects.toMatchObject({code:'LEGACY_SETTLEMENT_REQUIRES_RECONCILIATION'});
+    expect(await orderRepo.getById(tid,'legacy-paid')).toMatchObject({status:'Completed',version:1});
+    expect((await ingredientRepo.getById(tid,'audit-ing'))?.currentStock).toBe(10);
+    expect(await financialTransactionService.getPaymentRepo().getAll(tid)).toEqual([]);
+  });
+  it('can cancel a completed kitchen bill that was never paid',async()=>{
+    await financialTransactionService.executeOrderPlacement(tid,order('kitchen-completed',{status:'Completed'}) as any,{role:'Owner',staffId:'audit-owner'});
+    const cancelled=await financialTransactionService.executeOrderCancellation(tid,'kitchen-completed',{cancelledBy:'Owner',reason:'Audit'});
+    expect(cancelled.status).toBe('Cancelled');expect((await ingredientRepo.getById(tid,'audit-ing'))?.currentStock).toBe(10);
+  });
   it('rejects unknown tenant login instead of seeding default owner account', async () => {
     const r = await request('/auth/login', { tenantId: 'audit-unregistered-tenant', pin: '12345' });
     expect(r.status).toBeGreaterThanOrEqual(400);

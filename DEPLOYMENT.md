@@ -23,6 +23,10 @@ staff record. The surviving menu's recipe has no missing ingredient links. The
 legacy JSON snapshots did not supply matching menu or staff records for recovery.
 Restore the correct records or agree a separate archive/recovery treatment before
 proceeding; no business rows have been removed by these repairs.
+The tested alternative is documented in `migrations/manual/README.md`. Its SQL
+preserves the complete 14 original rows in a private recovery table before moving
+them out of active recipes/shifts. It is not an automatic migration and requires
+approval because that historical shift leaves the regular app reports.
 Migration 008 preserves rows, changes entity keys to `(tenant_id, id)`, merges
 legacy settings, and closes the unsafe public RPCs. It deliberately rejects
 pre-existing invalid links or duplicate completed settlements.
@@ -68,6 +72,11 @@ Hosted logs currently report missing database keys (in-memory storage) and missi
 real email credentials. Configure persistence and a verified HTTPS email sender
 before testing real restaurant onboarding; the old time-only health response
 does not prove either works.
+The Resend plugin is available but is not connected in this session. Connect the
+owner's Resend account to inspect sender/domain readiness without sharing API keys
+in chat. The required database server key also belongs in Render's private
+environment. Configure it only when the fixed code and migrations are ready;
+do not connect the old insecure deployed revision to the real database.
 
 To enable SaaS admin sign-in, also configure `SAAS_OWNER_EMAIL` and a bcrypt
 `SAAS_OWNER_PASSWORD_HASH` for a private password. Password admin login requires
@@ -115,6 +124,9 @@ Cloud account deletion, managed backup/PITR, delivery marketplaces, SMS and draw
 hardware are not completed integrations. The interface reports those limits;
 provider backups/restores and cloud deletion require actual operational work.
 Manual cash refunds across shift boundaries need reconciliation by the operator.
+The inspected legacy database has 21 paid bills without their original settlement
+ledger. Those bills are preserved, and the repaired cancellation path requires
+payment-history reconciliation instead of fabricating settlements/refunds.
 Stripe recurring billing and external AI/Google providers need live provider tests.
 Free hosting availability and high-load/multiple-instance operation have not been
 certified by the local automated tests.

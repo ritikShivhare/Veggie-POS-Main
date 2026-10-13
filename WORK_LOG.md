@@ -57,3 +57,19 @@ The first GitHub CLI device login did not save authorization: its process was
 lost after a network/session error. Prepared a temporary private device-flow
 handoff that saves its state and the received token before any API identity read,
 so a failed read cannot discard an authorized token. No new GitHub push yet.
+
+Published checkpoint (2026-10-13): the user completed the persistent GitHub device
+flow. Verified repository-owner identity and push/admin permission, then pushed
+fix/aatmyam-deployment and created draft PR #1. CI for 77430e6 succeeded on Node 24
+(install, TypeScript, 266 tests, audit and build). Main and Render remain unchanged.
+Prepared a bounded manual archive proposal outside automatic migrations, with
+full original-row retention, strict scope guard, public-access denial and rollback.
+Six hosted-schema tests pass; no production business rows have been archived.
+
+Additional legacy financial check found 21 paid/completed orders without payment
+ledger entries. Added a cancellation guard requiring reconciliation, including
+when refundConfirmed is true; unpaid completed kitchen bills still cancel and
+restock normally. Targeted 54 tests and expanded 271-test/27-file suite, TypeScript
+and production build passed. No fabricated settlements or historical data changes.
+Publish this checkpoint and check CI again. Data treatment needs user decision;
+Resend account/domain and private database-key configuration remain release gates.
