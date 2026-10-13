@@ -39,7 +39,7 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
   const getTimerColorClass = (isoString: string, status: string): string => {
     const diffMs = Date.now() - new Date(isoString).getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (status === "Ready") return "text-emerald-600 font-semibold";
     if (diffMins > 15) return "text-rose-500 animate-pulse font-bold";
     if (diffMins > 8) return "text-amber-500 font-semibold";

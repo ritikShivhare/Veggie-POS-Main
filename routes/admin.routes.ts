@@ -1,3 +1,7 @@
+import rateLimit from "express-rate-limit";
+import { OAuth2Client } from "google-auth-library";
+import { constantTimeStringCompare } from "../server/features/auth/PinSecurityService";
+import { digest } from "../server/features/shared/security";
 import express from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -30,370 +34,82 @@ import { Database } from "../server/features/shared/database";
 
 const router = express.Router();
 
-// In-Memory store for SaaS Super-Admin Email OTPs with auto-expiry
-interface PendingAdminOtp {
-  otp: string;
-  expiresAt: number;
-  email: string;
-  lastSentAt: number;
+// Admin identity is configured separately from notification recipients.
+const adminLimiter = rateLimit({ windowMs: 15*60*1000, limit: 15, standardHeaders: true, legacyHeaders: false });
+router.use(['/saas-admin/login','/saas-admin/google-login','/saas-admin/resend-otp'], adminLimiter);
+const pendingAdminOtps = new Map<string, {hash:string, expiresAt:number, email:string, lastSentAt:number, attempts:number}>();
+async function sendAdminCode(email: string, code: string): Promise<boolean> {
+  const sent = await notificationService.send('saas-admin', {
+    title:'Aatmyam POS admin verification', message:'Your verification code expires in 10 minutes.', severity:'info',
+    channels:['email'], recipientEmail:email,
+    htmlBody:`<p>Your Aatmyam POS verification code is <strong>${code}</strong>. Valid for 10 minutes.</p>`
+  });
+  return sent.dispatchedChannels.some(c => c.channel === 'email' && c.status === 'success');
 }
-const pendingAdminOtps = new Map<string, PendingAdminOtp>();
-
-// Periodic cleanup of expired OTPs every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, val] of pendingAdminOtps.entries()) {
-    if (val.expiresAt < now) {
-      pendingAdminOtps.delete(key);
-    }
-  }
-}, 5 * 60 * 1000);
-
-// Production-Level Session and Lockout Management Endpoints for SaaS Admin login
-router.post("/saas-admin/login", async (req, res) => {
-  const { pin, password, totp, otp, challengeToken } = req.body;
-  const inputPin = pin || password;
-  const userAgent = (req.headers["user-agent"] as string) || "Unknown User Agent";
-  const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
-  const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
-
+async function adminSession(req: express.Request, res: express.Response, email: string) {
+  const session = await sessionService.createSession('saas-admin','s-saas-owner','SaaS Owner','SaaS Owner',req.ip || '',String(req.headers['user-agent'] || ''));
+  res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
+  return res.json({ success:true, session, user:{id:'s-saas-owner',name:'SaaS Owner',role:'SaaS Owner',email,permissions:['super_admin']} });
+}
+router.get('/auth/public-config', (_req,res) => res.json({success:true, googleClientId:process.env.GOOGLE_CLIENT_ID || null}));
+router.post('/saas-admin/login', async (req,res) => {
+  const ownerEmail = process.env.SAAS_OWNER_EMAIL?.trim().toLowerCase();
+  const passwordHash = process.env.SAAS_OWNER_PASSWORD_HASH;
+  if (!ownerEmail || !passwordHash) return res.status(503).json({success:false,error:'ADMIN_NOT_CONFIGURED',message:'Configure the SaaS owner identity before admin sign-in.'});
   try {
-    const hashToUse = process.env.SAAS_OWNER_PASSWORD_HASH;
-    const inputOtp = (otp || totp || "").toString().trim();
-
-    // ----------------------------------------------------
-    // STEP 2: VERIFY 6-DIGIT EMAIL OTP
-    // ----------------------------------------------------
-    if (inputOtp) {
-      if (!challengeToken || !pendingAdminOtps.has(challengeToken)) {
-        return res.status(401).json({
-          success: false,
-          error: "OTP_NOT_FOUND",
-          message: "Verification code expired. Please request a new code."
-        });
-      }
-
-      const record = pendingAdminOtps.get(challengeToken)!;
-      if (Date.now() > record.expiresAt) {
-        pendingAdminOtps.delete(challengeToken);
-        return res.status(401).json({
-          success: false,
-          error: "OTP_EXPIRED",
-          message: "Verification code expired. Please request a new code."
-        });
-      }
-
-      if (record.otp !== inputOtp) {
-        return res.status(401).json({
-          success: false,
-          error: "INVALID_OTP",
-          message: "Invalid verification code."
-        });
-      }
-
-      // Valid OTP confirmed: Invalidate so code cannot be reused
-      pendingAdminOtps.delete(challengeToken);
-
-      // Issue Super-Admin Session
-      const session = await sessionService.createSession(
-        "saas-admin",
-        "s-saas-owner",
-        "SaaS Owner",
-        "SaaS Owner",
-        ip,
-        userAgent
-      );
-
-      res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
-
-      return res.json({
-        success: true,
-        message: "Verification successful.",
-        session,
-        user: {
-          id: "s-saas-owner",
-          name: "SaaS Owner",
-          role: "SaaS Owner",
-          permissions: ["billing", "inventory", "reports", "settings", "super_admin"]
-        }
-      });
-    }
-
-    // ----------------------------------------------------
-    // STEP 1: VERIFY PASSWORD AND SEND EMAIL OTP
-    // ----------------------------------------------------
-    if (!inputPin) {
-      return res.status(400).json({ success: false, message: "Super-Admin Password is required." });
-    }
-
-    let isPasswordMatch = false;
-    if (inputPin === "admin123" || inputPin === "superadmin") {
-      isPasswordMatch = true;
-    } else if (hashToUse) {
-      isPasswordMatch = await bcrypt.compare(inputPin, hashToUse);
-    }
-
-    if (!isPasswordMatch) {
-      return res.status(401).json({
-        success: false,
-        error: "INVALID_CREDENTIALS",
-        message: "Incorrect Super-Admin Password."
-      });
-    }
-
-    // Generate fresh random 6-digit Email OTP on backend
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const targetEmail = (req.body.email && typeof req.body.email === "string" && req.body.email.includes("@"))
-      ? req.body.email.trim()
-      : (process.env.EMAIL_ALERT_ADDRESS || process.env.SMTP_USER || "shivritik53@gmail.com");
-
-    const token = crypto.randomBytes(16).toString("hex");
-
-    // Store OTP securely associated with challengeToken and target email (10 minutes expiry)
-    pendingAdminOtps.set(token, {
-      otp: generatedOtp,
-      expiresAt: Date.now() + 10 * 60 * 1000,
-      email: targetEmail,
-      lastSentAt: Date.now()
-    });
-
-    // Send the exact generated OTP to user's email using existing notification/email service
-    let emailSent = false;
-    try {
-      const sendResult = await notificationService.send("saas-admin", {
-        title: "Your VeggiePOS Verification Code",
-        message: `Your VeggiePOS Super-Admin verification code is: ${generatedOtp}. This code will expire in 10 minutes.`,
-        severity: "info",
-        channels: ["email"],
-        recipientEmail: targetEmail,
-        htmlBody: `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
-            <div style="text-align: center; margin-bottom: 24px;">
-              <div style="display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #ec4899, #6366f1); line-height: 48px; color: #ffffff; font-weight: 800; font-size: 20px;">V</div>
-              <h2 style="color: #0f172a; margin: 12px 0 4px; font-size: 20px;">Super-Admin Verification</h2>
-              <p style="color: #64748b; font-size: 13px; margin: 0;">VeggiePOS SaaS Multi-Tenant Control Panel</p>
-            </div>
-            <p style="color: #334155; font-size: 14px; line-height: 1.5;">Enter the following 6-digit one-time code to complete your Super-Admin login:</p>
-            <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0;">
-              <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #db2777; font-family: 'Courier New', Courier, monospace;">${generatedOtp}</span>
-            </div>
-            <p style="color: #64748b; font-size: 12px; line-height: 1.5;">This code expires in <strong>10 minutes</strong>. Never share this code with anyone.</p>
-            <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
-            <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${targetEmail} for VeggiePOS SaaS Security</p>
-          </div>
-        `
-      });
-
-      emailSent = sendResult.dispatchedChannels.some(
-        (c) => c.channel === "email" && c.status === "success"
-      );
-    } catch (sendErr) {
-      console.warn("[Admin Auth] Email notification failed, falling back to direct password authentication:", sendErr);
-      emailSent = false;
-    }
-
-    // If email failed or SMTP is not set up, authenticate immediately with password so owner is never locked out
-    if (!emailSent) {
+    if (req.body.otp) {
+      const token = String(req.body.challengeToken || '');
+      const challenge = pendingAdminOtps.get(token);
+      if (!challenge || challenge.expiresAt <= Date.now() || challenge.attempts >= 5) return res.status(401).json({success:false,message:'Verification expired. Request a new code.'});
+      challenge.attempts++;
+      if (!constantTimeStringCompare(challenge.hash,digest(String(req.body.otp)))) return res.status(401).json({success:false,message:'Invalid verification code.'});
       pendingAdminOtps.delete(token);
-
-      const session = await sessionService.createSession(
-        "saas-admin",
-        "s-saas-owner",
-        "SaaS Owner",
-        "SaaS Owner",
-        ip,
-        userAgent
-      );
-
-      res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
-
-      return res.json({
-        success: true,
-        message: "Authenticated successfully with Super-Admin credentials.",
-        session,
-        user: {
-          id: "s-saas-owner",
-          name: "SaaS Owner",
-          role: "SaaS Owner",
-          email: targetEmail,
-          permissions: ["billing", "inventory", "reports", "settings", "super_admin"]
-        }
-      });
+      return await adminSession(req,res,ownerEmail);
     }
-
-    return res.json({
-      success: true,
-      requireOtp: true,
-      challengeToken: token,
-      email: targetEmail,
-      message: "Verification code sent to your email."
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message, message: "Unable to process authentication. Please try again." });
-  }
+    if (typeof req.body.password !== 'string' || !(await bcrypt.compare(req.body.password,passwordHash))) return res.status(401).json({success:false,error:'INVALID_CREDENTIALS',message:'Incorrect admin credentials.'});
+    const code = crypto.randomInt(100000,1000000).toString();
+    if (!await sendAdminCode(ownerEmail,code)) return res.status(503).json({success:false,error:'EMAIL_SEND_FAILED',message:'Unable to send verification email. Check the mail provider configuration.'});
+    const token = crypto.randomBytes(32).toString('hex');
+    pendingAdminOtps.set(token,{hash:digest(code),expiresAt:Date.now()+600000,email:ownerEmail,lastSentAt:Date.now(),attempts:0});
+    for (const [key,c] of pendingAdminOtps) if(c.expiresAt<Date.now()) pendingAdminOtps.delete(key);
+    return res.json({success:true,requireOtp:true,challengeToken:token,email:ownerEmail,message:'Verification email accepted by the mail provider.'});
+  } catch (e) { return res.status(503).json({success:false,message:'Authentication service unavailable.'}); }
 });
-
-// Endpoint for SaaS Owner Google Authentication
-router.post("/saas-admin/google-login", async (req, res) => {
-  const { credential, email, name } = req.body;
-  const userAgent = (req.headers["user-agent"] as string) || "Unknown User Agent";
-  const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
-  const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
-
+router.post('/saas-admin/google-login', async (req,res) => {
+  const expectedEmail = process.env.SAAS_OWNER_EMAIL?.trim().toLowerCase();
+  const audience = process.env.GOOGLE_CLIENT_ID;
+  if (!audience || !expectedEmail || typeof req.body.credential !== 'string') return res.status(401).json({success:false,message:'A valid Google credential is required.'});
   try {
-    let authenticatedEmail = (email || "").trim().toLowerCase();
-
-    // If Google JWT ID token was provided, parse token payload safely
-    if (credential && typeof credential === "string") {
-      try {
-        const parts = credential.split(".");
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
-          if (payload.email) {
-            authenticatedEmail = payload.email.trim().toLowerCase();
-          }
-        }
-      } catch (e) {
-        console.warn("[Google Auth] Error decoding credential:", e);
-      }
-    }
-
-    const expectedOwnerEmail = (process.env.EMAIL_ALERT_ADDRESS || process.env.SMTP_USER || "shivritik53@gmail.com").trim().toLowerCase();
-
-    // Allow owner login
-    const isAuthorized =
-      !authenticatedEmail ||
-      authenticatedEmail === expectedOwnerEmail ||
-      authenticatedEmail === "shivritik53@gmail.com" ||
-      authenticatedEmail === "ritikshiv53@gmail.com" ||
-      authenticatedEmail.includes("ritikshiv") ||
-      authenticatedEmail.includes("shivritik");
-
-    if (!isAuthorized) {
-      return res.status(403).json({
-        success: false,
-        message: `Google Account (${authenticatedEmail}) is not authorized as SaaS Owner. Please use ${expectedOwnerEmail}.`
-      });
-    }
-
-    const session = await sessionService.createSession(
-      "saas-admin",
-      "s-saas-owner",
-      name || "SaaS Owner",
-      "SaaS Owner",
-      ip,
-      userAgent
-    );
-
-    res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
-
-    return res.json({
-      success: true,
-      message: "Google authentication successful.",
-      session,
-      user: {
-        id: "s-saas-owner",
-        name: name || "SaaS Owner",
-        role: "SaaS Owner",
-        email: authenticatedEmail || expectedOwnerEmail,
-        permissions: ["billing", "inventory", "reports", "settings", "super_admin"]
-      }
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Google authentication failed. Please try again."
-    });
-  }
+    const ticket = await new OAuth2Client(audience).verifyIdToken({idToken:req.body.credential,audience});
+    const payload = ticket.getPayload();
+    if (!payload?.email_verified || payload.email?.toLowerCase() !== expectedEmail) return res.status(403).json({success:false,message:'This Google account is not the configured SaaS owner.'});
+    return await adminSession(req,res,expectedEmail);
+  } catch { return res.status(401).json({success:false,message:'Google credential is invalid or expired.'}); }
 });
-
-// Endpoint to resend Super-Admin Email OTP
-router.post("/saas-admin/resend-otp", async (req, res) => {
-  const { challengeToken } = req.body;
+router.post('/saas-admin/resend-otp', async (req,res) => {
+  const c = pendingAdminOtps.get(String(req.body.challengeToken || ''));
+  if (!c || c.expiresAt<=Date.now()) return res.status(400).json({success:false,message:'Verification expired. Sign in again.'});
+  if (Date.now()-c.lastSentAt<30000) return res.status(429).json({success:false,message:'Wait 30 seconds before requesting another code.'});
+  const code=crypto.randomInt(100000,1000000).toString();
   try {
-    if (!challengeToken || !pendingAdminOtps.has(challengeToken)) {
-      return res.status(400).json({
-        success: false,
-        message: "Verification code expired. Please request a new code."
-      });
-    }
-
-    const record = pendingAdminOtps.get(challengeToken)!;
-
-    // Cooldown check (15 seconds)
-    if (Date.now() - record.lastSentAt < 15000) {
-      const waitSec = Math.ceil((15000 - (Date.now() - record.lastSentAt)) / 1000);
-      return res.status(429).json({
-        success: false,
-        message: `Please wait ${waitSec} seconds before requesting another code.`
-      });
-    }
-
-    // 1. Generate a completely new 6-digit OTP
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // 2. Replace previous OTP and update expiration to 10 minutes
-    record.otp = newOtp;
-    record.expiresAt = Date.now() + 10 * 60 * 1000;
-    record.lastSentAt = Date.now();
-
-    // 3. Send new OTP to user's email
-    const sendResult = await notificationService.send("saas-admin", {
-      title: "Your VeggiePOS Verification Code (Resent)",
-      message: `Your new VeggiePOS Super-Admin verification code is: ${newOtp}. This code will expire in 10 minutes.`,
-      severity: "info",
-      channels: ["email"],
-      recipientEmail: record.email,
-      htmlBody: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
-          <div style="text-align: center; margin-bottom: 24px;">
-            <div style="display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #ec4899, #6366f1); line-height: 48px; color: #ffffff; font-weight: 800; font-size: 20px;">V</div>
-            <h2 style="color: #0f172a; margin: 12px 0 4px; font-size: 20px;">Super-Admin Verification</h2>
-            <p style="color: #64748b; font-size: 13px; margin: 0;">VeggiePOS SaaS Multi-Tenant Control Panel</p>
-          </div>
-          <p style="color: #334155; font-size: 14px; line-height: 1.5;">Enter the following new 6-digit one-time code to complete your Super-Admin login:</p>
-          <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0;">
-            <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #db2777; font-family: 'Courier New', Courier, monospace;">${newOtp}</span>
-          </div>
-          <p style="color: #64748b; font-size: 12px; line-height: 1.5;">This code expires in <strong>10 minutes</strong>. Only the newest code is valid.</p>
-          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
-          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${record.email} for VeggiePOS SaaS Security</p>
-        </div>
-      `
-    });
-
-    const emailSent = sendResult.dispatchedChannels.some(
-      (c) => c.channel === "email" && c.status === "success"
-    );
-
-    if (!emailSent) {
-      return res.status(200).json({
-        success: true,
-        message: "Code refreshed. If email delivery is delayed, you can also sign in directly using Google Authentication."
-      });
-    }
-
-    return res.json({
-      success: true,
-      message: "Verification code sent to your email."
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message || "Unable to send verification email. Please try again." });
-  }
+    if (!await sendAdminCode(c.email,code)) return res.status(503).json({success:false,message:'Unable to send verification email. Your previous valid code is unchanged.'});
+    Object.assign(c,{hash:digest(code),expiresAt:Date.now()+600000,lastSentAt:Date.now(),attempts:0});
+    return res.json({success:true,message:'Verification email accepted by the mail provider.'});
+  } catch { return res.status(503).json({success:false,message:'Email service unavailable.'}); }
 });
 
 router.get("/admin/tenants", adminAuthMiddleware, async (req, res) => {
   try {
     const tenants = await getGlobalTenantsList();
-    
+
     // Enrich with dynamic live subscription and usage stats
     const enrichedTenants = await Promise.all(tenants.map(async (t) => {
       try {
         const sub = await getSubscription(t.tenantId);
-        
+
         // Count staff
         const staffList = (await staffRepo.getAll(t.tenantId)) || [];
-        
+
         // Count monthly orders
         const orders = (await orderRepo.getAll(t.tenantId)) || [];
         const now = new Date();
@@ -498,7 +214,7 @@ router.post("/admin/tenants/register", adminAuthMiddleware, async (req, res) => 
 
   try {
     const cleanedName = businessName.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const randomSuffix = Math.floor(100 + Math.random() * 900);
+    const randomSuffix = crypto.randomUUID();
     const tenantId = `veg-${cleanedName}-${randomSuffix}`;
 
     const newOwnerId = `s-${ownerName.toLowerCase().replace(/[^a-z0-9]/g, "")}-${randomSuffix}`;
@@ -833,7 +549,9 @@ router.post("/leads/walkthrough", async (req, res) => {
     const cleanPhone = String(phone).replace(/[^0-9]/g, "");
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    const existingIndex = existingLeads.findIndex((l) => {
+    const existingIndex = -1;
+    /* Existing leads may only be edited through authenticated administration.
+    const unused = existingLeads.findIndex((l) => {
       const p1 = l.phone.replace(/[^0-9]/g, "");
       const isSamePhone = cleanPhone && p1 && (p1 === cleanPhone || p1.endsWith(cleanPhone) || cleanPhone.endsWith(p1));
       const isSameEmail = email && l.email && l.email.toLowerCase().trim() === String(email).toLowerCase().trim();
@@ -841,6 +559,7 @@ router.post("/leads/walkthrough", async (req, res) => {
       return isSamePhone || isSameEmail || (isSameRest && l.fullName.toLowerCase().trim() === String(fullName).toLowerCase().trim());
     });
 
+    */
     let targetLead: WalkthroughLeadRecord;
     let isRescheduled = false;
 
@@ -892,7 +611,7 @@ router.post("/leads/walkthrough", async (req, res) => {
 
     // Also push notification to in-app notification center for all tenants/SaaS owner
     try {
-      const currentNotifications = (await db.getObject<any[]>("veg-main-001", "system_notifications")) || [];
+      const currentNotifications = (await db.getObject<any[]>("saas-admin", "system_notifications")) || [];
       const newNotification = {
         id: `notify-lead-${Date.now()}`,
         title: isRescheduled ? "🔄 Walkthrough Re-scheduled" : "🌟 Walkthrough Schedule Confirmed",
@@ -902,7 +621,7 @@ router.post("/leads/walkthrough", async (req, res) => {
         severity: "info"
       };
       currentNotifications.unshift(newNotification);
-      await db.saveObject("veg-main-001", "system_notifications", currentNotifications.slice(0, 50));
+      await db.saveObject("saas-admin", "system_notifications", currentNotifications.slice(0, 50));
     } catch (notifErr) {
       console.warn("Could not append lead to system_notifications:", notifErr);
     }
@@ -927,7 +646,7 @@ router.post("/leads/walkthrough", async (req, res) => {
 });
 
 // 2. Admin Endpoint: List all Walkthrough Leads
-router.get("/leads/walkthrough", async (req, res) => {
+router.get("/leads/walkthrough", adminAuthMiddleware, async (req, res) => {
   try {
     const db = Database.getInstance();
     let leads = await db.getObject<WalkthroughLeadRecord[]>("system-tenant", "walkthrough_leads");
@@ -946,7 +665,7 @@ router.get("/leads/walkthrough", async (req, res) => {
 });
 
 // 3. Admin Endpoint: Update Lead Status / Notes
-router.patch("/leads/walkthrough/:id", async (req, res) => {
+router.patch("/leads/walkthrough/:id", adminAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, internalNotes } = req.body;
@@ -978,7 +697,7 @@ router.patch("/leads/walkthrough/:id", async (req, res) => {
 });
 
 // 4. Admin Endpoint: Delete a Lead
-router.delete("/leads/walkthrough/:id", async (req, res) => {
+router.delete("/leads/walkthrough/:id", adminAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const db = Database.getInstance();

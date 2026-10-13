@@ -75,7 +75,7 @@ export default function Sidebar({
       el.addEventListener("scroll", checkScroll);
       window.addEventListener("resize", checkScroll);
       checkScroll();
-      
+
       const timer = setTimeout(checkScroll, 300);
       return () => {
         el.removeEventListener("scroll", checkScroll);
@@ -103,6 +103,8 @@ export default function Sidebar({
 
   // Filter menu items by permissions and roles
   const filteredMenuItems = menuItems.filter((item) => {
+    if (["jobs","monitoring"].includes(item.id)) return currentStaff.role==="SaaS Owner";
+    if (item.id === "delivery") return false;
     if (item.id === "saas-admin") {
       // Completely removed from the restaurant terminal sidebar as requested
       return false;
@@ -285,7 +287,7 @@ export default function Sidebar({
                       <IconComponent className={`shrink-0 transition-transform duration-150 ${
                         collapsedMode ? "w-5 h-5 group-hover:scale-110" : "w-4 h-4"
                       } ${isSelected ? "text-pink-500" : "text-slate-400 group-hover:text-slate-600"}`} />
-                      
+
                       {!collapsedMode && (
                         <span className="truncate text-slate-600 group-hover:text-slate-900 transition-colors duration-150">
                           {item.label}
@@ -355,7 +357,7 @@ export default function Sidebar({
                 <span>Lock Terminal</span>
               </button>
               <p className="text-center text-[9px] text-slate-400 mt-3 font-mono">
-                VeggiePOS 1.20
+                Aatmyam POS 1.20
               </p>
             </>
           )}

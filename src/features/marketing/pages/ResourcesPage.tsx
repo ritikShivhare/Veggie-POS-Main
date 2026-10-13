@@ -92,7 +92,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
 
   return (
     <div className="bg-[#FBF9F5] text-[#1C1E1B] min-h-screen">
-      
+
       {/* 1. RESOURCES HERO */}
       <section className="pt-28 pb-16 md:pt-36 md:pb-24 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -115,7 +115,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
       {/* 2. CATEGORY TABS & ARTICLE GRID */}
       <section className="py-16 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
+
           {/* Category Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
             {[
@@ -194,7 +194,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
       {/* 3. DOWNLOADABLE OPERATOR TOOLKIT CTA */}
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
+
           <div className="bg-[#181A18] text-[#FBF9F5] rounded-3xl p-8 sm:p-12 border border-[#2E332D] flex flex-col lg:flex-row items-center justify-between gap-8 shadow-xl">
             <div className="space-y-4 max-w-2xl">
               <div className="inline-flex items-center gap-2 text-xs font-mono text-[#84A955]">
@@ -251,7 +251,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
                   OPERATIONAL IMPLEMENTATION SUMMARY:
                 </p>
                 <p className="text-xs text-[#2E4A1C] leading-relaxed">
-                  {activeArticleModal.keyTakeaway} All principles outlined in this guide come pre-configured inside the Veggie POS module workflows.
+                  {activeArticleModal.keyTakeaway} All principles outlined in this guide come pre-configured inside the Aatmyam POS module workflows.
                 </p>
               </div>
             </div>

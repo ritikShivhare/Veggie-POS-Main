@@ -7,3 +7,8 @@ coverage/
 .env*
 !.env.example
 database-fallback.json
+
+pending_signups*.json
+*.local
+
+/node_modules

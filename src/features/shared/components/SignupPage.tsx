@@ -48,7 +48,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
   const [password, setPassword] = useState("");
   const [pin, setPin] = useState(initialData?.pin || "");
   const [region, setRegion] = useState(initialData?.region || "North India / Delhi");
-  
+
   // Layout and security UI states
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -86,7 +86,8 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
           setEmail(parsed.sentEmail);
           if (parsed.businessName) setBusinessName(parsed.businessName);
           if (parsed.ownerName) setOwnerName(parsed.ownerName);
-          if (parsed.pin) setPin(parsed.pin);
+          delete parsed.pin;
+          sessionStorage.setItem("veggiepos_pending_verify", JSON.stringify(parsed));
           setGeneratedTenantId(parsed.generatedTenantId || "");
           setPhase("verify");
         } else {
@@ -103,44 +104,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
     }
   }, [phase]);
 
-  useEffect(() => {
-    if (initialData) {
-      const autoRegister = async () => {
-        setIsLoading(true);
-        setError("");
-        try {
-          const res = await fetch("/api/auth/signup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              businessName: initialData.businessName,
-              ownerName: initialData.ownerName,
-              ownerPhone: initialData.ownerPhone,
-              email: initialData.email,
-              pin: initialData.pin,
-              region: initialData.region
-            })
-          });
 
-          const data = await res.json();
-          if (!res.ok || !data.success) {
-            throw new Error(data.error || data.message || "Failed to submit registration request.");
-          }
-
-          setPendingToken(data.pendingToken);
-          setSentEmail(data.email);
-          setGeneratedTenantId(data.tenantId);
-          setPhase("verify");
-        } catch (err: any) {
-          setError(err.message || "Something went wrong. Please check your network and try again.");
-          setPhase("form");
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      autoRegister();
-    }
-  }, [initialData]);
 
   // Validation before submitting initial registration details
   const handleRegisterSubmit = async (e: React.FormEvent) => {
@@ -150,7 +114,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
     if (!businessName.trim()) return setError("Please enter your restaurant business name.");
     if (!ownerName.trim()) return setError("Please enter the owner's full name.");
     if (!email.trim()) return setError("Please enter a valid owner email address.");
-    if (!password || password.length < 6) return setError("Password must be at least 6 characters.");
+    if (!password || password.length < 8) return setError("Password must be at least 8 characters.");
     if (!pin || pin.length !== 5 || !/^\d+$/.test(pin)) return setError("Passcode PIN must be exactly 5 digits.");
 
     setIsLoading(true);
@@ -159,6 +123,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          password,
           businessName,
           ownerName,
           ownerPhone,
@@ -182,7 +147,6 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
           sentEmail: data.email,
           businessName,
           ownerName,
-          pin,
           generatedTenantId: data.tenantId,
           savedAt: Date.now()
         }));
@@ -294,7 +258,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
       {/* Main card stage */}
       <main className="w-full max-w-md mx-auto my-8">
         <div className="bg-slate-900/40 border border-slate-800/80 rounded-3xl p-6 md:p-8 shadow-2xl backdrop-blur-md relative overflow-hidden">
-          
+
           {phase === "form" && (
             <div className="space-y-6">
               <div className="flex items-center justify-between border-b border-slate-800 pb-4">
@@ -620,7 +584,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
       {/* Footer details */}
       <footer className="w-full max-w-md mx-auto text-center text-[10px] text-slate-500 font-mono">
         <p>Tenant Space: AWS Mumbai S3 Sandbox Node</p>
-        <p className="mt-1">© 2026 VeggiePOS SaaS Ltd. All rights reserved.</p>
+        <p className="mt-1">© 2026 Aatmyam POS SaaS Ltd. All rights reserved.</p>
       </footer>
     </div>
   );

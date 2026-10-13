@@ -26,7 +26,7 @@ export default function AICopilot({ activeTenant, currentStaff }: AICopilotProps
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  
+
   // Initial messages
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
@@ -39,7 +39,7 @@ export default function AICopilot({ activeTenant, currentStaff }: AICopilotProps
         {
           id: "msg-welcome",
           sender: "ai",
-          text: `Namaste & Welcome to Veggie POS! I am your AI Product & Operations Advisor.
+          text: `Namaste & Welcome to Aatmyam POS! I am your AI Product & Operations Advisor.
 
 I have full information about our Touch POS Billing, Kitchen KOT/KDS, Recipe Bill of Materials (BOM), Table Floor Management, Pricing Plans, and ROI Leakage Protections.
 
@@ -102,28 +102,28 @@ How can I help you or your restaurant today? (Feel free to ask in English or Hin
     } catch (err) {
       console.error("Copilot AI Request Error:", err);
       setIsTyping(false);
-      
+
       // Smart offline fallback
       setTimeout(() => {
-        let reply = "Veggie POS is the calm command center for restaurants, cafés, QSRs, and cloud kitchens. It combines ultra-fast touch billing, multi-course KOTs, recipe-level inventory deduction, and real-time owner analytics.";
-        
+        let reply = "Aatmyam POS is the calm command center for restaurants, cafés, QSRs, and cloud kitchens. It combines ultra-fast touch billing, multi-course KOTs, recipe-level inventory deduction, and real-time owner analytics.";
+
         const lowercaseText = text.toLowerCase();
         if (lowercaseText.includes("hindi") || lowercaseText.includes("kya") || lowercaseText.includes("kaise") || lowercaseText.includes("dam") || lowercaseText.includes("price")) {
-          reply = `Veggie POS restaurants aur cafés ke liye complete software hai:
+          reply = `Aatmyam POS restaurants aur cafés ke liye complete software hai:
 1. Fast PIN Billing: Sub-100ms speed se quick bills aur UPI payments.
 2. Kitchen KOT & KDS: Stations ke hisab se automatic orders dispatch.
 3. Recipe & Stock BOM: Har dish bikne par raw materials gram-to-gram deduct hote hain.
 4. Pricing: Starter plan ₹799/month se start hota hai, aur 48 hours me aapka menu live ho jata hai!`;
         } else if (lowercaseText.includes("recipe") || lowercaseText.includes("ingredient") || lowercaseText.includes("stock") || lowercaseText.includes("inventory")) {
-          reply = `In Veggie POS, each dish links to raw ingredients via our Bill of Materials (BOM). When a cashier checks out an order at the POS, ingredient quantities (like cheese, coffee beans, sauces) are automatically deducted in real time, preventing inventory leakage.`;
+          reply = `In Aatmyam POS, each dish links to raw ingredients via our Bill of Materials (BOM). When a cashier checks out an order at the POS, ingredient quantities (like cheese, coffee beans, sauces) are automatically deducted in real time, preventing inventory leakage.`;
         } else if (lowercaseText.includes("price") || lowercaseText.includes("cost") || lowercaseText.includes("plan") || lowercaseText.includes("pricing")) {
-          reply = `Veggie POS offers simple, transparent tiers:
+          reply = `Aatmyam POS offers simple, transparent tiers:
 • Starter / Counter: ₹799/mo (billed annually) for single counter QSRs & cafés.
 • Growth / Full Dine-In: ₹1,499/mo with table layouts, paced KOTs & recipe BOM.
 • Multi-Outlet: ₹2,999/mo for multi-location groups.
 All plans include free updates and zero hardware lease lock-ins!`;
         } else if (lowercaseText.includes("hardware") || lowercaseText.includes("printer") || lowercaseText.includes("ipad") || lowercaseText.includes("tablet")) {
-          reply = `Veggie POS runs in any modern browser on iPads, Android tablets, Windows laptops, MacBooks, and phones. It connects seamlessly with standard 58mm/80mm ESC/POS thermal receipt and kitchen ticket printers over Bluetooth, USB, and LAN/Wi-Fi.`;
+          reply = `Aatmyam POS runs in any modern browser on iPads, Android tablets, Windows laptops, MacBooks, and phones. It connects seamlessly with standard 58mm/80mm ESC/POS thermal receipt and kitchen ticket printers over Bluetooth, USB, and LAN/Wi-Fi.`;
         } else if (lowercaseText.includes("login") || lowercaseText.includes("terminal") || lowercaseText.includes("sign in")) {
           reply = `To access your restaurant's billing terminal, click 'Sign In' in the top navigation bar. Enter your Store Code or Restaurant Name once to connect this device, and then your staff can log in using their 4-digit PIN!`;
         }
@@ -152,7 +152,7 @@ All plans include free updates and zero hardware lease lock-ins!`;
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 right-6 z-[80] p-4 bg-[#181A18] hover:bg-[#6E8F45] text-[#FBF9F5] rounded-full shadow-2xl flex items-center justify-center gap-2.5 transition-all duration-200 hover:scale-105 active:scale-95 group cursor-pointer border border-[#2E332D]"
         id="ai-copilot-trigger-bubble"
-        title="Veggie POS AI Assistant"
+        title="Aatmyam POS AI Assistant"
       >
         <span className="relative flex h-3 w-3">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#6E8F45] opacity-75"></span>
@@ -175,7 +175,7 @@ All plans include free updates and zero hardware lease lock-ins!`;
 
           {/* Drawer Content */}
           <div className="relative w-full sm:w-[440px] bg-[#FBF9F5] h-full shadow-2xl flex flex-col z-10 border-l border-[#EAE5DA] animate-slide-in">
-            
+
             {/* DRAWER HEADER */}
             <div className="p-4 bg-[#181A18] text-[#FBF9F5] flex flex-col shrink-0 border-b border-[#2E332D]">
               <div className="flex items-center justify-between">
@@ -185,7 +185,7 @@ All plans include free updates and zero hardware lease lock-ins!`;
                   </div>
                   <div>
                     <h3 className="font-serif text-sm font-bold tracking-tight flex items-center gap-1.5 text-[#FBF9F5]">
-                      Veggie POS AI Assistant
+                      Aatmyam POS AI Assistant
                       <span className="bg-[#6E8F45]/20 text-[#84A955] text-[9px] px-1.5 py-0.5 rounded font-mono font-bold tracking-widest uppercase">AI</span>
                     </h3>
                     <p className="text-[10px] text-[#A6AEA0] font-medium">Platform & Operations Advisor</p>
@@ -242,7 +242,7 @@ All plans include free updates and zero hardware lease lock-ins!`;
             {/* SUGGESTIONS PILLS */}
             <div className="p-3 bg-[#F4F0E8] border-t border-[#EAE5DA] shrink-0 flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-none">
               <button
-                onClick={() => handleSuggestionClick("Veggie POS ke main features kya hain?")}
+                onClick={() => handleSuggestionClick("Aatmyam POS ke main features kya hain?")}
                 className="px-2.5 py-1.5 bg-[#FBF9F5] border border-[#EAE5DA] hover:border-[#6E8F45] rounded-lg text-[10px] text-[#1C1E1B] font-semibold cursor-pointer transition-all"
               >
                 Features in Hindi 🇮🇳
@@ -266,7 +266,7 @@ All plans include free updates and zero hardware lease lock-ins!`;
               <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  placeholder="Ask anything about Veggie POS or restaurant operations..."
+                  placeholder="Ask anything about Aatmyam POS or restaurant operations..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}

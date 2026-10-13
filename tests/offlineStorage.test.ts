@@ -19,7 +19,7 @@ describe("Veggie POS - Offline Storage Layer (Dexie + IndexedDB)", () => {
   });
 
   it("should initialize all 11 required IndexedDB stores", () => {
-    const tableNames = db.tables.map(t => t.name);
+    const tableNames = db.tables.map(t => t.name.replace(/_v4$/, ""));
     const expectedStores = [
       "menuItems",
       "ingredients",
@@ -285,13 +285,13 @@ describe("Veggie POS - Offline Storage Layer (Dexie + IndexedDB)", () => {
     expect(outboxItem.status).toBe("pending");
 
     // Check IndexedDB persistence first (committed locally without waiting for cloud)
-    const storedOrder = await repo.db.orders.get(orderId);
+    const storedOrder = await repo.db.orders.where("id").equals(orderId).first();
     expect(storedOrder).toBeDefined();
     expect(storedOrder?.id).toBe(orderId);
     expect(storedOrder?.total).toBe(550);
 
     // Check outbox item is stored in outbox table
-    const storedOutbox = await repo.db.outbox.get(outboxItem.operationId);
+    const storedOutbox = await repo.db.outbox.where("id").equals(outboxItem.operationId).first();
     expect(storedOutbox).toBeDefined();
     expect(storedOutbox?.idempotencyKey).toBe(`ik_order_${orderId}`);
   });
@@ -316,7 +316,7 @@ describe("Veggie POS - Offline Storage Layer (Dexie + IndexedDB)", () => {
     const beforeFail = Date.now();
     await repo.recordOutboxFailure(item.operationId, "HTTP 500 Internal Server Error");
 
-    const failedItem1 = await repo.db.outbox.get(item.operationId);
+    const failedItem1 = await repo.db.outbox.where("id").equals(item.operationId).first();
     expect(failedItem1?.retryCount).toBe(1);
     expect(failedItem1?.status).toBe("failed");
     expect(failedItem1?.lastError).toBe("HTTP 500 Internal Server Error");
@@ -329,7 +329,7 @@ describe("Veggie POS - Offline Storage Layer (Dexie + IndexedDB)", () => {
 
     // 2nd failure
     await repo.recordOutboxFailure(item.operationId, "Connection reset by peer");
-    const failedItem2 = await repo.db.outbox.get(item.operationId);
+    const failedItem2 = await repo.db.outbox.where("id").equals(item.operationId).first();
     expect(failedItem2?.retryCount).toBe(2);
     // Backoff for retry 2: ~4s (1000 * 2^2 + jitter)
     expect(failedItem2?.nextRetryAt).toBeGreaterThanOrEqual(beforeFail + 3800);
@@ -388,7 +388,7 @@ describe("Veggie POS - Offline Storage Layer (Dexie + IndexedDB)", () => {
     await repo.recordOutboxFailure(outboxItem.operationId, "HTTP 500");
     await repo.recordOutboxFailure(outboxItem.operationId, "HTTP 503");
 
-    const retriedItem = await repo.db.outbox.get(outboxItem.operationId);
+    const retriedItem = await repo.db.outbox.where("id").equals(outboxItem.operationId).first();
     // Idempotency key MUST remain 100% stable across all retries
     expect(retriedItem?.idempotencyKey).toBe(initialKey);
     expect(retriedItem?.retryCount).toBe(2);
@@ -429,7 +429,7 @@ describe("Veggie POS - Offline Storage Layer (Dexie + IndexedDB)", () => {
       isAvailable: true
     });
 
-    const item = await mDb.menuItems.get("migrated-item-1");
+    const item = await mDb.menuItems.get(["migrated-tenant","migrated-item-1"] as any);
     expect(item).toBeDefined();
     expect(item?.tenantId).toBe("migrated-tenant");
     expect(item?.branchId).toBeDefined();

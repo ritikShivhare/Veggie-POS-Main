@@ -65,7 +65,7 @@ export default function POSBilling({
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCartOnMobile, setShowCartOnMobile] = useState(false);
-  
+
   // Checkout Form
   const [orderType, setOrderType] = useState<"Dine-In" | "Takeaway">("Dine-In");
   const [tableNo, setTableNo] = useState("T-01");
@@ -144,6 +144,7 @@ export default function POSBilling({
         credentials: "include",
         body: JSON.stringify({
           managerPin: cancelManagerPin,
+          refundConfirmed: cancelModalOrder.paidAt ? window.confirm("Confirm that you have already refunded the customer manually. This app does not transfer money.") : false,
           reason: cancelReason.trim(),
           staffName: currentStaff?.name || "Staff",
           sessionId: sessId,
@@ -157,7 +158,7 @@ export default function POSBilling({
         return;
       }
 
-      onUpdateOrderStatus(cancelModalOrder.id, "Cancelled");
+      await onUpdateOrderStatus(cancelModalOrder.id, "Cancelled");
       alert(`Order #${cancelModalOrder.orderNumber} successfully cancelled! Cryptographic audit entry recorded.`);
       setCancelModalOrder(null);
       setCancelReason("");
@@ -216,6 +217,10 @@ export default function POSBilling({
   // Handle Custom Discount Application with Manager PIN
   const handleApplyDiscountSubmit = async () => {
     setDiscountError(null);
+    if(billingOrder) {
+      setDiscountError("Apply discounts before sending the order to the kitchen. Submitted bills keep their recorded total.");
+      return;
+    }
     const numVal = parseFloat(customDiscountVal);
     if (isNaN(numVal) || !isFinite(numVal) || numVal <= 0) {
       setDiscountError(discountMode === "percentage" ? "Please enter a valid discount percentage (e.g. 10)." : "Please enter a valid discount amount.");
@@ -454,8 +459,9 @@ export default function POSBilling({
     const currentAmount = billingOrder ? billingOrder.total : total;
     const configuredVpa = (settings.upiVpa || activeTenant?.vpa || "").trim();
     const isDemoVpa = !configuredVpa || configuredVpa === "veggiepos@upi";
-    const vpa = !isDemoVpa ? configuredVpa : "veggiepos@upi";
-    const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Veggie POS").trim();
+    if (isDemoVpa) {setUpiQrDataUrl(null);return;}
+    const vpa = configuredVpa;
+    const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Aatmyam POS").trim();
     const brandName = encodeURIComponent(merchantName);
     const note = encodeURIComponent(`Order ${billingOrder?.orderNumber || "Bill"}`);
     const upiUri = `upi://pay?pa=${vpa}&pn=${brandName}&am=${currentAmount.toFixed(2)}&cu=INR&tn=${note}`;
@@ -491,9 +497,9 @@ export default function POSBilling({
   };
 
   // Submit order to kitchen (KDS)
-  const handleSubmitOrderToKitchen = () => {
+  const handleSubmitOrderToKitchen = async () => {
     if (cart.length === 0) return;
-    
+
     // Validate inventory stock deductions before sending to kitchen
     let insufficientIngredients: { name: string; shortBy: number; unit: string }[] = [];
 
@@ -528,39 +534,13 @@ export default function POSBilling({
     }
 
     if (settings.blockOrdersIfInsufficient && insufficientIngredients.length > 0) {
-      const errorMsg = "Cannot send to kitchen! The following raw materials are short in inventory:\n" + 
+      const errorMsg = "Cannot send to kitchen! The following raw materials are short in inventory:\n" +
         insufficientIngredients.map(i => `• ${i.name} (Short by ${i.shortBy} ${i.unit})`).join("\n");
       setCheckoutError(errorMsg);
       return;
     }
 
     setCheckoutError(null);
-
-    // 1. Deduct stock if auto-deduct is enabled
-    if (settings.autoDeductStock) {
-      const updatedIngredients = ingredients.map((ing) => {
-        let totalDeduction = 0;
-        for (const cartItem of cart) {
-          const recipe = recipes.find((r) => r.menuItemId === cartItem.menuItem.id);
-          if (recipe) {
-            const reqIngredient = recipe.ingredients.find((req) => req.ingredientId === ing.id);
-            if (reqIngredient) {
-              const convertedPerPortion = convertRecipeQuantityToIngredientStock(
-                reqIngredient.quantity,
-                reqIngredient.unit,
-                ing.unit
-              );
-              totalDeduction += convertedPerPortion * cartItem.quantity;
-            }
-          }
-        }
-        return {
-          ...ing,
-          currentStock: Math.max(0, Number((ing.currentStock - totalDeduction).toFixed(3)))
-        };
-      });
-      onUpdateIngredients(updatedIngredients);
-    }
 
     // 2. Format cart items with final notes
     const finalCartItems = cart.map((item) => ({
@@ -577,7 +557,7 @@ export default function POSBilling({
     const totalOrderDiscount = Number((loyaltyDiscount + appliedDiscount).toFixed(2));
     const newOrder: Order = {
       id: orderUuid,
-      orderNumber: `${randomNum}`,
+      orderNumber: `${Date.now().toString(36)}-${orderUuid.slice(0,8)}`,
       date: new Date().toISOString(),
       type: orderType,
       tableNo: orderType === "Dine-In" ? tableNo : undefined,
@@ -586,7 +566,8 @@ export default function POSBilling({
       items: finalCartItems,
       subtotal,
       tax,
-      discount: totalOrderDiscount > 0 ? totalOrderDiscount : undefined,
+      discount: appliedDiscount > 0 ? appliedDiscount : undefined,
+      discountReason: appliedDiscountReason || undefined,
       total,
       status: "Pending",
       cashierId: currentStaff.id,
@@ -594,28 +575,8 @@ export default function POSBilling({
       managerPin: appliedDiscountPin || undefined
     };
 
-    if (selectedCustomerId) {
-      const updatedCustomers = customers.map((c) => {
-        if (c.id === selectedCustomerId) {
-          const earned = Math.floor(subtotal / 100);
-          const used = redeemPoints ? loyaltyDiscount : 0;
-          const newPoints = Math.max(0, c.loyaltyPoints + earned - used);
-          return {
-            ...c,
-            loyaltyPoints: newPoints,
-            lastVisited: new Date().toISOString().split("T")[0],
-            totalVisits: c.totalVisits + 1,
-            totalSpend: c.totalSpend + total,
-            maxBillAmount: Math.max(c.maxBillAmount, total),
-            minBillAmount: c.minBillAmount === 0 ? total : Math.min(c.minBillAmount, total)
-          };
-        }
-        return c;
-      });
-      setCustomers(updatedCustomers);
-    }
-
-    onOrderCreated(newOrder);
+    (newOrder as any).redeemPoints=redeemPoints;
+    try {await onOrderCreated(newOrder);}catch(error:any){setCheckoutError(`Order was not saved: ${error.message}`);return;}
 
     // 4. Reset Cart State
     setCart([]);
@@ -633,9 +594,10 @@ export default function POSBilling({
   };
 
   // Settle billing & payment for a kitchen order
-  const handleSettleOrderPayment = () => {
+  const handleSettleOrderPayment = async () => {
     if (!billingOrder) return;
-
+    if(selectedPayment==="UPI" && !settings.upiVpa && !activeTenant?.vpa) {setCheckoutError("Configure your UPI address in settings first.");return;}
+    if(selectedPayment==="Cash" && actualReceived<orderAmount) {setCheckoutError("Cash received must cover the bill amount.");return;}
     const paidTimestamp = new Date().toISOString();
     const completedOrder: Order = {
       ...billingOrder,
@@ -645,12 +607,7 @@ export default function POSBilling({
     };
 
     // Update existing order status to Completed and record payment details
-    onUpdateOrderStatus(
-      billingOrder.id,
-      "Completed",
-      selectedPayment,
-      paidTimestamp
-    );
+    try {await onUpdateOrderStatus(billingOrder.id,"Completed",selectedPayment,paidTimestamp);}catch(error:any){setCheckoutError(`Payment was not saved: ${error.message}`);return;}
 
     // Prompt immediate thermal receipt printing
     setReceiptModalOrder(completedOrder);
@@ -661,7 +618,7 @@ export default function POSBilling({
     <div className="flex h-full bg-[#f8fafc] text-slate-800 font-sans overflow-hidden relative">
       {/* LEFT PANEL: Menu Catalog or Active Billing Desk */}
       <div className="flex-1 flex flex-col p-4 sm:p-6 overflow-hidden pb-24 lg:pb-6">
-        
+
         {/* Navigation Subtabs: Take New Order vs Settle Served Bills */}
         <div className="flex bg-slate-100 p-1 rounded-2xl gap-1 mb-5 shrink-0 border border-slate-200/50">
           <button
@@ -715,7 +672,7 @@ export default function POSBilling({
                   id="pos-search-input"
                 />
               </div>
-              
+
               {/* Active User & Cash Drawer Actions */}
               <div className="flex items-center gap-2">
                 <button
@@ -924,7 +881,7 @@ export default function POSBilling({
                 <h2 className="font-display font-bold text-slate-800 text-base">Bills & Settlement Register</h2>
                 <p className="text-slate-500 text-xs mt-0.5">Collect payments, print official ESC/POS thermal receipts, and view live order slips.</p>
               </div>
-              
+
               {/* Filter Tabs: Unpaid vs Settled vs All */}
               <div className="flex items-center bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200/60">
                 <button
@@ -1090,7 +1047,7 @@ export default function POSBilling({
                                 INR {order.total.toFixed(2)}
                               </span>
                             </div>
-                            
+
                             <div className="flex flex-wrap gap-2">
                               {/* Print KOT Slip Button */}
                               <button
@@ -1415,7 +1372,7 @@ export default function POSBilling({
               <Receipt className="w-3.5 h-3.5" />
               <span>Order Summary Breakdown</span>
             </h4>
-            
+
             <div className="space-y-1 text-slate-600">
               <div className="flex justify-between">
                 <span>Subtotal:</span>
@@ -1544,7 +1501,7 @@ export default function POSBilling({
                 const configuredVpa = (settings.upiVpa || activeTenant?.vpa || "").trim();
                 const isUnconfigured = !configuredVpa || configuredVpa === "veggiepos@upi";
                 const activeVpa = !isUnconfigured ? configuredVpa : "veggiepos@upi";
-                const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Veggie POS").trim();
+                const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Aatmyam POS").trim();
 
                 return (
                   <div className="border-t border-slate-200/60 pt-3 flex flex-col items-center text-center space-y-2.5">
@@ -1574,7 +1531,7 @@ export default function POSBilling({
                           <span className="text-[10px]">Generating UPI QR...</span>
                         </div>
                       )}
-                      
+
                       <div className="mt-1 flex flex-col items-center gap-0.5">
                         <span className="text-[11px] font-mono text-slate-700 font-bold">
                           {activeVpa}

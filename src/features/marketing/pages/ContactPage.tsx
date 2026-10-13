@@ -143,7 +143,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
 
   return (
     <div className="bg-[#FBF9F5] text-[#1C1E1B] min-h-screen">
-      
+
       {/* 1. CONTACT HERO */}
       <section className="pt-28 pb-14 md:pt-36 md:pb-20 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -157,7 +157,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
               <span className="text-[#6E8F45] italic">live walkthrough.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              Speak directly with a hospitality systems engineer. We’ll show you how Veggie POS runs your menu, kitchen tickets, and recipe stock without high-pressure sales tactics.
+              Speak directly with a hospitality systems engineer. We’ll show you how Aatmyam POS runs your menu, kitchen tickets, and recipe stock without high-pressure sales tactics.
             </p>
           </div>
         </div>
@@ -166,12 +166,12 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
       {/* 2. DEMO FORM & IMPLEMENTATION CHECKLIST */}
       <section className="py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-            
+
             {/* Left: Interactive Qualified Request Form */}
             <div className="lg:col-span-7 bg-[#F4F0E8] border border-[#EAE5DA] rounded-3xl p-6 sm:p-10 shadow-sm">
-              
+
               {isSubmitted ? (
                 <div className="space-y-6 text-center py-8 animate-in zoom-in-95 duration-200">
                   <div className="w-16 h-16 rounded-full bg-[#EBF2E4] border border-[#D5E3C8] text-[#567234] flex items-center justify-center mx-auto">
@@ -249,7 +249,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                       </div>
                     </div>
                   )}
-                  
+
                   <div className="space-y-1 pb-2 border-b border-[#EAE5DA]">
                     <h2 className="font-serif text-2xl font-bold text-[#181A18]">
                       Tell us about your restaurant setup
@@ -477,7 +477,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
 
             {/* Right: Implementation Checklist & Guarantees */}
             <div className="lg:col-span-5 space-y-8">
-              
+
               <div className="bg-[#181A18] text-[#FBF9F5] rounded-3xl p-6 sm:p-8 border border-[#2E332D] space-y-6 shadow-lg">
                 <div className="space-y-2">
                   <span className="text-xs font-mono text-[#84A955] uppercase font-bold">

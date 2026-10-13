@@ -44,9 +44,11 @@ export class OfflineRepository {
     updatedAt: string;
     version: number;
   } {
+    if (!tenantId || ((record as any).tenantId && (record as any).tenantId !== tenantId)) throw new Error("Tenant boundary mismatch.");
     const now = new Date().toISOString();
+    const {pin,passwordHash,password,managerPin,...safe} = record as any;
     return {
-      ...record,
+      ...safe,
       tenantId,
       branchId: explicitBranchId || (record as any).branchId || getBranchId(tenantId),
       deviceId: (record as any).deviceId || getDeviceId(),
@@ -149,40 +151,15 @@ export class OfflineRepository {
     return this.db.orderItems.where("tenantId").equals(tenantId).toArray();
   }
 
-  public async saveOrders(tenantId: string, items: any[]): Promise<void> {
-    const enrichedOrders = items.map((item) => this.enrichRecord(tenantId, item));
-    
-    // Extract and normalize order items
-    const allOrderItems: OfflineOrderItem[] = [];
-    for (const order of items) {
-      if (Array.isArray(order.items)) {
-        order.items.forEach((ci: any, index: number) => {
-          const mItem = ci.menuItem || {};
-          allOrderItems.push(
-            this.enrichRecord(tenantId, {
-              id: ci.id || `oi_${order.id}_${index}`,
-              orderId: order.id,
-              menuItemId: mItem.id,
-              name: mItem.name || "Item",
-              quantity: ci.quantity || 1,
-              unitPrice: mItem.price || 0,
-              subtotal: (mItem.price || 0) * (ci.quantity || 1),
-              notes: ci.note,
-              version: 1
-            })
-          );
-        });
-      }
-    }
-
-    await this.db.transaction("rw", [this.db.orders, this.db.orderItems], async () => {
+  public async saveOrders(tenantId:string,items:any[]):Promise<void> {
+    await this.db.transaction("rw",[this.db.orders,this.db.orderItems,this.db.outbox],async()=>{
+      const queued=(await this.getAllOutbox(tenantId)).filter(q=>!["SYNCED","completed"].includes(q.status) && ["order","payment"].includes(q.entityType));
+      const pendingIds=new Set(queued.map(q=>q.entityId));
+      const pending=(await this.getOrders(tenantId)).filter(o=>pendingIds.has(o.id));
+      const merged=[...items.filter(i=>!pendingIds.has(i.id)),...pending];
       await this.db.orders.where("tenantId").equals(tenantId).delete();
-      await this.db.orders.bulkPut(enrichedOrders);
-
-      if (allOrderItems.length > 0) {
-        await this.db.orderItems.where("tenantId").equals(tenantId).delete();
-        await this.db.orderItems.bulkPut(allOrderItems);
-      }
+      await this.db.orderItems.where("tenantId").equals(tenantId).delete();
+      for (const order of merged) await this.putOrder(tenantId,order);
     });
   }
 
@@ -269,7 +246,7 @@ export class OfflineRepository {
   }
 
   public async saveSettings(tenantId: string, settingsObj: Record<string, any>): Promise<void> {
-    const records: OfflineSetting[] = Object.keys(settingsObj).map((key) => {
+    const records: OfflineSetting[] = Object.keys(settingsObj).filter(key=>!['managerPin','pin','password','passwordHash','slackWebhookUrl','sentryDsn','emailAlertAddress'].includes(key)).map((key) => {
       return this.enrichRecord(tenantId, {
         id: `${tenantId}_${key}`,
         key,
@@ -295,6 +272,7 @@ export class OfflineRepository {
   }
 
   public async putSetting(tenantId: string, key: string, value: any): Promise<void> {
+    if (['managerPin','pin','password','passwordHash','slackWebhookUrl','sentryDsn','emailAlertAddress'].includes(key)) throw new Error('Do not store server credentials on the device.');
     const enriched = this.enrichRecord(tenantId, {
       id: `${tenantId}_${key}`,
       key,
@@ -380,7 +358,7 @@ export class OfflineRepository {
     );
 
     // Reuse server idempotency-key system: deterministic key per entity mutation
-    const ik = explicitIdempotencyKey || `ik_${entityType}_${entityId || operationId}`;
+    const ik = explicitIdempotencyKey || `ik_${operationId}`;
 
     const outboxItem: OfflineOutboxItem = {
       id: operationId,
@@ -413,6 +391,13 @@ export class OfflineRepository {
    * Retrieves pending and retryable failed outbox operations for a tenant.
    * Only returns operations whose exponential backoff delay (nextRetryAt) has expired.
    */
+  public async resumeAuthOperations(tenantId:string):Promise<void> {
+    await this.db.outbox.where("tenantId").equals(tenantId).and(i=>i.status==="auth_error").modify({status:"pending",nextRetryAt:0,lastError:undefined});
+  }
+  public async retryOperation(tenantId:string,id:string,payload?:any):Promise<void> {
+    const item=await this.db.outbox.get([tenantId,id] as any);if(!item) throw new Error("Operation not found.");
+    await this.db.outbox.update([tenantId,id] as any,{status:"pending",nextRetryAt:0,lastError:undefined,...(payload?{payload,idempotencyKey:crypto.randomUUID()}: {})});
+  }
   public async getPendingOutbox(tenantId: string): Promise<OfflineOutboxItem[]> {
     const now = Date.now();
     const items = await this.db.outbox
@@ -442,10 +427,10 @@ export class OfflineRepository {
     status: OutboxStatus,
     lastError?: string
   ): Promise<void> {
-    const existing = await this.db.outbox.get(id);
+    const existing = await this.getOutboxItem(id);
     if (!existing) return;
 
-    await this.db.outbox.update(id, {
+    await this.db.outbox.update([existing.tenantId,id] as any, {
       status,
       lastError,
       updatedAt: new Date().toISOString()
@@ -467,9 +452,9 @@ export class OfflineRepository {
     try {
       switch (entityType) {
         case "order": {
-          const existing = await this.db.orders.get(entityId);
+          const existing = await this.db.orders.get([tenantId,entityId] as any);
           if (existing) {
-            await this.db.orders.update(entityId, {
+            await this.db.orders.update([tenantId,entityId] as any, {
               ...existing,
               ...canonicalData,
               version: canonicalData.version || (existing.version || 1) + 1,
@@ -481,9 +466,9 @@ export class OfflineRepository {
           break;
         }
         case "payment": {
-          const existing = await this.db.orders.get(entityId);
+          const existing = await this.db.orders.get([tenantId,entityId] as any);
           if (existing) {
-            await this.db.orders.update(entityId, {
+            await this.db.orders.update([tenantId,entityId] as any, {
               ...existing,
               status: canonicalData.status || existing.status,
               paymentMethod: canonicalData.paymentMethod || existing.paymentMethod,
@@ -497,9 +482,9 @@ export class OfflineRepository {
           break;
         }
         case "customer": {
-          const existing = await this.db.customers.get(entityId);
+          const existing = await this.db.customers.get([tenantId,entityId] as any);
           if (existing) {
-            await this.db.customers.update(entityId, {
+            await this.db.customers.update([tenantId,entityId] as any, {
               ...existing,
               ...canonicalData,
               version: canonicalData.version || (existing.version || 1) + 1,
@@ -511,9 +496,9 @@ export class OfflineRepository {
           break;
         }
         case "shift": {
-          const existing = await this.db.shifts.get(entityId);
+          const existing = await this.db.shifts.get([tenantId,entityId] as any);
           if (existing) {
-            await this.db.shifts.update(entityId, {
+            await this.db.shifts.update([tenantId,entityId] as any, {
               ...existing,
               ...canonicalData,
               version: canonicalData.version || (existing.version || 1) + 1,
@@ -576,9 +561,7 @@ export class OfflineRepository {
         clientVersion: canonicalVersion,
         status: "synced"
       });
-    } catch (err) {
-      console.warn(`[OfflineRepository] Failed to update local entity ${entityType} [${entityId}] with canonical:`, err);
-    }
+    } catch (err) { throw err; }
   }
 
   private resolveSliceName(entityType: string): string {
@@ -608,7 +591,9 @@ export class OfflineRepository {
   }
 
   public async getOutboxItem(id: string): Promise<OfflineOutboxItem | undefined> {
-    return this.db.outbox.get(id);
+    const rows = await this.db.outbox.where("id").equals(id).toArray();
+    if (rows.length > 1) throw new Error("Ambiguous operation: tenant required.");
+    return rows[0];
   }
 
   /**
@@ -621,7 +606,7 @@ export class OfflineRepository {
     statusOverride: OutboxStatus = "failed",
     delayMs?: number
   ): Promise<void> {
-    const existing = await this.db.outbox.get(id);
+    const existing = await this.getOutboxItem(id);
     if (!existing) return;
 
     const newRetryCount = (existing.retryCount || 0) + 1;
@@ -639,7 +624,7 @@ export class OfflineRepository {
       nextRetryAt = Date.now() + exponentialDelay + jitter;
     }
 
-    await this.db.outbox.update(id, {
+    await this.db.outbox.update([existing.tenantId,id] as any, {
       status: statusOverride,
       lastError,
       retryCount: newRetryCount,
@@ -649,7 +634,8 @@ export class OfflineRepository {
   }
 
   public async removeOutboxItem(id: string): Promise<void> {
-    await this.db.outbox.delete(id);
+    const item=await this.getOutboxItem(id);
+    if (item) await this.db.outbox.delete([item.tenantId,id] as any);
   }
 
   // =========================================================================
@@ -663,19 +649,20 @@ export class OfflineRepository {
    * 3. UI does NOT wait for the cloud API
    */
   public async recordOrderOffline(tenantId: string, order: any): Promise<OfflineOutboxItem> {
-    // 1. Commit to IndexedDB first
+    return this.db.transaction("rw",[this.db.orders,this.db.orderItems,this.db.outbox],async()=>{
     await this.putOrder(tenantId, order);
-
-    // 2. Enqueue in durable outbox
     const idempotencyKey = `ik_order_${order.id}`;
+    const {managerPin,...safeOrder}=order;
+    if (managerPin) throw new Error("Discounts requiring a manager PIN must be submitted online.");
     return this.enqueueOutbox(tenantId, {
       entityType: "order",
       entityId: order.id,
       operationType: "CREATE",
-      payload: order,
+      payload: safeOrder,
       endpoint: "/api/orders",
       method: "POST",
       idempotencyKey
+    });
     });
   }
 
@@ -689,10 +676,11 @@ export class OfflineRepository {
     orderId: string,
     updateData: { status: string; paymentMethod?: string; paidAt?: string }
   ): Promise<OfflineOutboxItem> {
+    return this.db.transaction("rw",[this.db.orders,this.db.outbox],async()=>{
     // 1. Update in local IndexedDB
-    const existing = await this.db.orders.get(orderId);
+    const existing = await this.db.orders.get([tenantId,orderId] as any);
     if (existing) {
-      await this.db.orders.update(orderId, {
+      await this.db.orders.update([tenantId,orderId] as any, {
         ...updateData,
         updatedAt: new Date().toISOString()
       });
@@ -701,13 +689,14 @@ export class OfflineRepository {
     // 2. Enqueue in durable outbox
     const idempotencyKey = `ik_pay_${orderId}_${updateData.status || "Completed"}`;
     return this.enqueueOutbox(tenantId, {
-      entityType: "payment",
+      entityType: updateData.paymentMethod ? "payment" : "order",
       entityId: orderId,
       operationType: "UPDATE",
-      payload: updateData,
-      endpoint: `/api/orders/${encodeURIComponent(orderId)}`,
-      method: "PUT",
+      payload: updateData.paymentMethod ? {paymentMethod:updateData.paymentMethod,amount:existing?.total} : {status:updateData.status},
+      endpoint: `/api/orders/${encodeURIComponent(orderId)}${updateData.paymentMethod ? "/pay" : ""}`,
+      method: updateData.paymentMethod ? "POST" : "PUT",
       idempotencyKey
+    });
     });
   }
 
@@ -796,7 +785,7 @@ export class OfflineRepository {
     sliceName: string
   ): Promise<OfflineSyncMetadata | undefined> {
     const id = `${tenantId}_${sliceName}`;
-    return this.db.syncMetadata.get(id);
+    return this.db.syncMetadata.get([tenantId,id] as any);
   }
 
   public async getAllSyncMetadata(tenantId: string): Promise<OfflineSyncMetadata[]> {
@@ -813,7 +802,7 @@ export class OfflineRepository {
     }
   ): Promise<void> {
     const id = `${tenantId}_${sliceName}`;
-    const existing = await this.db.syncMetadata.get(id);
+    const existing = await this.db.syncMetadata.get([tenantId,id] as any);
     const now = new Date().toISOString();
 
     const record: OfflineSyncMetadata = this.enrichRecord(tenantId, {
@@ -845,6 +834,7 @@ export class OfflineRepository {
       settings?: any;
     }
   ): Promise<void> {
+    await this.db.transaction("rw",this.db.tables,async()=>{
     if (data.menuItems) await this.saveMenuItems(tenantId, data.menuItems);
     if (data.ingredients) await this.saveIngredients(tenantId, data.ingredients);
     if (data.recipes) await this.saveRecipes(tenantId, data.recipes);
@@ -855,6 +845,7 @@ export class OfflineRepository {
     if (data.settings) await this.saveSettings(tenantId, data.settings);
 
     await this.updateSyncMetadata(tenantId, "all", { status: "synced" });
+    });
   }
 
   public async getFullTenantState(tenantId: string): Promise<{

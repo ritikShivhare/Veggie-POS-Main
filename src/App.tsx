@@ -1,3 +1,4 @@
+import SyncQueueStatus from "./features/shared/components/SyncQueueStatus";
 import React, { useState, useEffect } from "react";
 import { StaffMember, RestaurantTenant } from "./features/shared/types";
 import { AppContextProvider, useAppContext } from "./features/shared/context/AppContext";
@@ -160,7 +161,7 @@ function AppContent() {
     const fetchUnreadCount = async () => {
       if (!currentStaff) return;
       try {
-        const res = await fetch("/api/notifications");
+        const res = await ApiClient.authenticatedFetch("/api/notifications");
         const data = await res.json();
         if (data.success && data.notifications) {
           const unread = data.notifications.filter((n: any) => !n.read).length;
@@ -298,7 +299,7 @@ function AppContent() {
               const cleanedName = data.businessName.toLowerCase().replace(/[^a-z0-9]/g, "");
               const randomSuffix = Math.floor(100 + Math.random() * 900);
               const newTenantId = `veg-${cleanedName}-${randomSuffix}`;
-              
+
               const newTenant: RestaurantTenant = {
                 id: `t-${Date.now()}`,
                 name: data.businessName,
@@ -408,7 +409,7 @@ function AppContent() {
 
   return (
     <div className="h-screen w-full flex bg-[#f8fafc] text-[#1e293b] font-sans overflow-hidden select-none">
-      
+
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -422,7 +423,7 @@ function AppContent() {
       />
 
       <main className="flex-1 flex flex-col overflow-hidden bg-[#fafbfd]">
-        
+
         <header className="h-16 bg-white/90 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-4 sm:px-8 shadow-[0_1px_2px_0_rgba(0,0,0,0.02)] shrink-0 z-10">
           <div className="flex items-center gap-3 sm:gap-4">
             <button
@@ -435,7 +436,8 @@ function AppContent() {
             <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight font-display">
               {activeTab === "saas-admin" && "SaaS Multi-Tenant Control Panel"}
               {activeTab === "dashboard" && "Operations Center"}
-              {activeTab === "billing" && "Order Entry Desk"}
+              <SyncQueueStatus tenantId={activeTenant.tenantId} />
+          {activeTab === "billing" && "Order Entry Desk"}
               {activeTab === "kds" && "Kitchen Assembly Line"}
               {activeTab === "crm" && "Customer Relations (CRM)"}
               {activeTab === "delivery" && "Food Delivery Channel Gateway"}
@@ -492,11 +494,11 @@ function AppContent() {
 
         <div className="flex-1 overflow-hidden relative">
           {isInitialSyncLoading && (
-            <div 
+            <div
               onClick={() => setIsInitialSyncLoading(false)}
               className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px] z-50 flex items-center justify-center p-4 animate-fade-in"
             >
-              <div 
+              <div
                 onClick={(e) => e.stopPropagation()}
                 className="bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-2xl rounded-2xl p-6 flex flex-col items-center gap-3 text-center max-w-xs w-full animate-scale-up relative"
               >
@@ -524,7 +526,7 @@ function AppContent() {
               </div>
             </div>
           )}
-          
+
           {activeTab === "dashboard" && (
             <Dashboard
               dashboardStats={dashboardStats}
@@ -646,7 +648,7 @@ function AppContent() {
                 const cleanedName = data.businessName.toLowerCase().replace(/[^a-z0-9]/g, "");
                 const randomSuffix = Math.floor(100 + Math.random() * 900);
                 const newTenantId = `veg-${cleanedName}-${randomSuffix}`;
-                
+
                 const newTenant: RestaurantTenant = {
                   id: `t-${Date.now()}`,
                   name: data.businessName,
@@ -737,7 +739,7 @@ function AppContent() {
             <div className="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center mx-auto text-amber-500 animate-bounce">
               <AlertTriangle className="w-8 h-8" />
             </div>
-            
+
             <div className="space-y-1.5">
               <h3 className="text-base font-extrabold text-slate-800">Inactivity Idle Warning</h3>
               <p className="text-xs text-slate-500 leading-relaxed">
@@ -763,14 +765,14 @@ function AppContent() {
 
       {toastMessage && (
         <div className={`fixed bottom-6 right-6 z-[99999] flex items-center gap-3.5 px-4.5 py-4 rounded-2xl shadow-2xl border text-xs font-semibold tracking-wide animate-bounce duration-300 max-w-sm ${
-          toastMessage.type === "success" 
-            ? "bg-slate-900 border-slate-850 text-emerald-400" 
+          toastMessage.type === "success"
+            ? "bg-slate-900 border-slate-850 text-emerald-400"
             : "bg-rose-950/95 border-rose-900 text-rose-100 backdrop-blur"
         }`}>
           <div className={`w-2.5 h-2.5 rounded-full ${toastMessage.type === "success" ? "bg-emerald-500 animate-ping" : "bg-rose-500 animate-pulse"}`} />
           <span className="flex-1 leading-relaxed">{toastMessage.text}</span>
-          <button 
-            onClick={() => setToastMessage(null)} 
+          <button
+            onClick={() => setToastMessage(null)}
             className="text-[10px] uppercase font-black tracking-widest text-slate-400 hover:text-white px-1.5 py-1 transition-colors rounded hover:bg-white/5 ml-1"
           >
             Dismiss

@@ -22,7 +22,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
       number: "01",
       title: "Respect the Rush",
       description:
-        "When 40 orders hit the kitchen at 8:30 PM, software must never hesitate. Every screen transition, modifier tap, and KOT dispatch in Veggie POS is optimized for sub-100ms response times. We build for the floor, not the boardroom."
+        "When 40 orders hit the kitchen at 8:30 PM, software must never hesitate. Every screen transition, modifier tap, and KOT dispatch in Aatmyam POS is optimized for sub-100ms response times. We build for the floor, not the boardroom."
     },
     {
       number: "02",
@@ -40,13 +40,13 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
       number: "04",
       title: "Zero Hardware Traps",
       description:
-        "We reject proprietary $2,000 POS hardware leases and forced credit card processor lock-ins. Veggie POS runs cleanly in standard browsers on iPads, Android tablets, laptops, and phones with standard ESC/POS thermal printers."
+        "We reject proprietary $2,000 POS hardware leases and forced credit card processor lock-ins. Aatmyam POS runs cleanly in standard browsers on iPads, Android tablets, laptops, and phones with standard ESC/POS thermal printers."
     }
   ];
 
   return (
     <div className="bg-[#FBF9F5] text-[#1C1E1B] min-h-screen">
-      
+
       {/* 1. ABOUT HERO */}
       <section className="pt-28 pb-16 md:pt-36 md:pb-24 border-b border-[#EAE5DA]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
@@ -59,7 +59,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             <span className="text-[#6E8F45] italic">hardest working room</span> in hospitality.
           </h1>
           <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-            Veggie POS was born out of a simple observation: modern restaurant operators are caught between archaic, clunky desktop software from the 1990s and bloated SaaS platforms that take percentage cuts of every order. 
+            Aatmyam POS was born out of a simple observation: modern restaurant operators are caught between archaic, clunky desktop software from the 1990s and bloated SaaS platforms that take percentage cuts of every order.
             We set out to build a calm, precise, and transparent operational command center.
           </p>
         </div>
@@ -68,7 +68,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
       {/* 2. FOUNDING STORY & POINT OF VIEW */}
       <section className="py-20 border-b border-[#EAE5DA]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
+
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
             <div className="md:col-span-4 space-y-2">
               <span className="text-xs font-mono uppercase text-[#567234] font-bold">
@@ -87,7 +87,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
                 In that environment, multi-level dropdown menus and delayed sync spinners are unacceptable. Tools must be tactile, fast, and unforgivingly dependable.
               </p>
               <p>
-                We built Veggie POS with an editorial Harvest Command aesthetic—subtle warm neutrals, high-contrast typography, and purposeful saffron warning signals. No purple gradients, no flashing notifications, just clean operational visibility.
+                We built Aatmyam POS with an editorial Harvest Command aesthetic—subtle warm neutrals, high-contrast typography, and purposeful saffron warning signals. No purple gradients, no flashing notifications, just clean operational visibility.
               </p>
             </div>
           </div>
@@ -98,7 +98,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
       {/* 3. CORE OPERATING PRINCIPLES */}
       <section className="py-20 bg-[#F4F0E8] border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
-          
+
           <div className="text-center max-w-2xl mx-auto space-y-3">
             <span className="text-xs font-mono uppercase tracking-widest text-[#567234] font-bold">
               Guiding Principles
@@ -140,7 +140,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             See the calm difference on your own floor.
           </h2>
           <p className="text-sm text-[#5A6056] leading-relaxed">
-            Experience how Veggie POS simplifies table service, kitchen lines, and inventory accounting. Schedule a personalized walkthrough with our hospitality team.
+            Experience how Aatmyam POS simplifies table service, kitchen lines, and inventory accounting. Schedule a personalized walkthrough with our hospitality team.
           </p>
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <button

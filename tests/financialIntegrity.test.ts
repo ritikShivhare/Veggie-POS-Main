@@ -490,7 +490,7 @@ describe("Phase 3: Financial Data Integrity & Database Transactions", () => {
     await expect(
       financialService.executeOrderCancellation(TENANT_A, "ord-cancel-fail", {
         cancelledBy: "Manager Rohit",
-        reason: "Customer changed mind"
+        reason: "Customer changed mind",refundConfirmed:true
       })
     ).rejects.toThrow("Simulated storage failure");
 

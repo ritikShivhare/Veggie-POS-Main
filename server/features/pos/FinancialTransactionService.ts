@@ -12,7 +12,7 @@ import { OrderItemRepository } from "./OrderItemRepository";
 import { PaymentRepository } from "./PaymentRepository";
 import { InventoryMovementRepository } from "../inventory/InventoryMovementRepository";
 import { Order, OrderItem, Payment, InventoryMovement, Customer, Ingredient } from "../../../src/features/shared/types";
-import { convertRecipeQuantityToIngredientStock } from "../../../src/features/shared/utils/unitConversion";
+import crypto from "node:crypto";
 
 export class OrderAlreadyPaidError extends Error {
   public code = "ORDER_ALREADY_PAID";
@@ -90,22 +90,27 @@ export class FinancialTransactionService {
       throw new DatabaseUnavailableError("Database is unavailable (database is stopped). Cannot persist order.");
     }
 
-    // 1. Authoritative calculation & validation
+    return Database.getInstance().runTransaction(tenantId, async (trx) => {
+    const existing = rawOrder.id ? await orderRepo.getById(tenantId, rawOrder.id) : null;
+    if (existing) return {order:existing,items:await (await this.orderItemRepo.getAll(tenantId) || []).filter(i=>i.orderId===existing.id),payment:(await this.paymentRepo.getAll(tenantId))?.find(p=>p.orderId===existing.id)};
+    if (rawOrder.paymentMethod && !["Cash","UPI"].includes(rawOrder.paymentMethod)) throw new FinancialValidationError("INVALID_PAYMENT_METHOD","Choose Cash or UPI.");
+    if (rawOrder.status && !["Pending","Preparing","Completed"].includes(rawOrder.status)) throw new FinancialValidationError("INVALID_ORDER_STATUS","Invalid initial order status.");
+    // Pricing and stock reads happen inside the transaction, including on retry.
     const calculation = await posPricingEngine.validateAndCalculateOrder(tenantId, rawOrder, userContext);
 
-    const orderId = rawOrder.id || `ord-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const orderId = rawOrder.id || `ord-${crypto.randomUUID()}`;
     const nowIso = new Date().toISOString();
     const isPaidImmediately = Boolean(rawOrder.paymentMethod && (rawOrder.status === "Completed" || !rawOrder.status));
 
     const finalOrder: Order = {
       id: orderId,
-      orderNumber: rawOrder.orderNumber || `#${Math.floor(1000 + Math.random() * 9000)}`,
+      orderNumber: rawOrder.orderNumber || `#${Date.now().toString(36)}-${crypto.randomUUID().slice(0,8)}`,
       date: rawOrder.date || nowIso,
       type: rawOrder.type || "Dine-In",
       tableNo: rawOrder.tableNo,
       customerId: rawOrder.customerId || rawOrder.selectedCustomerId,
       customerName: rawOrder.customerName || (calculation.customerUpdate ? calculation.customerUpdate.customer.name : undefined),
-      items: rawOrder.items as any,
+      items: calculation.validatedItems.map((i: any)=>({menuItem:i.menuItem, menuItemId:i.menuItemId,quantity:i.quantity,note:i.notes})),
       subtotal: calculation.subtotal,
       tax: calculation.tax,
       discount: calculation.discount,
@@ -113,7 +118,7 @@ export class FinancialTransactionService {
       status: isPaidImmediately ? "Completed" : (rawOrder.status || "Pending"),
       paymentMethod: isPaidImmediately ? rawOrder.paymentMethod : undefined,
       paidAt: isPaidImmediately ? nowIso : undefined,
-      cashierId: userContext?.staffId || rawOrder.cashierId || "cashier",
+      cashierId: userContext?.staffId || rawOrder.cashierId,
       cashierName: userContext?.staffName || rawOrder.cashierName || "Cashier",
       version: 1,
       created_at: nowIso,
@@ -159,7 +164,7 @@ export class FinancialTransactionService {
           newStock: deduction.newStock,
           referenceId: orderId,
           reason: `Sale deduction for order ${finalOrder.orderNumber}`,
-          performedBy: finalOrder.cashierName,
+          performedBy: finalOrder.cashierId,
           created_at: nowIso,
           updated_at: nowIso,
           version: 1
@@ -168,8 +173,7 @@ export class FinancialTransactionService {
     }
 
     // 2. ATOMIC TRANSACTION EXECUTION
-    const db = Database.getInstance();
-    await db.runTransaction(tenantId, async (trx) => {
+    // All staged writes commit together.
       // 2a. Insert Order
       await orderRepo.add(tenantId, finalOrder, trx);
 
@@ -194,12 +198,15 @@ export class FinancialTransactionService {
       // 2e. Update Customer Loyalty Points and Spend if applicable
       if (calculation.customerUpdate) {
         const c = calculation.customerUpdate.customer;
+        (finalOrder as any).redeemedPoints = calculation.customerUpdate.pointsRedeemed;
+        (finalOrder as any).earnedPoints = calculation.customerUpdate.pointsEarned;
+        await orderRepo.update(tenantId, finalOrder, undefined, trx);
         const updatedCustomer: Customer = {
           ...c,
-          loyaltyPoints: calculation.customerUpdate.newPoints,
-          totalSpend: Number(((c.totalSpend || 0) + calculation.total).toFixed(2)),
-          totalVisits: (c.totalVisits || 0) + 1,
-          lastVisited: nowIso
+          loyaltyPoints: Math.max(0,c.loyaltyPoints-calculation.customerUpdate.pointsRedeemed+(isPaidImmediately?calculation.customerUpdate.pointsEarned:0)),
+          totalSpend: Number(((c.totalSpend || 0) + (isPaidImmediately?calculation.total:0)).toFixed(2)),
+          totalVisits: (c.totalVisits || 0) + (isPaidImmediately?1:0),
+          lastVisited: isPaidImmediately?nowIso:c.lastVisited
         };
         await customerRepo.update(tenantId, updatedCustomer, undefined, trx);
       }
@@ -222,13 +229,8 @@ export class FinancialTransactionService {
         },
         trx
       );
+    return { order: finalOrder, items: orderItemsToInsert, payment: paymentRecord };
     });
-
-    return {
-      order: finalOrder,
-      items: orderItemsToInsert,
-      payment: paymentRecord
-    };
   }
 
   /**
@@ -251,6 +253,7 @@ export class FinancialTransactionService {
       throw new CrossTenantViolationError("Tenant identity is required for payment.");
     }
 
+    return Database.getInstance().runTransaction(tenantId, async (trx) => {
     const order = await orderRepo.getById(tenantId, orderId);
     if (!order) {
       throw new NotFoundError(`Order '${orderId}' not found for tenant '${tenantId}'.`);
@@ -266,7 +269,7 @@ export class FinancialTransactionService {
 
     // Verify amount matches authoritative order total
     const paymentAmount = Number(paymentDetails.amount);
-    if (isNaN(paymentAmount) || paymentAmount <= 0) {
+    if (!Number.isFinite(paymentAmount) || paymentAmount < 0) {
       throw new FinancialValidationError("INVALID_PAYMENT_AMOUNT", "Payment amount must be greater than zero.", 400);
     }
 
@@ -278,6 +281,7 @@ export class FinancialTransactionService {
       );
     }
 
+    if (!["Cash","UPI"].includes(paymentDetails.paymentMethod)) throw new FinancialValidationError("INVALID_PAYMENT_METHOD","Choose Cash or UPI.");
     const nowIso = new Date().toISOString();
     const paymentId = `pay-${order.id}-${Date.now()}`;
     const paymentRecord: Payment = {
@@ -302,14 +306,17 @@ export class FinancialTransactionService {
       version: (order.version || 1) + 1
     };
 
-    const db = Database.getInstance();
-    await db.runTransaction(tenantId, async (trx) => {
+    // All staged writes commit together.
       // 1. Insert Payment
       await this.paymentRepo.add(tenantId, paymentRecord, trx);
 
       // 2. Update Order Status
       await orderRepo.update(tenantId, updatedOrder, order.version, trx);
 
+      if (order.customerId) {
+        const c = await customerRepo.getById(tenantId,order.customerId);
+        if (c) await customerRepo.update(tenantId,{...c,loyaltyPoints:c.loyaltyPoints+((order as any).earnedPoints || 0),totalSpend:Number((c.totalSpend+paymentAmount).toFixed(2)),totalVisits:c.totalVisits+1,lastVisited:nowIso},undefined,trx);
+      }
       // 3. Log Audit Trail
       await auditLogService.log(
         tenantId,
@@ -326,12 +333,8 @@ export class FinancialTransactionService {
         },
         trx
       );
+    return {order: updatedOrder,payment:paymentRecord};
     });
-
-    return {
-      order: updatedOrder,
-      payment: paymentRecord
-    };
   }
 
   /**
@@ -346,12 +349,15 @@ export class FinancialTransactionService {
       cancelledBy: string;
       reason: string;
       expectedVersion?: number;
+      refundConfirmed?: boolean;
+      staffId?: string;
     }
   ): Promise<Order> {
     if (!tenantId) {
       throw new CrossTenantViolationError("Tenant identity is required for order cancellation.");
     }
 
+    return Database.getInstance().runTransaction(tenantId, async (trx) => {
     const order = await orderRepo.getById(tenantId, orderId);
     if (!order) {
       throw new NotFoundError(`Order '${orderId}' not found for tenant '${tenantId}'.`);
@@ -380,58 +386,25 @@ export class FinancialTransactionService {
     (updatedOrder as any).cancelledBy = cancelDetails.cancelledBy;
     (updatedOrder as any).cancelledAt = nowIso;
 
-    // Check if recipes and ingredients need restocking
-    const recipes = (await recipeRepo.getAll(tenantId)) || [];
     const ingredients = (await ingredientRepo.getAll(tenantId)) || [];
-    const ingredientMap = new Map<string, Ingredient>();
-    for (const ing of ingredients) {
-      ingredientMap.set(ing.id, { ...ing });
-    }
-
+    const ingredientMap = new Map(ingredients.map(i=>[i.id,{...i}]));
+    const previousMovements = (await this.inventoryMovementRepo.getAll(tenantId)) || [];
     const returnMovements: InventoryMovement[] = [];
-    if (order.items && Array.isArray(order.items)) {
-      for (const item of order.items) {
-        const mId = (item as any).menuItemId || (item as any).menuItem?.id;
-        const recipe = recipes.find(r => r.menuItemId === mId);
-        if (recipe && Array.isArray(recipe.ingredients)) {
-          for (const ri of recipe.ingredients) {
-            const ing = ingredientMap.get(ri.ingredientId);
-            if (ing) {
-              const convertedPerPortion = convertRecipeQuantityToIngredientStock(
-                Number(ri.quantity),
-                ri.unit,
-                ing.unit
-              );
-              const returnQty = convertedPerPortion * Number(item.quantity);
-              const previousStock = ing.currentStock;
-              const newStock = Number((previousStock + returnQty).toFixed(4));
-              ing.currentStock = newStock;
-              ing.updated_at = nowIso;
-              ing.version = (ing.version || 1) + 1;
-
-              returnMovements.push({
-                id: `mov-ret-${order.id}-${ing.id}-${Date.now()}`,
-                ingredientId: ing.id,
-                movementType: "RETURN",
-                quantityDelta: returnQty,
-                previousStock,
-                newStock,
-                referenceId: order.id,
-                reason: `Restock due to cancellation of Order ${order.orderNumber}: ${cancelDetails.reason}`,
-                performedBy: cancelDetails.cancelledBy,
-                created_at: nowIso,
-                updated_at: nowIso,
-                version: 1
-              });
-            }
-          }
-        }
-      }
+    // Reverse exactly the original committed stock movements, not today's recipe.
+    for (const sale of previousMovements.filter(m=>m.referenceId===orderId && m.movementType==="SALE_DEDUCTION")) {
+      if (previousMovements.some(m=>m.id===`return-${sale.id}`)) continue;
+      const ing = ingredientMap.get(sale.ingredientId);
+      if (!ing) throw new FinancialValidationError("MISSING_INGREDIENT","Original stock ingredient no longer exists.");
+      const previousStock = ing.currentStock;
+      ing.currentStock = Number((previousStock-sale.quantityDelta).toFixed(4));
+      ing.version = (ing.version || 1)+1; ing.updated_at = nowIso;
+      returnMovements.push({id:`return-${sale.id}`,ingredientId:ing.id,movementType:"RETURN",quantityDelta:-sale.quantityDelta,previousStock,newStock:ing.currentStock,referenceId:orderId,reason:cancelDetails.reason,performedBy:cancelDetails.staffId,version:1,created_at:nowIso,updated_at:nowIso});
     }
 
     // Check payments for this order to mark as Refunded
     const payments = (await this.paymentRepo.getAll(tenantId)) || [];
     const orderPayments = payments.filter(p => p.orderId === orderId && p.status === "Completed");
+    if (orderPayments.length && !cancelDetails.refundConfirmed) throw new FinancialValidationError("REFUND_CONFIRMATION_REQUIRED","Refund the customer manually, then confirm the refund before cancelling.");
     const updatedPayments = payments.map(p => {
       if (p.orderId === orderId && p.status === "Completed") {
         return {
@@ -444,8 +417,7 @@ export class FinancialTransactionService {
       return p;
     });
 
-    const db = Database.getInstance();
-    await db.runTransaction(tenantId, async (trx) => {
+    // All staged writes commit together.
       // 1. Update Order
       await orderRepo.update(tenantId, updatedOrder, order.version, trx);
 
@@ -461,6 +433,10 @@ export class FinancialTransactionService {
         await this.paymentRepo.saveAll(tenantId, updatedPayments, trx);
       }
 
+      if (order.customerId) {
+        const c = await customerRepo.getById(tenantId,order.customerId);
+        if (c) await customerRepo.update(tenantId,{...c,loyaltyPoints:Math.max(0,c.loyaltyPoints+((order as any).redeemedPoints || 0)-(orderPayments.length?((order as any).earnedPoints || 0):0)),totalSpend:Math.max(0,Number((c.totalSpend-(orderPayments.length?order.total:0)).toFixed(2))),totalVisits:Math.max(0,c.totalVisits-(orderPayments.length?1:0))},undefined,trx);
+      }
       // 4. Log Audit Trail
       await auditLogService.log(
         tenantId,
@@ -478,9 +454,8 @@ export class FinancialTransactionService {
         },
         trx
       );
-    });
-
     return updatedOrder;
+    });
   }
 }
 

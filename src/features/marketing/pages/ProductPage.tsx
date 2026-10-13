@@ -166,7 +166,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
 
   return (
     <div className="bg-[#181A18] text-[#FBF9F5] min-h-screen">
-      
+
       {/* 1. PRODUCT COMMAND HEADER */}
       <section className="pt-28 pb-16 md:pt-36 md:pb-24 border-b border-[#2E332D]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -180,7 +180,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               <span className="text-[#6E8F45] italic">Every gram</span> accounted for.
             </h1>
             <p className="text-base sm:text-lg text-[#A6AEA0] leading-relaxed">
-              Explore the modular architecture powering Veggie POS. Built from the ground up to eliminate restaurant friction across billing, kitchen line dispatch, inventory depletion, and owner reconciliation.
+              Explore the modular architecture powering Aatmyam POS. Built from the ground up to eliminate restaurant friction across billing, kitchen line dispatch, inventory depletion, and owner reconciliation.
             </p>
             <div className="pt-2 flex flex-wrap items-center gap-3">
               <button
@@ -203,7 +203,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
       {/* 2. INTERACTIVE MODULE EXPLORER */}
       <section className="py-20 border-b border-[#2E332D]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
+
           {/* Module Selector Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-[#2E332D]">
             {modules.map((mod, idx) => {
@@ -228,7 +228,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
 
           {/* Active Module Showcase Card */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-[#242823] border border-[#2E332D] rounded-3xl p-6 sm:p-10 shadow-2xl">
-            
+
             {/* Left Description */}
             <div className="lg:col-span-7 space-y-6">
               <div className="space-y-2">
@@ -304,7 +304,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
       {/* 3. ORDER-TO-INSIGHT TIMELINE */}
       <section className="py-20 border-b border-[#2E332D]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-14">
-          
+
           <div className="max-w-2xl space-y-3">
             <span className="text-xs font-mono uppercase tracking-widest text-[#84A955] font-bold">
               The Full Service Loop
@@ -313,12 +313,12 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               From diner greeting to midnight reconciliation.
             </h2>
             <p className="text-sm text-[#A6AEA0]">
-              Follow the journey of a single table order across the entire Veggie POS ecosystem.
+              Follow the journey of a single table order across the entire Aatmyam POS ecosystem.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            
+
             <div className="bg-[#242823] p-6 rounded-2xl border border-[#2E332D] space-y-4">
               <div className="flex items-center justify-between">
                 <span className="w-7 h-7 rounded-lg bg-[#6E8F45] text-[#FBF9F5] flex items-center justify-center font-mono font-bold text-xs">
@@ -379,7 +379,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
       {/* 4. HARDWARE FREEDOM SPECIFICATIONS */}
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
+
           <div className="text-center max-w-2xl mx-auto space-y-3">
             <span className="text-xs font-mono uppercase tracking-widest text-[#84A955] font-bold">
               Open Hardware Standard
@@ -388,12 +388,12 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               Run on the devices you already own.
             </h2>
             <p className="text-sm text-[#A6AEA0]">
-              Never get trapped in expensive proprietary POS hardware leases. Veggie POS runs natively in modern web browsers and communicates with industry-standard peripherals.
+              Never get trapped in expensive proprietary POS hardware leases. Aatmyam POS runs natively in modern web browsers and communicates with industry-standard peripherals.
             </p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            
+
             <div className="bg-[#242823] p-6 rounded-2xl border border-[#2E332D] space-y-3">
               <Monitor className="w-8 h-8 text-[#6E8F45] mx-auto" />
               <h3 className="font-serif text-base font-bold text-[#FBF9F5]">Touchscreens & PCs</h3>

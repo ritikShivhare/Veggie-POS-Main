@@ -22,7 +22,7 @@ import { BackgroundJobsService } from "./features/jobs/BackgroundJobsService";
 import { NotificationService } from "./features/notifications/NotificationService";
 import { EventBus } from "./features/shared/EventBus";
 import { AuditLogService } from "./features/shared/AuditLogService";
-import { Database } from "./features/shared/database";
+import { Database,handleApiError } from "./features/shared/database";
 import { SessionService, SESSION_COOKIE_NAME } from "./features/auth/SessionService";
 import { MonitoringService } from "./features/shared/MonitoringService";
 import { IdempotencyService } from "./features/shared/IdempotencyService";
@@ -85,41 +85,7 @@ export async function getGlobalTenantsList(): Promise<any[]> {
   const db = Database.getInstance();
   let list = await db.getObject<any[]>("veg-main-001", "global_tenants_list");
   if (!list) {
-    list = [
-      {
-        id: "t-1",
-        name: "Main Veggie Bistro",
-        tenantId: "veg-main-001",
-        status: "active",
-        created: "2026-01-15",
-        region: "North India / Delhi",
-        ownerName: "Rahul Sharma",
-        email: "rahul@veggiebistro.com",
-        ownerPhone: "9876543210"
-      },
-      {
-        id: "t-2",
-        name: "Connaught Place Express",
-        tenantId: "veg-cp-002",
-        status: "active",
-        created: "2026-03-22",
-        region: "North India / Delhi",
-        ownerName: "Amit Verma",
-        email: "amit@veggiebistro.com",
-        ownerPhone: "9123456789"
-      },
-      {
-        id: "t-3",
-        name: "Reetesh Dhaba",
-        tenantId: "veg-reetesh-dhaba",
-        status: "active",
-        created: "2026-07-04",
-        region: "North India / Delhi",
-        ownerName: "Reetesh",
-        email: "reetesh@dhaba.com",
-        ownerPhone: "9999911111"
-      }
-    ];
+    list = [];
     await db.saveObject("veg-main-001", "global_tenants_list", list);
   }
   return list;
@@ -165,7 +131,6 @@ export const PUBLIC_ROUTES = [
   { method: "GET", path: "/api/auth/staff-directory" },
   { method: "POST", path: "/api/saas-admin/login" },
   { method: "POST", path: "/api/webhooks/stripe" },
-  { method: "POST", path: "/api/monitoring/report-error" },
   { method: "POST", path: "/api/copilot-chat" }
 ];
 
@@ -195,6 +160,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     return next();
   }
 
+  try {
   const querySessionId =
     process.env.NODE_ENV !== "production" && typeof req.query?.sessionId === "string"
       ? (req.query.sessionId as string)
@@ -280,13 +246,16 @@ export const authMiddleware = async (req: express.Request, res: express.Response
 
   // Branch verification: validate x-branch-id if provided
   const clientBranchId = (req.headers["x-branch-id"] as string) || (req.body?.branchId as string) || "main";
-  (req as any).branchId = clientBranchId;
+  if (clientBranchId !== "main") return res.status(400).json({success:false,error:"UNSUPPORTED_BRANCH",message:"This version supports one outlet per restaurant."});
+  (req as any).branchId = "main";
 
   (req as any).tenantId = tenantId;
   (req as any).session = session;
+  (req as any).user = { id: session.userId, name: session.userName, role: session.role, permissions: session.permissions };
 
   // 403 Forbidden check for suspended tenants
-  if (suspendedTenants.has(tenantId)) {
+  const registeredTenant=(await getGlobalTenantsList()).find(t=>t.tenantId===tenantId);
+  if (registeredTenant?.status === "suspended") {
     return res.status(403).json({
       success: false,
       error: "SUSPENDED_TENANT",
@@ -298,7 +267,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
   const sub = await getSubscription(tenantId);
   (req as any).subscription = sub;
 
-  const isMutation = ["POST", "PUT", "DELETE"].includes(req.method);
+  const isMutation = ["POST", "PUT", "PATCH", "DELETE"].includes(req.method);
   if (sub.isReadOnly && isMutation) {
     return res.status(403).json({
       success: false,
@@ -308,6 +277,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
   }
 
   next();
+  } catch(error) {handleApiError(res,error);}
 };
 
 /**
@@ -328,7 +298,7 @@ export const requireRole = (...allowedRoles: string[]) => {
 
     const role = session.role;
     const isSuperOrOwner = role === "Owner" || role === "SaaS Owner";
-    if (isSuperOrOwner || allowedRoles.includes(role)) {
+    if (role === "SaaS Owner" || (role === "Owner" && !allowedRoles.includes("SaaS Owner")) || allowedRoles.includes(role)) {
       return next();
     }
 

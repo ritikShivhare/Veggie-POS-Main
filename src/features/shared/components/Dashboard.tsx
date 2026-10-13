@@ -1,14 +1,14 @@
 import React, { useState, useMemo } from "react";
-import { 
-  TrendingUp, 
-  Activity, 
-  Clock, 
-  AlertTriangle, 
-  Sparkles, 
-  Calendar, 
-  ArrowUpRight, 
-  ArrowDownRight, 
-  BarChart3, 
+import {
+  TrendingUp,
+  Activity,
+  Clock,
+  AlertTriangle,
+  Sparkles,
+  Calendar,
+  ArrowUpRight,
+  ArrowDownRight,
+  BarChart3,
   TrendingDown,
   Layers,
   ShoppingBag,
@@ -65,7 +65,7 @@ export default function Dashboard({
 
   // Date Range state for analytics view
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>("week");
-  
+
   // Custom date picker states (defaults to last 7 days)
   const [customStartDate, setCustomStartDate] = useState<string>(() => {
     const d = new Date();
@@ -104,7 +104,7 @@ export default function Dashboard({
   // Compute stats based on the selected period
   const periodAnalytics = useMemo(() => {
     const now = new Date();
-    
+
     // 1. Define active period boundaries
     let startDate: Date;
     let endDate: Date = new Date();
@@ -118,7 +118,7 @@ export default function Dashboard({
       const yesterdayStart = new Date();
       yesterdayStart.setDate(now.getDate() - 1);
       yesterdayStart.setHours(0, 0, 0, 0);
-      
+
       const yesterdayEnd = new Date();
       yesterdayEnd.setDate(now.getDate() - 1);
       yesterdayEnd.setHours(23, 59, 59, 999);
@@ -210,7 +210,7 @@ export default function Dashboard({
 
       order.items.forEach(item => {
         if (!item.menuItem) return;
-        
+
         // Find exact ingredient deduction if recipes & costPerUnit are set
         // In our case, let's fall back gracefully to a solid realistic 35% material cost to guarantee financial consistency
         const itemPrice = item.menuItem.price || 0;
@@ -251,10 +251,10 @@ export default function Dashboard({
 
     // Calculate daily data breakdown for charts and drilldown (Option 1 & 3)
     const dailyMap: { [dateKey: string]: { dateLabel: string; sales: number; profit: number; cost: number; orders: number; upi: number; cash: number; ordersList: Order[] } } = {};
-    
+
     // Initialize day slots for the selected period
     const durationDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
-    
+
     // For Yesterday or Custom with 1 day, let's split by hourly intervals. For larger spans, split by days.
     const isHourlySplit = durationDays <= 1.5;
 
@@ -354,7 +354,7 @@ export default function Dashboard({
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 5);
 
-    const comparisonLabel = 
+    const comparisonLabel =
       selectedPeriod === "yesterday" ? "vs Yesterday" :
       selectedPeriod === "week" ? "vs Last week" :
       selectedPeriod === "month" ? "vs Last month" :
@@ -382,7 +382,7 @@ export default function Dashboard({
 
   return (
     <div className="h-full p-4 sm:p-6 flex flex-col gap-6 overflow-y-auto bg-[#fafbfd] select-text">
-      
+
       {/* BRAND & VIEW DESK TAB SELECTOR */}
       <div className="bg-white border border-slate-200/80 p-4 rounded-2xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.03)] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -406,7 +406,7 @@ export default function Dashboard({
             <Activity className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
             <span>Today Live Stream</span>
           </button>
-          
+
           <button
             onClick={() => setDashboardViewTab("analytics")}
             className={`px-4 py-2 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
@@ -672,10 +672,10 @@ export default function Dashboard({
       {/* ================= VIEW 2: PERIOD CHRONO ANALYTICS ================= */}
       {dashboardViewTab === "analytics" && (
         <div className="space-y-6 animate-fade-in">
-          
+
           {/* OPTION 1: TIME RANGE SELECTOR BAR */}
           <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-            
+
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setSelectedPeriod("yesterday")}
@@ -760,7 +760,7 @@ export default function Dashboard({
 
           {/* DYNAMIC METRIC CARDS WITH HIGHEST VISIBILITY CONTRAST */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            
+
             {/* KPI 1: Net Sales (कुल बिक्री) */}
             <div className="bg-white p-5 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
               <div>
@@ -775,12 +775,12 @@ export default function Dashboard({
                   <span>{periodAnalytics.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 1 })}</span>
                 </h3>
               </div>
-              
+
               {/* COMPARISON METRIC BLOCK (Option 4) */}
               <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-100">
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                  periodAnalytics.salesTrend >= 0 
-                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200" 
+                  periodAnalytics.salesTrend >= 0
+                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200"
                     : "bg-rose-100 text-rose-900 border border-rose-200"
                 }`}>
                   {periodAnalytics.salesTrend >= 0 ? (
@@ -813,12 +813,12 @@ export default function Dashboard({
                   <span>{periodAnalytics.estimatedProfit.toLocaleString(undefined, { minimumFractionDigits: 1 })}</span>
                 </h3>
               </div>
-              
+
               {/* COMPARISON METRIC BLOCK (Option 4) */}
               <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-100">
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                  periodAnalytics.profitTrend >= 0 
-                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200" 
+                  periodAnalytics.profitTrend >= 0
+                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200"
                     : "bg-rose-100 text-rose-900 border border-rose-200"
                 }`}>
                   {periodAnalytics.profitTrend >= 0 ? (
@@ -850,12 +850,12 @@ export default function Dashboard({
                   {periodAnalytics.orderCount} <span className="text-xs text-slate-400 font-normal font-sans">checkouts</span>
                 </h3>
               </div>
-              
+
               {/* COMPARISON METRIC BLOCK (Option 4) */}
               <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-100">
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                  periodAnalytics.ordersTrend >= 0 
-                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200" 
+                  periodAnalytics.ordersTrend >= 0
+                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200"
                     : "bg-rose-100 text-rose-900 border border-rose-200"
                 }`}>
                   {periodAnalytics.ordersTrend >= 0 ? (
@@ -888,12 +888,12 @@ export default function Dashboard({
                   <span>{periodAnalytics.avgTicket.toLocaleString()}</span>
                 </h3>
               </div>
-              
+
               {/* COMPARISON METRIC BLOCK (Option 4) */}
               <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-100">
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                  periodAnalytics.ticketTrend >= 0 
-                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200" 
+                  periodAnalytics.ticketTrend >= 0
+                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200"
                     : "bg-rose-100 text-rose-900 border border-rose-200"
                 }`}>
                   {periodAnalytics.ticketTrend >= 0 ? (
@@ -916,7 +916,7 @@ export default function Dashboard({
 
           {/* OPTION 3 BREAKDOWN: HIGH-CONTRAST CHART & TRANSACTION GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
+
             {/* Left: SVG Revenue Trend Chart */}
             <div className="col-span-12 lg:col-span-8 bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
@@ -962,7 +962,7 @@ export default function Dashboard({
                             </div>
 
                             {/* Bar segment Stack */}
-                            <div 
+                            <div
                               onClick={() => {
                                 if (d.orders > 0) {
                                   setSelectedDrilldownDay(d);
@@ -973,12 +973,12 @@ export default function Dashboard({
                               className={`w-full flex items-end justify-center gap-0.5 max-w-[45px] h-full ${d.orders > 0 ? "cursor-pointer hover:opacity-85" : "cursor-default opacity-40"} transition-opacity`}
                             >
                               {/* Sales Bar */}
-                              <div 
+                              <div
                                 style={{ height: d.sales > 0 ? `${Math.max(4, salesHeightPct)}%` : "0%" }}
                                 className="w-1/2 bg-indigo-600/95 hover:bg-indigo-700 transition-all rounded-t-sm relative"
                               />
                               {/* Profit Bar */}
-                              <div 
+                              <div
                                 style={{ height: d.profit > 0 ? `${Math.max(4, profitHeightPct)}%` : "0%" }}
                                 className="w-1/2 bg-emerald-500 hover:bg-emerald-600 transition-all rounded-t-sm relative"
                               />
@@ -1002,7 +1002,7 @@ export default function Dashboard({
               <h3 className="font-bold text-sm text-slate-900 tracking-tight font-display mb-4 border-b border-slate-100 pb-3">
                 Top Sellers in Selected Period
               </h3>
-              
+
               <div className="flex-1 space-y-4">
                 {periodAnalytics.topSellingInPeriod.length === 0 ? (
                   <p className="text-slate-400 text-xs italic">No orders computed for this duration.</p>
@@ -1024,7 +1024,7 @@ export default function Dashboard({
                           </span>
                         </div>
                         <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                          <div 
+                          <div
                             style={{ width: `${pct}%` }}
                             className="h-full bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-full transition-all duration-300"
                           />
@@ -1076,8 +1076,8 @@ export default function Dashboard({
                     </tr>
                   ) : (
                     periodAnalytics.chartData.filter(row => row.orders > 0).map((row, idx) => (
-                      <tr 
-                        key={idx} 
+                      <tr
+                        key={idx}
                         onClick={() => {
                           setSelectedDrilldownDay(row);
                           setDrilldownSearch("");
@@ -1100,7 +1100,7 @@ export default function Dashboard({
                           </span>
                         </td>
                         <td className="p-3.5 text-right font-mono">
-                          <button 
+                          <button
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-lg border border-indigo-200/80 transition-all shadow-xs"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -1122,7 +1122,7 @@ export default function Dashboard({
       {selectedDrilldownDay && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-scale-up">
-            
+
             {/* Modal Header */}
             <div className="p-5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1247,8 +1247,8 @@ export default function Dashboard({
                             {orderTimeStr}
                           </span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border font-mono ${
-                            order.paymentMethod === "UPI" 
-                              ? "bg-indigo-50 text-indigo-700 border-indigo-200" 
+                            order.paymentMethod === "UPI"
+                              ? "bg-indigo-50 text-indigo-700 border-indigo-200"
                               : "bg-emerald-50 text-emerald-700 border-emerald-200"
                           }`}>
                             {order.paymentMethod || "Cash"}
@@ -1317,7 +1317,7 @@ export default function Dashboard({
       {selectedOrderReceipt && (
         <div className="fixed inset-0 z-60 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full max-h-[92vh] flex flex-col overflow-hidden animate-scale-up">
-            
+
             {/* Invoice Top Bar */}
             <div className="p-4 border-b border-slate-100 bg-slate-900 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1338,7 +1338,7 @@ export default function Dashboard({
             <div className="flex-1 overflow-y-auto p-6 space-y-4 font-mono text-xs text-slate-800 bg-white">
               <div className="text-center border-b border-dashed border-slate-300 pb-4">
                 <h2 className="text-lg font-black text-slate-900 uppercase font-sans">
-                  {activeTenant?.name || "VeggiePOS Restaurant"}
+                  {activeTenant?.name || "Aatmyam POS Restaurant"}
                 </h2>
                 <p className="text-[11px] text-slate-500 mt-0.5">Authentic Dining & Quick Billing Hub</p>
                 <p className="text-[10px] text-slate-400 mt-1">
@@ -1448,7 +1448,7 @@ export default function Dashboard({
                 <Printer className="w-3.5 h-3.5" />
                 <span>Print Bill (प्रिंट बिल)</span>
               </button>
-              
+
               <button
                 onClick={() => setSelectedOrderReceipt(null)}
                 className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs transition-colors cursor-pointer"

@@ -80,11 +80,6 @@ export default function StaffShifts({
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        setBlindError(data.message || data.error || "Shift closing failed.");
-        return;
-      }
-
       if (data.requireManagerOverride) {
         setBlindStep("override");
         setVarianceInfo({
@@ -93,6 +88,11 @@ export default function StaffShifts({
           variance: data.variance
         });
         setBlindError(data.message);
+        return;
+      }
+
+      if (!res.ok || !data.success) {
+        setBlindError(data.message || data.error || "Shift closing failed.");
         return;
       }
 
@@ -113,10 +113,10 @@ export default function StaffShifts({
     const end = endTime ? new Date(endTime) : new Date();
     const start = new Date(startTime);
     const diffMs = end.getTime() - start.getTime();
-    
+
     const diffHrs = Math.floor(diffMs / 3600000);
     const diffMins = Math.floor((diffMs % 3600000) / 60000);
-    
+
     if (diffHrs < 1) return `${diffMins} min${diffMins > 1 ? "s" : ""}`;
     return `${diffHrs}h ${diffMins}m`;
   };
@@ -200,57 +200,23 @@ export default function StaffShifts({
 
     setIsSaving(true);
     const updatedList = [...staffList, newStaff];
-    onUpdateStaffList(updatedList);
+    // Publish UI state only after the server confirms the mutation.
 
-    // Instant Backend Sync
     try {
-      const sessId = ApiClient.getSessionId() || "";
-      const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || activeTenant?.tenantId || "";
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (sessId) headers["x-session-id"] = sessId;
-      if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
-
-      await fetch("/api/pos/staff", {
-        method: "POST",
-        headers,
-        credentials: "include",
-        body: JSON.stringify(newStaff)
-      });
-    } catch (syncErr) {
-      console.warn("Backend direct staff sync error:", syncErr);
-    } finally {
-      setIsSaving(false);
-    }
-
-    setFormSuccess(`Successfully registered ${newName.trim()} (${finalRoleTitle})! Synced instantly to backend.`);
-    setNewName("");
-    setNewPin("");
-    setCustomRoleTitle("");
-    setNewRole("Cashier");
-    setNewPerms(["billing"]);
+      const response=await ApiClient.authenticatedFetch("/api/staff",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(newStaff)});
+      const data=await response.json();if(!response.ok || !data.success) throw new Error(data.message || data.error || "Staff save failed.");
+      const fresh=await (await ApiClient.authenticatedFetch("/api/staff")).json();
+      if(fresh.success) onUpdateStaffList(fresh.data);
+      setFormSuccess(`Registered ${newName.trim()}.`);setNewName("");setNewPin("");setCustomRoleTitle("");setNewRole("Cashier");setNewPerms(["billing"]);
+    }catch(error:any){setFormError(error.message);}finally{setIsSaving(false);}
   };
 
-  const handleDeleteStaffMember = async (staffId: string) => {
-    const updatedList = staffList.filter((s) => s.id !== staffId);
-    onUpdateStaffList(updatedList);
-    setLocalDeleteId(null);
-
-    // Instant Backend Sync Delete
+  const handleDeleteStaffMember=async(staffId:string)=>{
     try {
-      const sessId = ApiClient.getSessionId() || "";
-      const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || activeTenant?.tenantId || "";
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (sessId) headers["x-session-id"] = sessId;
-      if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
-
-      await fetch(`/api/pos/staff/${staffId}`, {
-        method: "DELETE",
-        headers,
-        credentials: "include"
-      });
-    } catch (syncErr) {
-      console.warn("Backend direct staff delete error:", syncErr);
-    }
+      const response=await ApiClient.authenticatedFetch(`/api/staff/${encodeURIComponent(staffId)}`,{method:"DELETE"});const data=await response.json();
+      if(!response.ok || !data.success) throw new Error(data.message || data.error || "Staff removal failed.");
+      const fresh=await (await ApiClient.authenticatedFetch("/api/staff")).json();if(fresh.success) onUpdateStaffList(fresh.data.filter((s:any)=>s.status!=="inactive"));setLocalDeleteId(null);
+    }catch(error:any){setFormError(error.message);}
   };
 
   return (
@@ -559,7 +525,7 @@ export default function StaffShifts({
                             <div className="space-y-1">
                               <p className="font-bold text-white">Upgrade Plan Suggestion</p>
                               <p className="text-[11px] leading-relaxed text-slate-300">
-                                Your current <span className="uppercase text-amber-400 font-bold font-mono">{planName}</span> plan only supports up to <span className="font-bold text-white">{planCapacity} staff members</span>. 
+                                Your current <span className="uppercase text-amber-400 font-bold font-mono">{planName}</span> plan only supports up to <span className="font-bold text-white">{planCapacity} staff members</span>.
                                 You currently have <span className="font-bold text-white">{staffList.length} members</span>.
                               </p>
                             </div>
@@ -581,7 +547,7 @@ export default function StaffShifts({
                         type="submit"
                         disabled={hasReachedLimit || isSaving}
                         className={`w-full py-2.5 font-bold text-xs rounded-xl transition duration-150 shadow-md cursor-pointer ${
-                          hasReachedLimit 
+                          hasReachedLimit
                             ? "bg-slate-800 text-slate-500 cursor-not-allowed shadow-none"
                             : isSaving
                               ? "bg-emerald-600 text-slate-950 opacity-80 cursor-wait"

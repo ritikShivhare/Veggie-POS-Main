@@ -29,7 +29,7 @@ export function useTenantData() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.map((t:any)=>{const {ownerPin,initialPassword,staffQrSecret,...safe}=t;return safe;});
       } catch (e) {}
     }
     return INITIAL_TENANTS;
@@ -45,7 +45,7 @@ export function useTenantData() {
     if (savedTenantsStr) {
       try {
         const parsed = JSON.parse(savedTenantsStr);
-        if (Array.isArray(parsed) && parsed.length > 0) currentTenants = parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) currentTenants = parsed.map((t:any)=>{const {ownerPin,initialPassword,staffQrSecret,...safe}=t;return safe;});
       } catch (e) {}
     }
 

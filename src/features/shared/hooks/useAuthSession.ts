@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { StaffMember, Shift } from "../types";
+import { offlineRepository,OutboxProcessor } from "../services/offline";
 import { ApiClient } from "../services/api";
 
 interface UseAuthSessionProps {
@@ -29,7 +30,7 @@ export function useAuthSession({
 
   useEffect(() => {
     if (currentStaff) {
-      localStorage.setItem("veggiepos_current_staff", JSON.stringify(currentStaff));
+      localStorage.setItem("veggiepos_current_staff", JSON.stringify(((s:any)=>{const {pin,passwordHash,password,...safe}=s;return safe;})(currentStaff)));
     } else {
       localStorage.removeItem("veggiepos_current_staff");
     }
@@ -98,7 +99,7 @@ export function useAuthSession({
       headers["x-session-id"] = currentSessionId;
     }
 
-    fetch("/api/auth/sessions-data?tenantId=" + requestTenantId, { headers, credentials: "include" })
+    if (["Owner","SaaS Owner"].includes(currentStaff.role)) fetch("/api/auth/sessions-data?tenantId=" + requestTenantId, { headers, credentials: "include" })
       .then(res => res.json())
       .then(data => {
         if (data.success && data.securitySettings) {
@@ -219,29 +220,11 @@ export function useAuthSession({
   };
 
   // Clock In / Clock Out shift actions
-  const handleShiftAction = () => {
-    if (!currentStaff) return;
-
-    if (activeShift) {
-      const updatedShifts = shifts.map((s) =>
-        s.id === activeShift.id
-          ? { ...s, endTime: new Date().toISOString(), status: "Completed" as const }
-          : s
-      );
-      setShifts(updatedShifts);
-      alert(`Successfully clocked out. Shift duration: ${getShiftDurationString(activeShift.startTime)}`);
-    } else {
-      const newShift: Shift = {
-        id: `sh-${Date.now()}`,
-        staffId: currentStaff.id,
-        staffName: currentStaff.name,
-        role: currentStaff.role,
-        startTime: new Date().toISOString(),
-        status: "Active"
-      };
-      setShifts([...shifts, newShift]);
-      alert("Welcome to duty! Shift started successfully.");
-    }
+  const handleShiftAction=async()=>{
+    if(!currentStaff) return;
+    if(activeShift) {alert("Close the shift using the cash-count form in Staff & Shifts.");return;}
+    const shift:Shift={id:crypto.randomUUID(),staffId:currentStaff.id,staffName:currentStaff.name,role:currentStaff.role,startTime:new Date().toISOString(),status:"Active"};
+    try {await offlineRepository.recordShiftOffline(activeTenantId,shift);setShifts([...shifts,shift]);await OutboxProcessor.triggerDrain(activeTenantId);}catch(error:any){alert(`Shift was not saved: ${error.message}`);}
   };
 
   return {

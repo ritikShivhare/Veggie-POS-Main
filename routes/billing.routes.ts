@@ -41,7 +41,7 @@ router.get("/billing/subscription", authMiddleware, requireRole("Owner", "Manage
   const sub = (req as any).subscription; // loaded in authMiddleware
   try {
     const staffList = await staffRepo.getAll(tenantId);
-    
+
     const now = new Date();
     const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     const orders = await orderRepo.getAll(tenantId);
@@ -67,7 +67,7 @@ router.get("/billing/subscription", authMiddleware, requireRole("Owner", "Manage
 router.post("/billing/create-checkout-session", authMiddleware, requireRole("Owner"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { plan } = req.body; // pro or enterprise
-  const origin = req.headers.origin || "http://localhost:3000";
+  const origin = process.env.APP_URL || (isProductionEnvironment()?"":"http://localhost:3000");
 
   if (plan !== "pro" && plan !== "enterprise") {
     return res.status(400).json({ success: false, message: "Invalid subscription plan selected." });
@@ -107,10 +107,8 @@ router.post("/billing/create-checkout-session", authMiddleware, requireRole("Own
       await saveSubscription(tenantId, sub);
 
       // Save global customer mapping
-      const db = Database.getInstance();
-      const mapping = (await db.getObject<Record<string, string>>("global", "stripe_customer_mapping")) || {};
-      mapping[customerId] = tenantId;
-      await db.saveObject("global", "stripe_customer_mapping", mapping);
+      // Signed subscription metadata carries tenant identity. No cross-tenant
+      // global mapping is mutated from a restaurant command transaction.
     }
 
     const priceAmount = plan === "pro" ? 99900 : 299900;
@@ -124,7 +122,7 @@ router.post("/billing/create-checkout-session", authMiddleware, requireRole("Own
           price_data: {
             currency: "inr",
             product_data: {
-              name: `VeggiePOS ${planLabel}`,
+              name: `Aatmyam POS ${planLabel}`,
               description: plan === "pro" ? "Up to 10 staff members, 500 monthly orders" : "Unlimited staff members, unlimited monthly orders",
             },
             unit_amount: priceAmount,
@@ -136,8 +134,9 @@ router.post("/billing/create-checkout-session", authMiddleware, requireRole("Own
       mode: "subscription",
       success_url: `${origin}/?tab=settings&checkout=success&tenantId=${tenantId}`,
       cancel_url: `${origin}/?tab=settings&checkout=cancel&tenantId=${tenantId}`,
-      metadata: { tenantId, plan }
-    });
+      metadata: { tenantId, plan },
+      subscription_data: {metadata:{tenantId,plan}}
+    },{idempotencyKey:String(req.headers["idempotency-key"] || `checkout-${tenantId}-${plan}`)});
 
     res.json({ success: true, url: session.url });
   } catch (error: any) {
@@ -149,7 +148,7 @@ router.post("/billing/create-checkout-session", authMiddleware, requireRole("Own
 // 3. Create Stripe Customer Portal Session (Owner-only operation)
 router.post("/billing/create-portal-session", authMiddleware, requireRole("Owner"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
-  const origin = req.headers.origin || "http://localhost:3000";
+  const origin = process.env.APP_URL || (isProductionEnvironment()?"":"http://localhost:3000");
   const stripe = getStripeClient();
   const isProduction = isProductionEnvironment();
 
@@ -191,102 +190,33 @@ router.post("/billing/create-portal-session", authMiddleware, requireRole("Owner
 });
 
 // 4. Actual Stripe Webhook Endpoint (handles signature checking if configured)
-router.post("/webhooks/stripe", express.raw({ type: "application/json" }), async (req, res) => {
-  const stripe = getStripeClient();
-  if (!stripe) {
-    return res.status(400).send("Stripe SDK is not configured.");
-  }
-
-  const sig = req.headers["stripe-signature"];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  let event: any;
-
+router.post("/webhooks/stripe",express.raw({type:"application/json"}),async(req,res)=>{
+  const stripe=getStripeClient(),secret=process.env.STRIPE_WEBHOOK_SECRET,sig=req.headers["stripe-signature"];
+  if(!stripe || !secret) return res.status(503).json({success:false,error:"WEBHOOK_NOT_CONFIGURED"});
+  if(typeof sig!=="string" || !Buffer.isBuffer(req.body)) return res.status(400).json({success:false,error:"INVALID_SIGNATURE"});
+  let event:Stripe.Event;
+  try{event=stripe.webhooks.constructEvent(req.body,sig,secret);}catch{return res.status(400).json({success:false,error:"INVALID_SIGNATURE"});}
   try {
-    if (webhookSecret && sig) {
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    } else {
-      // Direct parse fallback for development testing/forwarding without signature verification
-      event = JSON.parse(req.body.toString());
+    let subscription:any=event.data.object;
+    if(event.type.startsWith("invoice.")) {
+      const id=subscription.subscription || subscription.parent?.subscription_details?.subscription;
+      if(!id) return res.json({received:true});
+      subscription=await stripe.subscriptions.retrieve(id);
     }
-  } catch (err: any) {
-    console.error("Stripe Webhook Parsing / Signature Verification Failed:", err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  try {
-    const db = Database.getInstance();
-    const mapping = (await db.getObject<Record<string, string>>("global", "stripe_customer_mapping")) || {};
-
-    let customerId: string | undefined;
-    let subscriptionId: string | undefined;
-    let status: string | undefined;
-    let tenantId: string | undefined;
-    let plan: "free" | "pro" | "enterprise" = "free";
-
-    // Handle the specific subscription lifecycle events
-    switch (event.type) {
-      case "customer.subscription.created":
-      case "customer.subscription.updated": {
-        const subscription = event.data.object as any;
-        customerId = subscription.customer;
-        subscriptionId = subscription.id;
-        status = subscription.status; // active, trialing, past_due, unpaid, canceled
-        
-        // Find tenant ID either from subscription metadata, or our customer-to-tenant mapping
-        tenantId = subscription.metadata?.tenantId || mapping[customerId || ""];
-        const metadataPlan = subscription.metadata?.plan || "pro";
-        plan = (metadataPlan === "pro" || metadataPlan === "enterprise") ? metadataPlan : "pro";
-        break;
-      }
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object as any;
-        customerId = subscription.customer;
-        subscriptionId = subscription.id;
-        status = "canceled";
-        tenantId = subscription.metadata?.tenantId || mapping[customerId || ""];
-        break;
-      }
-      case "invoice.payment_succeeded": {
-        const invoice = event.data.object as any;
-        customerId = invoice.customer;
-        subscriptionId = invoice.subscription;
-        status = "active";
-        tenantId = mapping[customerId || ""];
-        break;
-      }
-      case "invoice.payment_failed": {
-        const invoice = event.data.object as any;
-        customerId = invoice.customer;
-        subscriptionId = invoice.subscription;
-        status = "past_due"; // Will flag as read-only mode automatically
-        tenantId = mapping[customerId || ""];
-        break;
-      }
-    }
-
-    if (tenantId) {
-      const isReadOnly = (status === "past_due" || status === "unpaid" || status === "canceled" || status === "read-only");
-      const currentSub = await getSubscription(tenantId);
-      
-      const updatedSub = {
-        plan: status === "canceled" ? "free" : (plan || currentSub.plan),
-        status: status as any,
-        stripeCustomerId: customerId || currentSub.stripeCustomerId,
-        stripeSubscriptionId: subscriptionId || currentSub.stripeSubscriptionId,
-        isReadOnly
-      };
-
-      await saveSubscription(tenantId, updatedSub);
-      console.log(`[Stripe Webhook] Successfully processed ${event.type} for tenant ${tenantId}. Plan set to: ${updatedSub.plan}, Status: ${status}, ReadOnly: ${isReadOnly}`);
-    } else if (customerId) {
-      console.warn(`[Stripe Webhook] Received subscription event ${event.type} but could not resolve tenantId for customerId ${customerId}.`);
-    }
-
-    res.json({ received: true });
-  } catch (error: any) {
-    console.error("Error processing Stripe webhook event:", error);
-    res.status(500).json({ error: error.message });
-  }
+    if(!["customer.subscription.created","customer.subscription.updated","customer.subscription.deleted","invoice.payment_succeeded","invoice.payment_failed"].includes(event.type)) return res.json({received:true});
+    const tenantId=subscription.metadata?.tenantId;
+    if(!tenantId) return res.status(400).json({success:false,error:"MISSING_TENANT_METADATA"});
+    const db=Database.getInstance();
+    await db.runTransaction(tenantId,async trx=>{
+      if(await db.getObject(tenantId,`stripe_event:${event.id}`)) return;
+      const previous=await getSubscription(tenantId),last=(await db.getObject<number>(tenantId,"stripe_event_created")) || 0;
+      if(event.created<last) return;
+      const status=event.type==="customer.subscription.deleted"?"canceled":event.type==="invoice.payment_failed"?"past_due":subscription.status==="trialing"?"active":subscription.status;
+      const plan=["pro","enterprise"].includes(subscription.metadata?.plan)?subscription.metadata.plan:previous.plan;
+      await saveSubscription(tenantId,{...previous,plan,status,stripeCustomerId:String(subscription.customer),stripeSubscriptionId:subscription.id,isReadOnly:["past_due","unpaid","canceled","incomplete","incomplete_expired","paused"].includes(status)});
+      await trx.saveObject(`stripe_event:${event.id}`,{processedAt:new Date().toISOString()});await trx.saveObject("stripe_event_created",event.created);
+    });res.json({received:true});
+  }catch {res.status(503).json({success:false,error:"WEBHOOK_PROCESSING_FAILED"});}
 });
 
 // ============================================================================
@@ -317,12 +247,12 @@ if (process.env.NODE_ENV !== "production") {
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>VeggiePOS Stripe Checkout (Simulator)</title>
+      <title>Aatmyam POS Stripe Checkout (Simulator)</title>
       <script src="https://cdn.tailwindcss.com"></script>
     </head>
     <body class="bg-slate-50 text-slate-900 font-sans min-h-screen flex items-center justify-center p-4">
       <div class="max-w-md w-full bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-        
+
         <!-- Header -->
         <div class="bg-blue-600 px-6 py-5 text-white flex items-center justify-between">
           <div>
@@ -375,7 +305,7 @@ if (process.env.NODE_ENV !== "production") {
               </button>
 
               <a href="${origin}/?tab=settings" class="block text-center text-[11px] text-slate-400 hover:text-slate-600 hover:underline pt-2 font-medium">
-                Cancel and return to VeggiePOS
+                Cancel and return to Aatmyam POS
               </a>
             </div>
           </form>
@@ -528,12 +458,12 @@ if (process.env.NODE_ENV !== "production") {
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>VeggiePOS Stripe Customer Portal (Simulator)</title>
+      <title>Aatmyam POS Stripe Customer Portal (Simulator)</title>
       <script src="https://cdn.tailwindcss.com"></script>
     </head>
     <body class="bg-slate-50 text-slate-900 font-sans min-h-screen flex items-center justify-center p-4">
       <div class="max-w-md w-full bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-        
+
         <!-- Header -->
         <div class="bg-slate-800 px-6 py-5 text-white flex items-center justify-between">
           <div>
@@ -567,7 +497,7 @@ if (process.env.NODE_ENV !== "production") {
           <!-- Actions -->
           <div class="space-y-3">
             <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">Subscription Actions</h3>
-            
+
             <div class="grid grid-cols-1 gap-2">
               <button onclick="updateSubscription('free')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-2 rounded-lg text-xs transition duration-200 cursor-pointer">
                 Downgrade to Free Tier
@@ -587,7 +517,7 @@ if (process.env.NODE_ENV !== "production") {
           <!-- Footer return -->
           <div class="border-t border-slate-100 pt-4 flex justify-between items-center text-xs text-slate-400">
             <span>Customer ID: \${sub.stripeCustomerId || 'mock_cus_none'}</span>
-            <a href="${origin}/?tab=settings" class="text-blue-600 hover:underline font-bold">Return to VeggiePOS</a>
+            <a href="${origin}/?tab=settings" class="text-blue-600 hover:underline font-bold">Return to Aatmyam POS</a>
           </div>
         </div>
       </div>

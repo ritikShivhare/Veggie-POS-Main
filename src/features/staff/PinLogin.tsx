@@ -42,6 +42,8 @@ export default function PinLogin({
   onClearSavedStore,
   onConnectStoreCode
 }: PinLoginProps) {
+  const [ownerPassword,setOwnerPassword]=useState("");
+  const passwordLogin=async(e:React.FormEvent)=>{e.preventDefault();if(isSubmitting || isLocked) return;setIsSubmitting(true);setError("");try{const response=await fetch("/api/auth/login",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({tenantId,password:ownerPassword})});const data=await response.json();if(!response.ok || !data.success) throw new Error(data.message || "Owner login failed.");setOwnerPassword("");onLoginSuccess(data.user,data.session.sessionId,data.tenant);}catch(error:any){setError(error.message);}finally{setIsSubmitting(false);}};
   const [pin, setPin] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -133,7 +135,7 @@ export default function PinLogin({
     })
       .then(async (res) => {
         const data = await res.json();
-        
+
         if (res.status === 423 || data.locked) {
           setIsLocked(true);
           setCooldownSeconds(data.cooldownSeconds || 30);
@@ -149,12 +151,12 @@ export default function PinLogin({
         if (!res.ok) {
           setIsShaking(true);
           setTimeout(() => setIsShaking(false), 500);
-          
+
           if (data.remainingAttempts !== undefined) {
             setRemainingAttempts(data.remainingAttempts);
             setAttemptCount(data.attemptCount || 1);
           }
-          
+
           setError(data.message || `Incorrect PIN passcode. Please try again.`);
           setPin("");
           return;
@@ -358,7 +360,7 @@ export default function PinLogin({
 
   return (
     <div className="min-h-screen bg-[#FBF9F5] flex flex-col justify-center items-center p-4 font-sans text-[#1C1E1B] relative overflow-hidden select-none">
-      
+
       {/* Background Decorative Rings */}
       <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-[#EAE5DA]/40 blur-3xl pointer-events-none" />
       <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-[#EAE5DA]/40 blur-3xl pointer-events-none" />
@@ -374,7 +376,7 @@ export default function PinLogin({
           <h1 className="text-xl font-serif font-bold tracking-tight text-[#181A18]">
             {restaurantName}
           </h1>
-          
+
           <div className="flex items-center justify-center gap-1.5 mt-1">
             <span className="text-[10px] uppercase font-mono font-bold text-[#787F74] tracking-wider">
               Staff POS Terminal Keypad
@@ -410,7 +412,7 @@ export default function PinLogin({
             <div className="w-12 h-12 mx-auto rounded-full bg-[#FDE8E8] text-[#9B1C1C] flex items-center justify-center animate-pulse">
               <Lock className="w-6 h-6" />
             </div>
-            
+
             <div className="space-y-1">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-[#9B1C1C] text-white rounded-full text-[10px] font-mono font-bold uppercase tracking-wider">
                 <ShieldAlert className="w-3 h-3" />
@@ -443,7 +445,7 @@ export default function PinLogin({
           </div>
         ) : (
           <div className="flex flex-col items-center">
-            
+
             {/* Remaining Attempts Warning Pill */}
             {remainingAttempts !== null && remainingAttempts <= 2 && (
               <div className="mb-2 px-3 py-1 bg-[#FEF3C7] border border-[#FDE68A] text-[#92400E] rounded-full text-[10px] font-mono font-bold flex items-center gap-1.5 animate-pulse">
@@ -462,6 +464,10 @@ export default function PinLogin({
               </span>
             </div>
 
+            <form onSubmit={passwordLogin} className="w-full mb-3 flex gap-2">
+              <input type="password" autoComplete="current-password" placeholder="Owner password (optional)" value={ownerPassword} onChange={e=>setOwnerPassword(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-300 p-2 text-xs" />
+              <button disabled={isSubmitting || !ownerPassword} className="rounded-lg bg-slate-800 px-3 text-white text-xs disabled:opacity-50">Login</button>
+            </form>
             {/* Password Dot Indicators */}
             <div className="flex space-x-3 mb-3">
               {[0, 1, 2, 3, 4, 5].map((index) => (
@@ -499,7 +505,7 @@ export default function PinLogin({
                   {num}
                 </button>
               ))}
-              
+
               <button
                 onClick={handleManualSubmit}
                 disabled={isSubmitting || isLocked}
@@ -513,7 +519,7 @@ export default function PinLogin({
               >
                 {isSubmitting ? "Verifying..." : pin.length >= 4 ? "OK / Login ↵" : "Clear"}
               </button>
-              
+
               <button
                 onClick={() => handleKeyPress("0")}
                 disabled={isLocked || isSubmitting}
@@ -522,7 +528,7 @@ export default function PinLogin({
               >
                 0
               </button>
-              
+
               <button
                 onClick={handleBackspace}
                 disabled={isLocked || isSubmitting}
@@ -543,7 +549,7 @@ export default function PinLogin({
             className="mt-4 w-full py-2.5 border border-[#EAE5DA] hover:border-[#D5D0C5] text-[#5A6056] hover:text-[#181A18] font-bold text-xs rounded-xl transition bg-white cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
             id="pin-login-back-to-landing-btn"
           >
-            ← Back to Veggie POS Website
+            ← Back to Aatmyam POS Website
           </button>
         )}
       </div>

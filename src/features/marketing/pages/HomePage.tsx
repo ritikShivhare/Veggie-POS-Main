@@ -73,15 +73,15 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
   return (
     <div className="bg-[#FBF9F5] text-[#1C1E1B]">
-      
+
       {/* 1. HERO SECTION: Outcome-Led Editorial Layout */}
       <section className="pt-28 pb-16 md:pt-36 md:pb-24 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
-            
+
             {/* Left Narrative Column */}
             <div className="lg:col-span-7 space-y-6">
-              
+
               {/* Category Pill */}
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#EBF2E4] border border-[#D5E3C8] text-xs font-mono font-bold text-[#567234]">
                 <span className="w-2 h-2 rounded-full bg-[#6E8F45] animate-pulse"></span>
@@ -98,7 +98,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
               {/* Editorial Subhead */}
               <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed max-w-2xl">
-                Veggie POS is the calm operational command center for independent kitchens and growing multi-outlet groups. 
+                Aatmyam POS is the calm operational command center for independent kitchens and single-outlet restaurants.
                 Fast 4-digit PIN counter billing, synchronized KOTs, automated recipe-level stock deductions, and real-time leakage alerts—unified on the hardware you already own.
               </p>
 
@@ -131,7 +131,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 </div>
                 <div>
                   <p className="font-serif text-lg font-bold text-[#6E8F45]">100%</p>
-                  <p className="text-[11px] text-[#787F74]">KOT to Kitchen accuracy</p>
+                  <p className="text-[11px] text-[#787F74]">Kitchen status updates</p>
                 </div>
                 <div>
                   <p className="font-serif text-lg font-bold text-[#D97706]">&lt; 14 Days</p>
@@ -143,7 +143,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             {/* Right Interactive Dashboard Canvas */}
             <div className="lg:col-span-5">
               <div className="bg-[#181A18] text-[#FBF9F5] rounded-3xl p-5 sm:p-6 border border-[#2E332D] shadow-2xl relative overflow-hidden">
-                
+
                 {/* Top Control Bar */}
                 <div className="flex items-center justify-between pb-4 mb-4 border-b border-[#2E332D]">
                   <div className="flex items-center gap-2">
@@ -328,7 +328,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       {/* 2. THE ORDER-TO-INVENTORY WORKFLOW STRIP */}
       <section className="py-20 bg-[#F4F0E8] border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
+
           <div className="text-center max-w-2xl mx-auto mb-14 space-y-3">
             <span className="text-xs font-mono uppercase tracking-widest text-[#567234] font-bold">
               The Connected Restaurant Loop
@@ -407,7 +407,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       {/* 3. CORE EDITORIAL PILLARS */}
       <section className="py-20 md:py-28 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
-          
+
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div className="space-y-3 max-w-xl">
               <span className="text-xs font-mono uppercase tracking-widest text-[#567234] font-bold">
@@ -427,7 +427,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            
+
             {/* Pillar 1: Register Speed */}
             <div className="bg-[#F4F0E8] p-8 rounded-3xl border border-[#EAE5DA] space-y-5">
               <div className="w-12 h-12 rounded-2xl bg-[#181A18] text-[#6E8F45] flex items-center justify-center">
@@ -437,7 +437,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 Counter Speed That Keeps Lines Moving
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
-                4-digit quick staff PIN switches, tactile physical keyboard hotkeys, and automatic UPI QR codes. 
+                4-digit quick staff PIN switches, tactile physical keyboard hotkeys, and automatic UPI QR codes.
                 Your staff can punch a 5-item order and collect payment before other systems finish loading.
               </p>
               <ul className="space-y-2 text-xs text-[#1C1E1B] pt-2 border-t border-[#EAE5DA]">
@@ -461,7 +461,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 Recipe-Linked BOM Inventory
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
-                Raw ingredients link directly to menu items. As dishes sell, inventory calculates theoretical vs. physical consumption, 
+                Raw ingredients link directly to menu items. As dishes sell, inventory calculates theoretical vs. physical consumption,
                 flagging over-portioning and kitchen shrinkage before the month ends.
               </p>
               <ul className="space-y-2 text-xs text-[#1C1E1B] pt-2 border-t border-[#EAE5DA]">
@@ -485,7 +485,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 Owner Freedom & Saffron Leakage Signals
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
-                Step away from the cash counter with confidence. Role-based permissions lock bill edits and discounts behind owner authorization, 
+                Step away from the cash counter with confidence. Role-based permissions lock bill edits and discounts behind owner authorization,
                 giving you a real-time pulse of revenue from anywhere.
               </p>
               <ul className="space-y-2 text-xs text-[#1C1E1B] pt-2 border-t border-[#EAE5DA]">
@@ -507,7 +507,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       {/* 4. RESTAURANT FORMAT SELECTION CTA */}
       <section className="py-20 bg-[#FBF9F5] border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
+
           <div className="bg-[#181A18] text-[#FBF9F5] rounded-3xl p-8 sm:p-12 border border-[#2E332D] flex flex-col lg:flex-row items-center justify-between gap-8">
             <div className="space-y-4 max-w-2xl">
               <div className="inline-flex items-center gap-2 text-xs font-mono text-[#84A955]">
@@ -518,7 +518,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 Tuned for fine dining, fast counters, and 20-location groups alike.
               </h2>
               <p className="text-sm text-[#A6AEA0] leading-relaxed">
-                See how Veggie POS adapts to your specific floor layout, kitchen stations, and inventory workflows.
+                See how Aatmyam POS adapts to your specific floor layout, kitchen stations, and inventory workflows.
               </p>
             </div>
 
@@ -548,7 +548,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             Ready to bring calm and control to your kitchen floor?
           </h2>
           <p className="text-sm text-[#5A6056] leading-relaxed">
-            Schedule a 15-minute operational walkthrough. We’ll show you how Veggie POS handles your exact menu, recipes, and table layouts without costly hardware migrations.
+            Schedule a 15-minute operational walkthrough. We’ll show you how Aatmyam POS handles your exact menu, recipes, and table layouts without costly hardware migrations.
           </p>
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <button

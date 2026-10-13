@@ -68,7 +68,7 @@ export default function MarketingNav({
             </div>
             <div className="flex flex-col">
               <span className="font-serif text-lg tracking-tight font-bold text-[#181A18] flex items-center gap-1.5">
-                Veggie POS
+                Aatmyam POS
                 <span className="w-1.5 h-1.5 rounded-full bg-[#6E8F45]"></span>
               </span>
               <span className="text-[10px] uppercase tracking-wider font-mono text-[#787F74]">
