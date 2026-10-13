@@ -25,3 +25,24 @@ flow checks, owner profile edit, settlement-based atomic cash shift close and
 historical staff deactivation. Added DEPLOYMENT.md and VERIFICATION.md. Required
 hosted migrations 008/009 and verified HTTPS email have not been applied by this
 workspace. Push/CI/live observations are reported separately after publication.
+
+Resumed provider checkpoint (2026-10-13): user confirmed Render's My Workspace.
+The supplied service still runs base commit 6184b94, auto-deploys main, has no
+health-check path, and logs missing Supabase and real email credentials. The
+active POS Supabase schema was created manually; added missing audit/version
+columns and legacy function guards to migration 008 and reproduced its schema in
+a metadata-only fixture. Valid upgrade/profile/settings operations pass; bad
+references roll back without deleting records. Two compatible migrations applied
+and verified: public legacy RPC/snapshot access closed; all 31 staff PINs hashed.
+Row counts remain unchanged and Security Advisor returns no lints.
+
+Additional read-only preflight: 13 orphan recipes, 37 missing ingredient links
+inside those recipes, one orphan shift. Snapshots have no matching missing menu
+or staff recovery candidates. Native JSON has PIN copies in five snapshot and
+three object rows; no inspected plaintext password fields. The JSON PIN hashing
+migration is locally tested but two hosted attempts returned an expired request
+state. History/read-back confirm it is pending; do not bypass that failure through
+another unreviewed provider write. Password authentication now enforces bcrypt's
+72-byte UTF-8 bound. Final resumed suite: 266 tests/27 files, TypeScript and build
+passed. GitHub integration returns write 403; no push, new CI or new live release.
+Finish account authentication and data/email readiness before updating main.

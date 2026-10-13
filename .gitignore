@@ -12,3 +12,4 @@ pending_signups*.json
 *.local
 
 /node_modules
+/supabase/.temp/

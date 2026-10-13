@@ -1,7 +1,7 @@
 import rateLimit from "express-rate-limit";
 import { OAuth2Client } from "google-auth-library";
 import { constantTimeStringCompare } from "../server/features/auth/PinSecurityService";
-import { digest } from "../server/features/shared/security";
+import { digest, validPassword } from "../server/features/shared/security";
 import express from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -66,7 +66,7 @@ router.post('/saas-admin/login', async (req,res) => {
       pendingAdminOtps.delete(token);
       return await adminSession(req,res,ownerEmail);
     }
-    if (typeof req.body.password !== 'string' || !(await bcrypt.compare(req.body.password,passwordHash))) return res.status(401).json({success:false,error:'INVALID_CREDENTIALS',message:'Incorrect admin credentials.'});
+    if (!validPassword(req.body.password) || !(await bcrypt.compare(req.body.password,passwordHash))) return res.status(401).json({success:false,error:'INVALID_CREDENTIALS',message:'Incorrect admin credentials.'});
     const code = crypto.randomInt(100000,1000000).toString();
     if (!await sendAdminCode(ownerEmail,code)) return res.status(503).json({success:false,error:'EMAIL_SEND_FAILED',message:'Unable to send verification email. Check the mail provider configuration.'});
     const token = crypto.randomBytes(32).toString('hex');

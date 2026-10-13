@@ -6,7 +6,9 @@ production startup. A successful GitHub build alone does not verify a live resta
 ## Apply the database changes before starting the new server
 
 Use your existing Supabase project. Take a provider backup/export first.
-For an installation that already applied 001–007, run only:
+Run the read-only `migrations/PREFLIGHT.sql` before upgrading an existing database.
+For an installation that already applied 001–007, or the observed manually-created
+equivalent with the same tables, run:
 
 1. `migrations/008_deployment_integrity.sql`
 2. `migrations/009_atomic_registration.sql`
@@ -15,6 +17,12 @@ For a new database, run all migration files 001–009 in numeric order in the
 Supabase SQL editor as the database administrator. Each new migration uses a
 transaction. Do not delete data to bypass a foreign-key or duplicate-payment error;
 inspect the affected old records and correct them before retrying.
+The observed hosted database currently has 13 recipes without their menu records,
+37 missing ingredient references inside those recipes, and one shift without its
+staff record. The surviving menu's recipe has no missing ingredient links. The
+legacy JSON snapshots did not supply matching menu or staff records for recovery.
+Restore the correct records or agree a separate archive/recovery treatment before
+proceeding; no business rows have been removed by these repairs.
 Migration 008 preserves rows, changes entity keys to `(tenant_id, id)`, merges
 legacy settings, and closes the unsafe public RPCs. It deliberately rejects
 pre-existing invalid links or duplicate completed settlements.
@@ -24,6 +32,9 @@ The backend uses the service-role key; direct anonymous/authenticated Data API
 access to business tables is denied. Keep the service-role key out of frontend
 variables, screenshots and source control.
 
+Compatible security repairs and their hosted status are documented in
+`supabase/README.md`. Those repairs do not replace application migrations 008/009.
+
 ## Configure the Render service
 
 Use Node 24. Build: `npm ci --include=dev && npm run build`.
@@ -31,6 +42,10 @@ Start: `npm start`. Health check: `/api/health`.
 The frontend is served from `dist/client`; the server bundle remains private in `dist`.
 The updated `render.yaml` describes these settings for Blueprint-managed services.
 For a service created manually, apply the corresponding settings in its dashboard.
+The existing service still uses `npm install; npm run build`, has no health-check
+path configured, and auto-deploys commits to `main`. Publish the reviewed fixes on
+the repair branch first; merge/deploy only after database and mail readiness are
+confirmed. Editing `render.yaml` alone does not update a manually-created service.
 
 Required production variables:
 
@@ -49,12 +64,18 @@ ports cannot deliver OTP from that plan. Use the HTTPS Resend integration.
 The `onboarding@resend.dev` sandbox sender is rejected. Provider acceptance does
 not guarantee inbox delivery: check its delivery events and the recipient's spam
 folder. A rejected send returns an error and a failed resend preserves the last code.
+Hosted logs currently report missing database keys (in-memory storage) and missing
+real email credentials. Configure persistence and a verified HTTPS email sender
+before testing real restaurant onboarding; the old time-only health response
+does not prove either works.
 
 To enable SaaS admin sign-in, also configure `SAAS_OWNER_EMAIL` and a bcrypt
 `SAAS_OWNER_PASSWORD_HASH` for a private password. Password admin login requires
 email OTP. Optional Google login requires a web OAuth `GOOGLE_CLIENT_ID` and
 its authorized origin; only the configured owner's verified Google identity is accepted.
 No default admin password or six-digit master override is provided.
+Passwords must be at least eight characters and at most 72 UTF-8 bytes, so bcrypt
+never silently truncates them. Use the same bound for the private SaaS password.
 
 Optional settings are listed in `.env.example`. Redis, AI and Stripe credentials
 are not required for cash/manual UPI billing. Do not use a Gemini API key as a

@@ -1,7 +1,7 @@
 import express from "express";
 import crypto from "node:crypto";
 import rateLimit from "express-rate-limit";
-import { publicStaff, publicTenant, digest, validPin } from "../server/features/shared/security";
+import { publicStaff, publicTenant, digest, validPin, validPassword } from "../server/features/shared/security";
 
 import bcrypt from "bcryptjs";
 import { Database,handleApiError } from "../server/features/shared/database";
@@ -268,8 +268,8 @@ router.post("/auth/signup", async (req, res) => {
     if (typeof businessName !== 'string' || !businessName.trim() || businessName.length > 160 ||
         typeof ownerName !== 'string' || !ownerName.trim() || ownerName.length > 120 ||
         typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
-        !validPin(pin) || typeof password !== 'string' || password.length < 8 || password.length > 128) {
-      return res.status(422).json({success:false,message:'Name, valid email, 4–6 digit PIN and password of at least 8 characters are required.'});
+        !validPin(pin) || !validPassword(password)) {
+      return res.status(422).json({success:false,message:'Name, valid email, 4–6 digit PIN and a password of at least 8 characters and at most 72 UTF-8 bytes are required.'});
     }
     const targetEmail = email.trim().toLowerCase();
     if (!targetEmail) {
@@ -558,7 +558,7 @@ router.post("/auth/login", async (req, res) => {
     let staff = effectiveTenantId ? ((await staffRepo.getAll(effectiveTenantId)) || []) : [];
     staff=staff.filter(s=>s.status!=="inactive" && s.status!=="suspended");
     let matchingUser = validPin(pin) ? await findStaffByPinConstantTime(staff, pin) : null;
-    if (typeof password==="string" && password.length<=128) {
+    if (validPassword(password)) {
       const owner=staff.find(s=>s.role==="Owner");
       if ((owner as any)?.passwordHash && await bcrypt.compare(password,(owner as any).passwordHash)) matchingUser=owner;
     }

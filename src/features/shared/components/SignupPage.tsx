@@ -115,6 +115,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
     if (!ownerName.trim()) return setError("Please enter the owner's full name.");
     if (!email.trim()) return setError("Please enter a valid owner email address.");
     if (!password || password.length < 8) return setError("Password must be at least 8 characters.");
+    if (new TextEncoder().encode(password).length > 72) return setError("Password is too long. Use at most 72 bytes (72 English characters, or fewer for other scripts).");
     if (!pin || pin.length !== 5 || !/^\d+$/.test(pin)) return setError("Passcode PIN must be exactly 5 digits.");
 
     setIsLoading(true);

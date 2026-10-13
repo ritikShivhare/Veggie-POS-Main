@@ -1,6 +1,20 @@
 -- Aatmyam POS: atomic writes, complete schema, server-only access, tenant keys.
 -- Apply 001..008 in order. Runs as one transaction; never discards existing rows.
 BEGIN;
+-- Some hosted installations were created manually and never applied 003/005/007.
+-- Add their missing columns before the atomic writer starts sending audit fields.
+DO $$
+DECLARE t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['ingredients','menu_items','purchases','recipes','staff','orders','order_items','payments','inventory_movements','customers','shifts','settings','tenant_objects','idempotency_keys'] LOOP
+    EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS version integer DEFAULT 1',t);
+    EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now()',t);
+    EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now()',t);
+  END LOOP;
+END $$;
+ALTER TABLE idempotency_keys ADD COLUMN IF NOT EXISTS request_hash varchar;
+ALTER TABLE idempotency_keys ADD COLUMN IF NOT EXISTS status varchar DEFAULT 'COMPLETED';
+ALTER TABLE idempotency_keys ADD COLUMN IF NOT EXISTS expires_at timestamptz;
 ALTER TABLE staff ADD COLUMN IF NOT EXISTS "passwordHash" varchar;
 ALTER TABLE staff ADD COLUMN IF NOT EXISTS phone varchar;
 ALTER TABLE staff ADD COLUMN IF NOT EXISTS status varchar DEFAULT 'active';
@@ -54,6 +68,15 @@ ALTER TABLE inventory_movements ADD CONSTRAINT movements_tenant_ingredient_fk FO
 ALTER TABLE inventory_movements ADD CONSTRAINT movements_tenant_staff_fk FOREIGN KEY (tenant_id,performed_by) REFERENCES staff(tenant_id,id) ON DELETE SET NULL (performed_by) DEFERRABLE INITIALLY DEFERRED;
 ALTER TABLE orders ADD CONSTRAINT orders_tenant_staff_fk FOREIGN KEY (tenant_id,"cashierId") REFERENCES staff(tenant_id,id) ON DELETE SET NULL ("cashierId") DEFERRABLE INITIALLY DEFERRED;
 ALTER TABLE shifts ADD CONSTRAINT shifts_tenant_staff_fk FOREIGN KEY (tenant_id,"staffId") REFERENCES staff(tenant_id,id) DEFERRABLE INITIALLY DEFERRED;
+CREATE INDEX IF NOT EXISTS idx_purchases_ingredient ON purchases(tenant_id,"ingredientId");
+CREATE INDEX IF NOT EXISTS idx_order_items_tenant_order ON order_items(tenant_id,order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_tenant_menu ON order_items(tenant_id,menu_item_id);
+CREATE INDEX IF NOT EXISTS idx_payments_tenant_order ON payments(tenant_id,order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_tenant_cashier ON payments(tenant_id,cashier_id);
+CREATE INDEX IF NOT EXISTS idx_inv_movements_tenant_ingredient ON inventory_movements(tenant_id,ingredient_id);
+CREATE INDEX IF NOT EXISTS idx_inv_movements_tenant_staff ON inventory_movements(tenant_id,performed_by);
+CREATE INDEX IF NOT EXISTS idx_orders_cashier ON orders(tenant_id,"cashierId");
+CREATE INDEX IF NOT EXISTS idx_shifts_tenant_staff ON shifts(tenant_id,"staffId");
 -- One settlement per order. Refund state changes the same ledger entry.
 CREATE UNIQUE INDEX IF NOT EXISTS payments_one_settlement ON payments(tenant_id,order_id) WHERE status IN ('Completed','Refunded');
 
@@ -141,8 +164,20 @@ BEGIN
   END LOOP;
 END $$;
 CREATE OR REPLACE FUNCTION current_tenant_id() RETURNS text LANGUAGE sql STABLE SECURITY INVOKER SET search_path=public,pg_temp AS $$ SELECT NULLIF(auth.jwt()->'app_metadata'->>'tenant_id',''); $$;
--- Close the legacy definer functions on installations that already applied 004.
-REVOKE ALL ON FUNCTION save_multi_slice_transaction(VARCHAR,JSONB,JSONB) FROM PUBLIC,anon,authenticated;
-REVOKE ALL ON FUNCTION set_tenant_context(TEXT) FROM PUBLIC,anon,authenticated;
-REVOKE ALL ON FUNCTION current_tenant_id() FROM PUBLIC,anon,authenticated;
+-- Guard missing helpers and every signature: manual installations differ from 004/006.
+DO $$
+DECLARE f record;
+BEGIN
+  FOR f IN SELECT p.oid::regprocedure AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='public' AND p.prokind='f' AND p.proname IN ('save_multi_slice_transaction','set_tenant_context','current_tenant_id','acquire_tenant_lock','release_tenant_lock') LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,anon,authenticated',f.signature);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role',f.signature);
+    EXECUTE format('ALTER FUNCTION %s SET search_path=public,pg_temp',f.signature);
+  END LOOP;
+  IF to_regclass('public.restaurant_sync') IS NOT NULL THEN
+    ALTER TABLE public.restaurant_sync ENABLE ROW LEVEL SECURITY;
+    REVOKE ALL ON public.restaurant_sync FROM PUBLIC,anon,authenticated;
+    GRANT ALL ON public.restaurant_sync TO service_role;
+  END IF;
+END $$;
 COMMIT;

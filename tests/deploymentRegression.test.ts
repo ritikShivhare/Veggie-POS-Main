@@ -1,6 +1,7 @@
 import { beforeAll, afterAll, beforeEach, describe, it, expect, vi } from 'vitest';
 import http from 'node:http';
 import WebSocket from 'ws';
+import bcrypt from 'bcryptjs';
 import { app } from '../server';
 import { Database } from '../server/features/shared/database';
 import { staffRepo, menuRepo, ingredientRepo, recipeRepo, orderRepo, shiftRepo, settingsRepo, sessionService, notificationService, realtimeService, financialTransactionService, getGlobalTenantsList, saveGlobalTenantsList } from '../server/context';
@@ -177,6 +178,24 @@ describe('Deployment audit: expected secure and consistent behavior', () => {
     const result=await request('/auth/signup',{businessName:'Mail failure cafe',ownerName:'Owner',ownerPhone:'9000000000',email:'qa@example.test',pin:'85246',password:'test-password-strong'});
     expect(result.status).toBe(500);expect(result.data).toMatchObject({success:false,error:'EMAIL_SEND_FAILED'});
     expect(result.data.pendingToken).toBeUndefined();
+  });
+  it.each(['x'.repeat(73),'अ'.repeat(25)])('rejects signup passwords that bcrypt would truncate',async(password)=>{
+    const result=await request('/auth/signup',{businessName:'Password length cafe',ownerName:'Owner',ownerPhone:'9000000000',email:'qa@example.test',pin:'85246',password});
+    expect(result.status).toBe(422);expect(result.data.pendingToken).toBeUndefined();
+  });
+  it('rejects a different owner password with the same first 72 bytes',async()=>{
+    const password='x'.repeat(72);
+    await staffRepo.update(tid,{id:'audit-owner',passwordHash:await bcrypt.hash(password,4)} as any);
+    expect((await request('/auth/login',{tenantId:tid,password:password+'different-suffix'})).status).toBe(401);
+    expect((await request('/auth/login',{tenantId:tid,password})).data.success).toBe(true);
+  });
+  it('rejects a truncated admin password before issuing an OTP',async()=>{
+    vi.stubEnv('SAAS_OWNER_EMAIL','owner@example.test');
+    vi.stubEnv('SAAS_OWNER_PASSWORD_HASH',await bcrypt.hash('x'.repeat(72),4));
+    try {
+      const result=await request('/saas-admin/login',{password:'x'.repeat(72)+'different-suffix'});
+      expect(result.status).toBe(401);expect(result.data.challengeToken).toBeUndefined();
+    }finally{vi.unstubAllEnvs();}
   });
   it('completes signup, successful resend, PIN login and owner password login',async()=>{
     const sent:any[]=[];

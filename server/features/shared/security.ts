@@ -44,6 +44,11 @@ export function validPin(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4,6}$/.test(value);
 }
 
+// bcrypt accepts only 72 UTF-8 bytes; reject inputs it would silently truncate.
+export function validPassword(value: unknown): value is string {
+  return typeof value === 'string' && value.length >= 8 && Buffer.byteLength(value, 'utf8') <= 72;
+}
+
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 }
