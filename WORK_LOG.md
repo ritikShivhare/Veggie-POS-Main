@@ -46,3 +46,14 @@ another unreviewed provider write. Password authentication now enforces bcrypt's
 72-byte UTF-8 bound. Final resumed suite: 266 tests/27 files, TypeScript and build
 passed. GitHub integration returns write 403; no push, new CI or new live release.
 Finish account authentication and data/email readiness before updating main.
+
+Next authorized resume (2026-10-13): the fresh Supabase request successfully
+applied `hash_legacy_json_pins` (native version 20261013081822). Read-back reports
+zero numeric JSON PIN copies. All nine snapshots and 84 tenant objects are retained;
+normalized non-PIN fingerprints match before/after. Staff/orders/recipes/shifts
+counts remain unchanged and the temporary function is absent. Renamed the SQL
+file to the actual hosted migration timestamp and updated the current report.
+The first GitHub CLI device login did not save authorization: its process was
+lost after a network/session error. Prepared a temporary private device-flow
+handoff that saves its state and the received token before any API identity read,
+so a failed read cannot discard an authorized token. No new GitHub push yet.

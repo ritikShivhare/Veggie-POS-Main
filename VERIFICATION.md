@@ -6,7 +6,7 @@ It is not a certification that every hosted integration or device works.
 
 Release remains blocked: code is committed locally but has not been pushed;
 Render still runs the old commit; application migrations 008/009 and real OTP
-delivery have not been completed. Two compatible Supabase security repairs have
+delivery have not been completed. Three compatible Supabase security repairs have
 been applied and verified.
 
 ## Checks completed locally
@@ -72,11 +72,14 @@ remain visible for review rather than silently replaying removed credentials.
   email provider or all legacy data.
 - Row counts are preserved: 31 staff, 22 orders, 14 recipes, five shifts, 84 tenant
   objects and nine legacy snapshots. No business records were deleted or invented.
-- Legacy JSON still has numeric PIN copies in five snapshot rows and three object
-  rows; no plaintext password fields were found by the inspected JSON paths.
-  The pending JSON hashing migration passed nested-data, order-preservation and
-  repeat-run tests. Two hosted attempts failed with `Invalid or expired requestState`;
-  migration history and a read-back query confirm it was **not applied**.
+- `hash_legacy_json_pins` was applied on a fresh authorized resume after two earlier
+  attempts failed with an expired request state. Numeric PIN copies are now zero,
+  compared with five affected snapshot rows and three object rows beforehand.
+  No plaintext password fields were found by the inspected JSON paths. The SQL
+  transformation passed nested-data, order-preservation and repeat-run tests.
+  Read-back confirms all nine snapshots and 84 objects remain. Fingerprints with
+  PIN fields normalized match the before values, proving the other JSON unchanged.
+  The temporary transformation helper is removed; migration history matches.
 - Data preflight finds **13 orphan recipes** containing **37 missing ingredient
   links**, and **one orphan shift**. All missing ingredient links belong to the
   orphan recipes; none references another tenant's existing ingredient. The recipe
@@ -88,8 +91,8 @@ remain visible for review rather than silently replaying removed credentials.
 
 Apply migrations **008 and 009** to the existing Supabase project and configure
 Render's required environment values from [DEPLOYMENT.md](DEPLOYMENT.md).
-Resolve the historical references first, and complete the pending JSON PIN-copy
-repair. The current GitHub connection rejects tree creation with HTTP 403
+Resolve the historical references first. The current GitHub connection rejects
+tree creation with HTTP 403
 `Resource not accessible by integration`; no GitHub push or new CI run is claimed.
 The new server refuses production startup if the database/schema or email setup
 is missing. A passing old `/api/health` that only reports time does not prove the
@@ -101,7 +104,7 @@ workflow. The local PostgreSQL adapter does not test Supabase's hosted network,
 SMTP, Resend delivery events, or Render's service settings. Historical Git
 credentials from the removed signup file must be invalidated if previously used.
 
-Only the two compatible security migrations listed above were applied to the
+Only the three compatible security migrations listed above were applied to the
 hosted database. Application migrations, provider email configuration,
 backup/restore and real hardware actions remain incomplete. High-load operation
 and multi-instance hosting remain unverified. The build still reports a large
