@@ -212,7 +212,11 @@ describe('Deployment audit: expected secure and consistent behavior', () => {
   it('completes signup, successful resend, PIN login and owner password login',async()=>{
     const sent:any[]=[];
     vi.mocked(notificationService.send).mockImplementationOnce(async(_t,p)=>{sent.push(p);return {success:true,dispatchedChannels:[{channel:'email',status:'success',detail:'mock accepted'}]};});
-    const result=await request('/auth/signup',{businessName:'Verified cafe',ownerName:'New owner',ownerPhone:'9000000001',email:'qa@example.test',pin:'85246',password:'test-password-strong'});
+    const result=await request('/auth/signup',{businessName:'Cafe <script>alert(1)</script>',ownerName:'New owner <img src=x>',region:'<a href="https://example.test">Region</a>',ownerPhone:'9000000001',email:'qa&tag@example.test',pin:'85246',password:'test-password-strong'});
+    expect(sent[0].htmlBody).not.toContain('<script>alert(1)</script>');
+    expect(sent[0].htmlBody).not.toContain('<img src=x>');
+    expect(sent[0].htmlBody).toContain('qa&amp;tag@example.test');
+    expect(sent[0].recipientEmail).toBe('qa&tag@example.test');
     expect(result.status).toBe(200);const token=result.data.pendingToken;
     const records:any[]=await Database.getInstance().getObject('saas-admin','signup_challenges_v2');
     const challenge=records.find(s=>s.pendingToken===token);
@@ -222,7 +226,8 @@ describe('Deployment audit: expected secure and consistent behavior', () => {
     challenge.lastSentAt=Date.now()-30000;await Database.getInstance().saveObject('saas-admin','signup_challenges_v2',records);
     vi.mocked(notificationService.send).mockImplementationOnce(async(_t,p)=>{sent.push(p);return {success:true,dispatchedChannels:[{channel:'email',status:'success',detail:'mock accepted'}]};});
     expect((await request('/auth/resend-otp',{pendingToken:token,email:'attacker@example.test'})).data.success).toBe(true);
-    expect(sent[1].recipientEmail).toBe('qa@example.test');
+    expect(sent[1].recipientEmail).toBe('qa&tag@example.test');
+    expect(sent[1].htmlBody).toContain('qa&amp;tag@example.test');
     const secondCode=sent[1].htmlBody.match(/>(\d{6})<\/span>/)?.[1];
     const verified=await request('/auth/verify',{pendingToken:token,verificationCode:secondCode});
     expect(verified.data.success).toBe(true);expect(verified.data.user.pin).toBeUndefined();

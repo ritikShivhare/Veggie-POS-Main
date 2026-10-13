@@ -1,7 +1,7 @@
 import express from "express";
 import crypto from "node:crypto";
 import rateLimit from "express-rate-limit";
-import { publicStaff, publicTenant, digest, validPin, validPassword } from "../server/features/shared/security";
+import { publicStaff, publicTenant, digest, validPin, validPassword, escapeHtml } from "../server/features/shared/security";
 
 import bcrypt from "bcryptjs";
 import { Database,handleApiError } from "../server/features/shared/database";
@@ -75,7 +75,10 @@ function generateVerificationEmailHtml(params: {
   tenantId: string;
   region: string;
 }): string {
-  const { ownerName, businessName, verificationCode, tenantId, region } = params;
+  const { verificationCode, tenantId } = params;
+  const ownerName=escapeHtml(String(params.ownerName));
+  const businessName=escapeHtml(String(params.businessName));
+  const region=escapeHtml(String(params.region));
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -317,7 +320,7 @@ router.post("/auth/signup", async (req, res) => {
           </div>
           <p style="color: #64748b; font-size: 12px; line-height: 1.5;">This code expires in <strong>10 minutes</strong>. Never share this code with anyone.</p>
           <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
-          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${targetEmail} for Aatmyam POS Security</p>
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${escapeHtml(targetEmail)} for Aatmyam POS Security</p>
         </div>
       `
     });
@@ -419,7 +422,7 @@ router.post("/auth/resend-otp", async (req, res) => {
         </div>
         <p style="color: #64748b; font-size: 12px; line-height: 1.5;">This code expires in <strong>10 minutes</strong>. Only the newest code is valid.</p>
         <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
-        <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${signup.email} for Aatmyam POS Security</p>
+        <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${escapeHtml(signup.email)} for Aatmyam POS Security</p>
       </div>
     `
   });

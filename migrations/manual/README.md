@@ -1,41 +1,32 @@
-# Proposed recovery of the inspected legacy records
+# Manual recovery archive
 
-Status: prepared and tested; **not executed on the hosted database**.
-Requires the user's approval because moving a historical shift changes which
-records appear in the app's active shift reports.
+This is an operator-reviewed alternative when historical recipe/menu or shift/staff
+references are broken and authoritative recovery records are unavailable. It is
+outside automatic Supabase and numbered application migrations.
 
-The database contains 13 recipes without their menu rows and one shift without
-its staff row. Those recipes also contain 37 missing ingredient references.
-Restoring authoritative missing records is preferable when a valid backup exists;
-the inspected legacy snapshots did not contain matching missing menu/staff rows.
+The SQL retains each complete original row in a private recovery table before
+moving it out of active recipes/shifts. A moved historical shift leaves ordinary
+app reports, so obtain the data owner's decision first. Existing valid records,
+stock balances, orders, payments and financial totals are retained.
 
-`archive_invalid_legacy_references.sql` is an alternative for this exact batch:
+Before execution, take a backup/export and privately inspect PREFLIGHT.sql. Set
+app.recovery_expected_recipes and app.recovery_expected_shifts to the reviewed
+counts as session settings. The script rejects unset/negative expected counts or
+changed scope and rolls back. A repeat with no remaining orphans preserves the
+archive without moving additional data. Duplicate archive records fail safely.
 
-- Preserves all fields of the 13 recipes and the one shift as JSON in a private
-  `deployment_recovery_archive` table, with tenant, source ID, reason and time.
-- Moves those rows out of active recipes/shifts only after preserving their exact
-  content. The existing valid recipe, other shifts, staff, orders and payments
-  are retained in their active tables. No stock balances or financial totals change.
-- Uses one transaction and locks the related tables. Changed scope, duplicate
-  archive records or any failure roll back the entire operation.
-- Accepts exactly 13 orphan recipes plus one orphan shift, or no remaining orphans
-  on a repeat run. Any other count requires renewed review.
-- Denies anonymous/authenticated Data API access to the archive; only server-role
-  or database administrator access is allowed.
+For a synthetic batch only, the settings could be:
 
-This file is outside both automatic Supabase migrations and the numbered
-application migration sequence. Do not automatically apply it or remove records
-to bypass migration 008. Tests reproduce the exact batch, compare full original
-rows with the archive, check public-role denial, retry safely, and then install
-schema 9. A changed batch is rejected without moving data.
+```sql
+SET app.recovery_expected_recipes = '2';
+SET app.recovery_expected_shifts = '1';
+```
 
-After approval, take a provider backup/export, run this file, inspect the archive
-and active row counts, run `../PREFLIGHT.sql`, then apply 008 and 009. Keep the
-archive until recovery/reconciliation is complete. It is not a replacement for
-a full database backup or point-in-time recovery.
+Use the actual privately reviewed values, not this example. Run the SQL, inspect
+preserved/active rows, rerun preflight, then upgrade the numbered application schema.
+Archive access is restricted to the service role or database administrator.
 
-Recovery remains possible after the genuine missing menu/ingredient/staff records
-are restored. The database administrator can reinsert the retained original fields
-for the corresponding tenant using the archive; the tenant foreign keys must pass.
-Do not overwrite a newly created record with the same ID or invent a login account
-to satisfy the old reference. Restored records need deliberate version/audit handling.
+Tests compare all original fields, reject public roles and changed scope, retry
+safely, and then upgrade the full schema. Recovery remains possible after restoring
+authoritative missing parent records; do not overwrite new rows, invent credentials
+or bypass tenant constraints. The archive does not replace a full database backup.

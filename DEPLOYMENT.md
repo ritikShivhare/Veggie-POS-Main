@@ -17,16 +17,11 @@ For a new database, run all migration files 001–009 in numeric order in the
 Supabase SQL editor as the database administrator. Each new migration uses a
 transaction. Do not delete data to bypass a foreign-key or duplicate-payment error;
 inspect the affected old records and correct them before retrying.
-The observed hosted database currently has 13 recipes without their menu records,
-37 missing ingredient references inside those recipes, and one shift without its
-staff record. The surviving menu's recipe has no missing ingredient links. The
-legacy JSON snapshots did not supply matching menu or staff records for recovery.
-Restore the correct records or agree a separate archive/recovery treatment before
-proceeding; no business rows have been removed by these repairs.
-The tested alternative is documented in `migrations/manual/README.md`. Its SQL
-preserves the complete 14 original rows in a private recovery table before moving
-them out of active recipes/shifts. It is not an automatic migration and requires
-approval because that historical shift leaves the regular app reports.
+An older installation may have invalid references. Restore authoritative missing
+records or obtain the data owner's archive decision before proceeding. A tested,
+parameterized manual alternative is documented in migrations/manual/README.md;
+moved historical shifts leave ordinary app reports, while their original fields
+remain in a private recovery table. It is not an automatic migration.
 Migration 008 preserves rows, changes entity keys to `(tenant_id, id)`, merges
 legacy settings, and closes the unsafe public RPCs. It deliberately rejects
 pre-existing invalid links or duplicate completed settlements.
@@ -36,7 +31,7 @@ The backend uses the service-role key; direct anonymous/authenticated Data API
 access to business tables is denied. Keep the service-role key out of frontend
 variables, screenshots and source control.
 
-Compatible security repairs and their hosted status are documented in
+Compatible security repairs are documented in
 `supabase/README.md`. Those repairs do not replace application migrations 008/009.
 
 ## Configure the Render service
@@ -45,11 +40,9 @@ Use Node 24. Build: `npm ci --include=dev && npm run build`.
 Start: `npm start`. Health check: `/api/health`.
 The frontend is served from `dist/client`; the server bundle remains private in `dist`.
 The updated `render.yaml` describes these settings for Blueprint-managed services.
-For a service created manually, apply the corresponding settings in its dashboard.
-The existing service still uses `npm install; npm run build`, has no health-check
-path configured, and auto-deploys commits to `main`. Publish the reviewed fixes on
-the repair branch first; merge/deploy only after database and mail readiness are
-confirmed. Editing `render.yaml` alone does not update a manually-created service.
+For a manually-created service, update its dashboard settings explicitly. Publish
+and review the repair branch before merging/deploying, and confirm database/mail
+readiness first. Editing render.yaml alone does not configure an existing service.
 
 Required production variables:
 
@@ -68,15 +61,10 @@ ports cannot deliver OTP from that plan. Use the HTTPS Resend integration.
 The `onboarding@resend.dev` sandbox sender is rejected. Provider acceptance does
 not guarantee inbox delivery: check its delivery events and the recipient's spam
 folder. A rejected send returns an error and a failed resend preserves the last code.
-Hosted logs currently report missing database keys (in-memory storage) and missing
-real email credentials. Configure persistence and a verified HTTPS email sender
-before testing real restaurant onboarding; the old time-only health response
-does not prove either works.
-The Resend plugin is available but is not connected in this session. Connect the
-owner's Resend account to inspect sender/domain readiness without sharing API keys
-in chat. The required database server key also belongs in Render's private
-environment. Configure it only when the fixed code and migrations are ready;
-do not connect the old insecure deployed revision to the real database.
+A time-only health response does not establish persistence. Configure the private
+provider environment and confirm connected database/schema readiness before real
+onboarding tests. Keep API keys in the server environment, outside frontend code,
+source control and public discussion.
 
 To enable SaaS admin sign-in, also configure `SAAS_OWNER_EMAIL` and a bcrypt
 `SAAS_OWNER_PASSWORD_HASH` for a private password. Password admin login requires
@@ -124,9 +112,9 @@ Cloud account deletion, managed backup/PITR, delivery marketplaces, SMS and draw
 hardware are not completed integrations. The interface reports those limits;
 provider backups/restores and cloud deletion require actual operational work.
 Manual cash refunds across shift boundaries need reconciliation by the operator.
-The inspected legacy database has 21 paid bills without their original settlement
-ledger. Those bills are preserved, and the repaired cancellation path requires
-payment-history reconciliation instead of fabricating settlements/refunds.
+Legacy paid bills without original settlement ledgers require payment-history
+reconciliation before cancellation; the application does not fabricate settlements
+or refunds for imported history.
 Stripe recurring billing and external AI/Google providers need live provider tests.
 Free hosting availability and high-load/multiple-instance operation have not been
 certified by the local automated tests.
