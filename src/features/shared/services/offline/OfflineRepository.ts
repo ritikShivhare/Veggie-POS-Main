@@ -676,6 +676,9 @@ export class OfflineRepository {
     orderId: string,
     updateData: { status: string; paymentMethod?: string; paidAt?: string }
   ): Promise<OfflineOutboxItem> {
+    if (!updateData.paymentMethod && !["Preparing", "Ready"].includes(updateData.status)) {
+      throw new Error("Kitchen updates must be Preparing or Ready. Use cashier settlement to complete an order.");
+    }
     return this.db.transaction("rw",[this.db.orders,this.db.outbox],async()=>{
     // 1. Update in local IndexedDB
     const existing = await this.db.orders.get([tenantId,orderId] as any);

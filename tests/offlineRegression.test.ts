@@ -51,6 +51,38 @@ describe('Deployment audit: offline invariants', () => {
     const item = await repo.recordPaymentOffline('tenant-a', 'payment-order', { status: 'Completed', paymentMethod: 'Cash' });
     expect({ method: item.method, endpoint: item.endpoint }).toEqual({ method: 'POST', endpoint: '/api/orders/payment-order/pay' });
   });
+  it('rejects kitchen completion before changing the local order or adding a blocking command', async () => {
+    await repo.putOrder('tenant-a', { id: 'ready-order', items: [], total: 10, status: 'Ready' });
+    await expect(repo.recordPaymentOffline('tenant-a', 'ready-order', { status: 'Completed' })).rejects.toThrow('cashier settlement');
+    expect((await repo.getOrders('tenant-a'))[0].status).toBe('Ready');
+    expect(await repo.getAllOutbox('tenant-a')).toHaveLength(0);
+  });
+  it('preserves a queued payment and releases it after reviewing a rejected legacy kitchen clear', async () => {
+    await repo.putOrder('tenant-a', { id: 'legacy-ready', items: [], total: 10, status: 'Ready' });
+    const blocked = await repo.enqueueOutbox('tenant-a', {
+      entityType: 'order', entityId: 'legacy-ready', operationType: 'UPDATE',
+      payload: { status: 'Completed' }, endpoint: '/api/orders/legacy-ready', method: 'PUT',
+      idempotencyKey: 'legacy-kitchen-clear'
+    });
+    await repo.recordOutboxFailure(blocked.id, 'BUSINESS_COMMAND_REQUIRED', 'validation_error', 0);
+    await repo.recordPaymentOffline('tenant-a', 'legacy-ready', { status: 'Completed', paymentMethod: 'Cash' });
+    const paths: string[] = [];
+    const fetchFn = async (url: any) => {
+      paths.push(String(url));
+      return new Response(JSON.stringify({ success: true, data: {
+        id: 'legacy-ready', status: String(url).endsWith('/pay') ? 'Completed' : 'Ready',
+        total: 10, paymentMethod: String(url).endsWith('/pay') ? 'Cash' : undefined,
+        paidAt: String(url).endsWith('/pay') ? new Date().toISOString() : undefined
+      } }), { status: 200 });
+    };
+    await OfflineSyncEngine.syncNow('tenant-a', { repository: repo, fetchFn });
+    expect(paths).toEqual([]);
+    await repo.retryOperation('tenant-a', blocked.id, { status: 'Ready', version: 1 });
+    await OfflineSyncEngine.syncNow('tenant-a', { repository: repo, fetchFn });
+    expect(paths).toEqual(['/api/orders/legacy-ready', '/api/orders/legacy-ready/pay']);
+    expect((await repo.getOrders('tenant-a'))[0]).toMatchObject({ status: 'Completed', paymentMethod: 'Cash' });
+    expect((await repo.getAllOutbox('tenant-a')).every(item => item.status === 'SYNCED')).toBe(true);
+  });
   it('migrates a real v3 database without losing orders or pending commands',async()=>{
     const name='legacy-'+crypto.randomUUID(),legacy=new Dexie(name);
     const schema=Object.fromEntries(['menuItems','ingredients','recipes','staff','orders','orderItems','customers','shifts','settings','outbox','syncMetadata'].map(k=>[k,'id,tenantId']));

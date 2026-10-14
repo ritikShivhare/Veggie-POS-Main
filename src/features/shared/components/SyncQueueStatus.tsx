@@ -8,7 +8,16 @@ export default function SyncQueueStatus({tenantId}:{tenantId:string}) {
   const retry=async(item:any)=>{
     setError('');try {
       let payload:any;
-      if(item.method==='PUT' && item.payload?.version!==undefined) {
+      const rejectedKitchenClear=item.entityType==='order' && item.method==='PUT' &&
+        item.status==='validation_error' && item.payload?.status==='Completed' &&
+        !item.payload?.paymentMethod && item.lastError?.includes('BUSINESS_COMMAND_REQUIRED');
+      if(rejectedKitchenClear) {
+        const response=await ApiClient.authenticatedFetch(item.endpoint);const result=await response.json();
+        if(!response.ok || !result.success) throw new Error(result.message || 'Refresh failed.');
+        if(result.data.status!=='Ready' || result.data.paidAt) throw new Error('This order is no longer unpaid and Ready. Review it in billing before retrying.');
+        if(!window.confirm('The kitchen clear was rejected. Keep this order Ready and retry its queued cashier payment? No payment is discarded.')) return;
+        payload={status:'Ready',version:result.data.version};
+      } else if(item.method==='PUT' && item.payload?.version!==undefined) {
         const response=await ApiClient.authenticatedFetch(item.endpoint);const result=await response.json();
         if(!response.ok || !result.success) throw new Error(result.message || 'Refresh failed.');
         if(!window.confirm(`The server has version ${result.data.version}. Apply your saved change after reviewing this conflict?`)) return;
