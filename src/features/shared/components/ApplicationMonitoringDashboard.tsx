@@ -1,3 +1,4 @@
+import { ApiClient } from "../services/api";
 import React, { useState, useEffect } from "react";
 import {
   Activity,
@@ -85,7 +86,7 @@ export default function ApplicationMonitoringDashboard() {
   const fetchBackups = async (silent = false) => {
     if (!silent) setLoadingBackups(true);
     try {
-      const res = await fetch("/api/monitoring/backups");
+      const res = await ApiClient.authenticatedFetch("/api/monitoring/backups");
       const data = await res.json();
       if (data.success) {
         setBackups(data.backups || []);
@@ -101,7 +102,7 @@ export default function ApplicationMonitoringDashboard() {
   const handleTriggerBackup = async () => {
     setTriggeringBackup(true);
     try {
-      const res = await fetch("/api/monitoring/backups/trigger", { method: "POST" });
+      const res = await ApiClient.authenticatedFetch("/api/monitoring/backups/trigger", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         alert("Database snapshot compiled and verified successfully!");
@@ -120,7 +121,7 @@ export default function ApplicationMonitoringDashboard() {
   const handleTogglePitr = async (enabled: boolean) => {
     setTogglingPitr(true);
     try {
-      const res = await fetch("/api/monitoring/backups/toggle-pitr", {
+      const res = await ApiClient.authenticatedFetch("/api/monitoring/backups/toggle-pitr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ enabled })
@@ -143,7 +144,7 @@ export default function ApplicationMonitoringDashboard() {
 
   const fetchRedisStatus = async () => {
     try {
-      const res = await fetch("/api/monitoring/redis-status");
+      const res = await ApiClient.authenticatedFetch("/api/monitoring/redis-status");
       const data = await res.json();
       if (data.success) {
         setRedisActive(data.active);
@@ -158,7 +159,7 @@ export default function ApplicationMonitoringDashboard() {
     if (!window.confirm("Are you sure you want to completely flush the Redis cache? This will evict all currently cached settings, menu items, and table rows across all tenants, forcing fresh Supabase fetches on the next requests.")) return;
     setRedisFlushing(true);
     try {
-      const res = await fetch("/api/monitoring/redis-flush", { method: "POST" });
+      const res = await ApiClient.authenticatedFetch("/api/monitoring/redis-flush", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         alert("Redis cache flushed successfully!");
@@ -177,7 +178,7 @@ export default function ApplicationMonitoringDashboard() {
     if (!isLiveStreaming && silent) return;
     if (!silent) setSyncing(true);
     try {
-      const res = await fetch("/api/monitoring/telemetry");
+      const res = await ApiClient.authenticatedFetch("/api/monitoring/telemetry");
       const data = await res.json();
       if (data.success) {
         setLogs(data.logs || []);
@@ -207,7 +208,7 @@ export default function ApplicationMonitoringDashboard() {
     if (!window.confirm("Are you sure you want to completely purge the system telemetry logs? This will wipe the monitoring history.")) return;
     try {
       setSyncing(true);
-      const res = await fetch("/api/monitoring/clear", { method: "POST" });
+      const res = await ApiClient.authenticatedFetch("/api/monitoring/clear", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         setLogs([]);
@@ -223,7 +224,7 @@ export default function ApplicationMonitoringDashboard() {
   const handleSimulateEvent = async (type: string) => {
     setSimulationStatus(`Triggering simulated ${type}...`);
     try {
-      const res = await fetch("/api/monitoring/simulate", {
+      const res = await ApiClient.authenticatedFetch("/api/monitoring/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type })
@@ -253,7 +254,7 @@ export default function ApplicationMonitoringDashboard() {
       log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.service.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (log.context && JSON.stringify(log.context).toLowerCase().includes(searchTerm.toLowerCase()));
-    
+
     const matchesLevel = levelFilter === "ALL" || log.level === levelFilter;
     const matchesService = serviceFilter === "ALL" || log.service === serviceFilter;
 
@@ -307,7 +308,7 @@ export default function ApplicationMonitoringDashboard() {
 
   return (
     <div className="h-full p-4 sm:p-6 bg-[#f8fafc] overflow-y-auto space-y-6">
-      
+
       {/* HEADER SECTION */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
@@ -364,7 +365,7 @@ export default function ApplicationMonitoringDashboard() {
 
       {/* METRICS & APM ROW */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
+
         {/* Latency Average */}
         <div className="bg-white p-4 rounded-xl border border-slate-150 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
@@ -376,7 +377,7 @@ export default function ApplicationMonitoringDashboard() {
               {metrics.apiLatencyAverageMs}ms
             </h3>
             <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div 
+              <div
                 className={`h-full rounded-full transition-all duration-500 ${
                   metrics.apiLatencyAverageMs > 200 ? "bg-rose-500" : metrics.apiLatencyAverageMs > 100 ? "bg-amber-500" : "bg-emerald-500"
                 }`}
@@ -398,7 +399,7 @@ export default function ApplicationMonitoringDashboard() {
               {metrics.errorRatePercentage}%
             </h3>
             <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div 
+              <div
                 className={`h-full rounded-full transition-all duration-500 ${
                   metrics.errorRatePercentage > 15 ? "bg-rose-500" : metrics.errorRatePercentage > 5 ? "bg-amber-500" : "bg-emerald-500"
                 }`}
@@ -420,7 +421,7 @@ export default function ApplicationMonitoringDashboard() {
               {metrics.memoryUsageMb} MB
             </h3>
             <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-indigo-500 rounded-full transition-all duration-500"
                 style={{ width: `${Math.min(100, (metrics.memoryUsageMb / 512) * 100)}%` }}
               />
@@ -440,7 +441,7 @@ export default function ApplicationMonitoringDashboard() {
               {metrics.cpuUsagePercentage}%
             </h3>
             <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
-              <div 
+              <div
                 className="h-full bg-amber-500 rounded-full transition-all duration-500"
                 style={{ width: `${metrics.cpuUsagePercentage}%` }}
               />
@@ -472,7 +473,7 @@ export default function ApplicationMonitoringDashboard() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          
+
           <button
             onClick={() => handleSimulateEvent("error_exception")}
             className="p-3 bg-rose-50/50 hover:bg-rose-50 border border-rose-200 hover:border-rose-300 rounded-xl text-left transition space-y-1 group cursor-pointer"
@@ -635,7 +636,7 @@ export default function ApplicationMonitoringDashboard() {
         <div className="bg-indigo-50/40 p-3.5 rounded-xl border border-indigo-100/50 text-xs text-indigo-950 space-y-2">
           <p className="font-bold text-[11px] flex items-center gap-1">
             <Layers className="w-3.5 h-3.5 text-indigo-600" />
-            🎯 Active Cache Targets in VeggiePOS Routing:
+            🎯 Active Cache Targets in Aatmyam POS Routing:
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[11px]">
             <div className="bg-white p-2 rounded-lg border border-indigo-100/60 flex items-center justify-between">
@@ -691,7 +692,7 @@ export default function ApplicationMonitoringDashboard() {
                 </span>
               </div>
               <p className="text-[9px] text-slate-400 mt-1">
-                {pitrEnabled 
+                {pitrEnabled
                   ? "WAL continuous streams are backup-secured to S3. RPO is < 1 minute."
                   : "Continuous WAL archiving paused. Please enable to secure < 1m RPO."}
               </p>
@@ -700,8 +701,8 @@ export default function ApplicationMonitoringDashboard() {
               onClick={() => handleTogglePitr(!pitrEnabled)}
               disabled={togglingPitr}
               className={`w-full py-1.5 px-3 text-xs font-bold rounded-lg border transition cursor-pointer text-center ${
-                pitrEnabled 
-                  ? "bg-white hover:bg-slate-100 text-slate-700 border-slate-200" 
+                pitrEnabled
+                  ? "bg-white hover:bg-slate-100 text-slate-700 border-slate-200"
                   : "bg-emerald-600 hover:bg-emerald-700 text-white border-transparent"
               }`}
             >
@@ -763,8 +764,8 @@ export default function ApplicationMonitoringDashboard() {
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-slate-700">{b.id}</span>
                       <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
-                        b.status === "success" 
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-100" 
+                        b.status === "success"
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
                           : "bg-rose-50 text-rose-700 border border-rose-100"
                       }`}>
                         {b.status === "success" ? "Verified" : "Failed"}
@@ -805,7 +806,7 @@ export default function ApplicationMonitoringDashboard() {
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-rose-500 animate-pulse" />
                 <div>
-                  <h3 className="text-sm font-bold tracking-tight">VeggiePOS Disaster Recovery Runbook</h3>
+                  <h3 className="text-sm font-bold tracking-tight">Aatmyam POS Disaster Recovery Runbook</h3>
                   <p className="text-[10px] text-slate-400 font-mono">SUPABASE PITR & RECOVERY OPERATIONS</p>
                 </div>
               </div>
@@ -859,11 +860,11 @@ export default function ApplicationMonitoringDashboard() {
                   <span className="w-2 h-2 rounded-full bg-indigo-600" />
                   Step 2: Execute Point-in-Time Restoration
                 </h4>
-                
+
                 <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
                   <p className="font-semibold text-slate-800">Option A: Via Supabase Dashboard (Recommended)</p>
                   <ol className="list-decimal pl-4 space-y-1 text-slate-600">
-                    <li>Log in to <strong>Supabase Dashboard</strong> &rarr; Select <strong>VeggiePOS</strong> project.</li>
+                    <li>Log in to <strong>Supabase Dashboard</strong> &rarr; Select <strong>Aatmyam POS</strong> project.</li>
                     <li>Go to <strong>Settings ⚙️</strong> &rarr; <strong>Database</strong> &rarr; scroll to <strong>Backups</strong>.</li>
                     <li>Click <strong>Point in Time Restore</strong>.</li>
                     <li>Enter target safe timestamp immediately before corruption (e.g. <code>2026-07-04 10:14:55</code>).</li>
@@ -903,7 +904,7 @@ export default function ApplicationMonitoringDashboard() {
 
       {/* CENTRAL LOG VIEWER & SEARCH */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-        
+
         {/* LOG VIEWER CONTROLS */}
         <div className="p-5 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
           <div>
@@ -968,7 +969,7 @@ export default function ApplicationMonitoringDashboard() {
           </div>
         ) : (
           <div className="divide-y divide-slate-100 font-mono text-[11px]">
-            
+
             {/* Table Headers */}
             <div className="hidden lg:grid lg:grid-cols-12 gap-3 p-3 bg-slate-50 text-slate-500 font-bold border-b border-slate-100 uppercase text-[9px] tracking-wider">
               <div className="col-span-2">Timestamp</div>
@@ -1044,7 +1045,7 @@ export default function ApplicationMonitoringDashboard() {
                   {/* Expanded Payload Inspector Drawer */}
                   {isExpanded && (
                     <div className="px-5 py-4 bg-slate-900 text-slate-300 border-t border-b border-slate-950 font-mono text-[10.5px] space-y-3 shadow-inner">
-                      
+
                       <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
                         <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1.5">
                           <Layers className="w-3 h-3 text-indigo-400" />

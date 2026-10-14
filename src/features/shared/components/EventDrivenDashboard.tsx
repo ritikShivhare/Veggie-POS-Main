@@ -1,3 +1,4 @@
+import { ApiClient } from "../services/api";
 import React, { useState, useEffect } from "react";
 import {
   Zap,
@@ -86,7 +87,7 @@ export default function EventDrivenDashboard() {
   const fetchEventData = async (silent = false) => {
     if (!silent) setSyncing(true);
     try {
-      const res = await fetch("/api/events");
+      const res = await ApiClient.authenticatedFetch("/api/events");
       const data = await res.json();
       if (data.success) {
         setHistory(data.history || []);
@@ -112,7 +113,7 @@ export default function EventDrivenDashboard() {
   const handlePublishEvent = async (type: string, payload: any) => {
     setSimulating(type);
     try {
-      const res = await fetch("/api/events/publish", {
+      const res = await ApiClient.authenticatedFetch("/api/events/publish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type, payload }),
@@ -121,7 +122,7 @@ export default function EventDrivenDashboard() {
       if (data.success) {
         // Refresh
         await fetchEventData(true);
-        
+
         // Regenerate random IDs
         if (type === "ORDER_COMPLETE") {
           setOrdId(`ORD-${Math.floor(100000 + Math.random() * 900000)}`);
@@ -140,7 +141,7 @@ export default function EventDrivenDashboard() {
     if (!window.confirm("Are you sure you want to purge all events, audit records, and dashboard metrics?")) return;
     setSyncing(true);
     try {
-      const res = await fetch("/api/events/clear", { method: "POST" });
+      const res = await ApiClient.authenticatedFetch("/api/events/clear", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         setHistory([]);
@@ -173,7 +174,7 @@ export default function EventDrivenDashboard() {
 
   return (
     <div className="h-full p-4 sm:p-6 bg-[#f8fafc] overflow-y-auto space-y-6">
-      
+
       {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -275,7 +276,7 @@ export default function EventDrivenDashboard() {
           <Sliders className="w-4 h-4 text-indigo-600" />
           Simulator Lab
         </button>
-        
+
         <button
           onClick={() => setActivePane("logs")}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
@@ -299,10 +300,10 @@ export default function EventDrivenDashboard() {
 
       {/* MAIN CONTAINER LAYOUT */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
+
         {/* LEFT COLUMN: ACTIVE VIEW BODY */}
         <div className="lg:col-span-8 bg-white border border-slate-200 rounded-2xl shadow-sm p-6 min-h-[450px]">
-          
+
           {/* SIMULATOR PANE */}
           {activePane === "simulator" && (
             <div className="space-y-6">
@@ -317,7 +318,7 @@ export default function EventDrivenDashboard() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                
+
                 {/* SIMULATE EVENT 1: INVENTORY UPDATE */}
                 <div className="bg-slate-50/50 border border-slate-200/80 rounded-xl p-4 flex flex-col justify-between space-y-4">
                   <div className="space-y-2">
@@ -325,7 +326,7 @@ export default function EventDrivenDashboard() {
                       INVENTORY_UPDATE
                     </span>
                     <h3 className="text-xs font-bold text-slate-700">Simulate Ingredient Shift</h3>
-                    
+
                     <div className="space-y-2.5 pt-1 text-[11px]">
                       <div>
                         <label className="text-slate-400 block font-bold mb-1">Ingredient</label>
@@ -707,7 +708,7 @@ export default function EventDrivenDashboard() {
 
               {/* GRAPHIC TOPOLOGY CHART */}
               <div className="border border-slate-150 rounded-xl bg-slate-50/50 p-6 space-y-8">
-                
+
                 {/* STAGE 1: PUBLISHERS */}
                 <div className="space-y-3">
                   <div className="flex justify-center">
@@ -840,7 +841,7 @@ export default function EventDrivenDashboard() {
                         {new Date(evt.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
-                    
+
                     <p className="text-[9.5px] font-mono text-slate-300">
                       ID: <span className="text-white">{evt.id}</span>
                     </p>

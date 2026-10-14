@@ -379,7 +379,7 @@ export default function SaasAdminDashboard({
         if (data.success) {
           setRegSuccess(`Restaurant "${businessName}" successfully registered & database schema initialized!`);
           fetchTenants();
-          
+
           // Trigger the App.tsx prop logic too to keep client collections in sync if needed
           onRegisterBusiness({
             businessName,
@@ -389,7 +389,7 @@ export default function SaasAdminDashboard({
             region,
             pin
           }, data.tenant);
-          
+
           // Reset fields
           setBusinessName("");
           setOwnerName("");
@@ -464,17 +464,17 @@ export default function SaasAdminDashboard({
 
   return (
     <div className="h-full p-6 flex flex-col gap-6 overflow-y-auto bg-[#fafbfd] font-sans">
-      
+
       {/* 1. TOP HEADER BANNER - SEAMLESS DYNAMIC INFOGRAPHIC */}
       <div className="bg-gradient-to-r from-pink-500 via-rose-500 to-indigo-600 p-6 md:p-8 rounded-3xl text-white shadow-lg relative overflow-hidden">
         <div className="absolute right-0 bottom-0 top-0 w-1/3 opacity-10 pointer-events-none flex items-center justify-center">
           <Crown className="w-64 h-64" />
         </div>
-        
+
         <div className="relative z-10 max-w-4xl space-y-2">
           <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider">
             <Crown className="w-3.5 h-3.5 text-amber-350" />
-            <span>VeggiePOS SaaS Master Command Center</span>
+            <span>Aatmyam POS SaaS Master Command Center</span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
             SaaS Owner Dashboard (सॉस एडमिन पैनल)
@@ -487,7 +487,7 @@ export default function SaasAdminDashboard({
 
       {/* 2. STATS OVERVIEW CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        
+
         {/* Card 1: Registered Restaurants */}
         <div className="bg-white p-5 border border-slate-100 rounded-2xl shadow-[0_2px_8px_-3px_rgba(0,0,0,0.04)] flex flex-col justify-between hover:shadow-md transition">
           <div className="flex items-center justify-between">
@@ -648,7 +648,7 @@ export default function SaasAdminDashboard({
       {/* 3. BUSINESSES TABLE WITH WORKSPACE SELECTOR */}
       {activeAdminTab === "tenants" && (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
-        
+
         {/* Table Filters Header */}
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
           <div className="space-y-1">
@@ -860,7 +860,7 @@ export default function SaasAdminDashboard({
                 filteredTenants.map((t) => {
                   const isActiveWorkspace = activeTenant.tenantId === t.tenantId;
                   const isSuspended = t.status === "suspended";
-                  
+
                   return (
                     <tr
                       key={t.id}
@@ -874,7 +874,7 @@ export default function SaasAdminDashboard({
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${
                             isSuspended
                               ? "bg-red-100 text-red-700"
-                              : isActiveWorkspace 
+                              : isActiveWorkspace
                                 ? "bg-indigo-100 text-indigo-700"
                                 : "bg-pink-50 text-pink-600"
                           }`}>
@@ -1013,7 +1013,7 @@ export default function SaasAdminDashboard({
       {/* WALKTHROUGH LEADS & DEMO PIPELINE DASHBOARD (Option 1 & 3 with Address Column) */}
       {activeAdminTab === "leads" && (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden space-y-4 animate-in fade-in-50 duration-150">
-          
+
           {/* Header & Filter Controls */}
           <div className="p-5 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/50">
             <div>
@@ -1112,7 +1112,7 @@ export default function SaasAdminDashboard({
 
                     return (
                       <tr key={lead.id} className="hover:bg-slate-50/70 transition">
-                        
+
                         {/* Restaurant Name & Format */}
                         <td className="py-3 px-3">
                           <div className="space-y-1">
@@ -1235,7 +1235,7 @@ export default function SaasAdminDashboard({
                             {/* WhatsApp Button (Option 3 & 1) */}
                             <a
                               href={`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
-                                `Hello ${lead.fullName}, I am reaching out from Veggie POS regarding your 15-minute walkthrough request for "${lead.restaurantName}" (Address: ${lead.address || "your outlet"}). Are you available for a demonstration call?`
+                                `Hello ${lead.fullName}, I am reaching out from Aatmyam POS regarding your 15-minute walkthrough request for "${lead.restaurantName}" (Address: ${lead.address || "your outlet"}). Are you available for a demonstration call?`
                               )}`}
                               target="_blank"
                               rel="noopener noreferrer"

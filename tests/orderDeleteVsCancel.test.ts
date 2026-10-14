@@ -263,7 +263,7 @@ describe("Order Delete vs Order Cancel (Direct Delete Endpoint Bug Resolution)",
         },
         body: JSON.stringify({
           reason: "Customer had to leave immediately for emergency",
-          cancelledBy: "Vikram Owner"
+          cancelledBy: "Vikram Owner",refundConfirmed:true
         })
       });
 

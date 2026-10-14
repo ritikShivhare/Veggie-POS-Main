@@ -53,7 +53,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
       const idempotencyKey = ApiClient.generateIdempotencyKey(`checkout_${tenantId}_${plan}`);
       const res = await fetch(`/api/billing/create-checkout-session`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "x-session-id": sessId || "",
           "Idempotency-Key": idempotencyKey
@@ -81,7 +81,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
       const idempotencyKey = ApiClient.generateIdempotencyKey(`portal_${tenantId}`);
       const res = await fetch(`/api/billing/create-portal-session`, {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "x-session-id": sessId || "",
           "Idempotency-Key": idempotencyKey
@@ -131,7 +131,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
             <CreditCard className="w-5 h-5 text-blue-600" />
             Subscription & Stripe Billing
           </h2>
-          <p className="text-xs text-slate-500 mt-1">Manage VeggiePOS SaaS plans, limits, and real-time operational usage.</p>
+          <p className="text-xs text-slate-500 mt-1">Manage Aatmyam POS SaaS plans, limits, and real-time operational usage.</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-400 font-medium font-mono">Status:</span>
@@ -161,14 +161,14 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
 
       {/* Plan Details & Limits Progress */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        
+
         {/* Column 1: Quantity-Based Capacity Limits (Quantity Base) */}
         <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-5 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-200/50 pb-2">
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">1. Quantity-Based Limits</h3>
             <span className="text-[10px] bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded-full font-mono">Caps</span>
           </div>
-          
+
           <div className="space-y-4">
             {/* Staff Limit */}
             <div>
@@ -177,7 +177,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
                 <span>{safeUsage.staffCount} / {safeLimits.staffCount >= 10000 ? "∞" : safeLimits.staffCount}</span>
               </div>
               <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
-                <div 
+                <div
                   className={`h-full rounded-full transition-all duration-300 ${safeUsage.staffCount >= (safeLimits.staffCount >= 10000 ? Infinity : safeLimits.staffCount) ? 'bg-rose-500' : 'bg-blue-600'}`}
                   style={{ width: `${safeLimits.staffCount >= 10000 ? 0 : Math.min(100, (safeUsage.staffCount / safeLimits.staffCount) * 100)}%` }}
                 ></div>
@@ -192,7 +192,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
                 <span>{safeUsage.monthlyOrders} / {safeLimits.monthlyOrders >= 10000 ? "∞" : safeLimits.monthlyOrders}</span>
               </div>
               <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
-                <div 
+                <div
                   className={`h-full rounded-full transition-all duration-300 ${safeUsage.monthlyOrders >= (safeLimits.monthlyOrders >= 10000 ? Infinity : safeLimits.monthlyOrders) ? 'bg-rose-500' : 'bg-blue-600'}`}
                   style={{ width: `${safeLimits.monthlyOrders >= 10000 ? 0 : Math.min(100, (safeUsage.monthlyOrders / safeLimits.monthlyOrders) * 100)}%` }}
                 ></div>
@@ -208,7 +208,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">2. Feature-Based Access</h3>
             <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-mono">Modules</span>
           </div>
-          
+
           <div className="grid grid-cols-1 gap-2 text-[11px]">
             <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-100">
               <span className="text-slate-700 font-medium">✓ Standard POS Terminal</span>
@@ -248,7 +248,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
         {/* Column 3: Quick billing gateway card */}
         <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-xl p-5 flex flex-col justify-between">
           <div>
-            <span className="text-[9px] uppercase font-mono tracking-widest text-slate-400">VeggiePOS SaaS Gateway</span>
+            <span className="text-[9px] uppercase font-mono tracking-widest text-slate-400">Aatmyam POS SaaS Gateway</span>
             <h4 className="text-sm font-bold capitalize text-white flex items-center gap-1.5 mt-1">
               {plan === "free" ? <Zap className="w-4 h-4 text-amber-400" /> : plan === "pro" ? <Shield className="w-4 h-4 text-blue-400" /> : <Crown className="w-4 h-4 text-purple-400" />}
               {plan} Tier Subscription
@@ -278,7 +278,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
       <div>
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3.5">Compare Subscription Tiers</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          
+
           {/* Free Card */}
           <div className={`border rounded-xl p-4 flex flex-col justify-between ${plan === "free" ? "border-blue-500 ring-1 ring-blue-500/30 bg-blue-50/10" : "border-slate-200 bg-white"}`}>
             <div>
@@ -287,7 +287,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
                 {plan === "free" && <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Active</span>}
               </div>
               <p className="text-sm font-extrabold text-slate-900">₹0 / month</p>
-              
+
               <ul className="text-[11px] text-slate-500 mt-3 space-y-1.5 border-t border-slate-100 pt-3">
                 <li className="flex items-center gap-1">✓ 3 Staff Members</li>
                 <li className="flex items-center gap-1">✓ 30 Orders / month</li>
@@ -313,7 +313,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
                 {plan === "pro" && <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Active</span>}
               </div>
               <p className="text-sm font-extrabold text-slate-900">₹999 / month</p>
-              
+
               <ul className="text-[11px] text-slate-500 mt-3 space-y-1.5 border-t border-slate-100 pt-3">
                 <li className="flex items-center gap-1 font-medium text-slate-700">✓ 10 Staff Members</li>
                 <li className="flex items-center gap-1 font-medium text-slate-700">✓ 500 Orders / month</li>
@@ -349,7 +349,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
                 {plan === "enterprise" && <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Active</span>}
               </div>
               <p className="text-sm font-extrabold text-slate-900">₹2999 / month</p>
-              
+
               <ul className="text-[11px] text-slate-500 mt-3 space-y-1.5 border-t border-slate-100 pt-3">
                 <li className="flex items-center gap-1 font-medium text-purple-700">✓ Unlimited Staff (∞)</li>
                 <li className="flex items-center gap-1 font-medium text-purple-700">✓ Unlimited Orders (∞)</li>

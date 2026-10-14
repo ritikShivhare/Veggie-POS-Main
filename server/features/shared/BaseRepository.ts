@@ -43,7 +43,9 @@ export abstract class BaseRepository<T, KeyType = string> {
   }
 
   async add(tenantId: string, item: T, trx?: DatabaseTransaction): Promise<void> {
+    if (!trx) return this.db.runTransaction(tenantId, tx => this.add(tenantId,item,tx));
     const existing = (await this.getAll(tenantId)) || [];
+    if (existing.some(i => i[this.idKey] === item[this.idKey])) throw new OptimisticLockConflictError("Record already exists.", {entityId:String(item[this.idKey])});
     const items = [...existing];
     const record = { ...item } as any;
     if (record.version === undefined) {
@@ -80,6 +82,7 @@ export abstract class BaseRepository<T, KeyType = string> {
         );
       }
       const updatedRecord = {
+        ...items[index],
         ...item,
         version: currentVer + 1,
         updated_at: new Date().toISOString()
@@ -104,6 +107,7 @@ export abstract class BaseRepository<T, KeyType = string> {
   }
 
   async delete(tenantId: string, id: KeyType, trx?: DatabaseTransaction): Promise<void> {
+    if (!trx) return this.db.runTransaction(tenantId, tx => this.delete(tenantId,id,tx));
     const existing = (await this.getAll(tenantId)) || [];
     const exists = existing.some(i => (i[this.idKey] as any) === id);
     if (!exists) {

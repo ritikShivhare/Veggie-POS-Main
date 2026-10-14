@@ -31,7 +31,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
   const pilferageSaved = totalMonthlySales * (leakageRate / 100);
   const spoilageSaved = totalMonthlySales * (spoilageRate / 100) * 0.45; // ingredient cost portion
   const turnoverRevenueGain = totalMonthlySales * (turnoverGainRate / 100) * 0.35; // margin on extra tables
-  const estimatedSaaSMonthlyCost = 1499 * outlets;
+  const estimatedSaaSMonthlyCost = 999 * outlets;
 
   const totalMonthlyValue = pilferageSaved + spoilageSaved + turnoverRevenueGain;
   const netMonthlyProfit = totalMonthlyValue - estimatedSaaSMonthlyCost;
@@ -59,7 +59,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
 
   return (
     <div className="bg-[#FBF9F5] text-[#1C1E1B] min-h-screen">
-      
+
       {/* 1. ROI HERO */}
       <section className="pt-28 pb-16 md:pt-36 md:pb-24 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -73,8 +73,8 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
               <span className="text-[#D97706] italic">Fix what’s leaking.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              In food service, profit isn’t just made on the menu price—it’s protected in the kitchen and at the register. 
-              Use this interactive model to calculate how much margin Veggie POS can restore to your balance sheet.
+              In food service, profit isn’t just made on the menu price—it’s protected in the kitchen and at the register.
+              Use this interactive model to calculate how much margin Aatmyam POS can restore to your balance sheet.
             </p>
           </div>
         </div>
@@ -83,12 +83,12 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
       {/* 2. INTERACTIVE CALCULATOR & WATERFALL BREAKDOWN */}
       <section className="py-16 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            
+
             {/* Left Interactive Control Panel */}
             <div className="lg:col-span-6 bg-[#F4F0E8] border border-[#EAE5DA] rounded-3xl p-6 sm:p-8 space-y-6">
-              
+
               <div className="flex items-center justify-between pb-4 border-b border-[#EAE5DA]">
                 <h2 className="font-serif text-xl font-bold text-[#181A18]">
                   Your Operational Assumptions
@@ -197,7 +197,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
               <div className="p-3 bg-[#FBF9F5] rounded-xl border border-[#EAE5DA] flex items-start gap-2 text-[11px] text-[#787F74]">
                 <Info className="w-4 h-4 text-[#6E8F45] shrink-0 mt-0.5" />
                 <span>
-                  All calculations represent illustrative assumptions based on typical full-service and counter operations. 
+                  All calculations represent illustrative assumptions based on typical full-service and counter operations.
                   Actual figures are validated against your outlet's historic P&L during onboarding.
                 </span>
               </div>
@@ -206,7 +206,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
 
             {/* Right Live Waterfall Breakdown */}
             <div className="lg:col-span-6 bg-[#181A18] text-[#FBF9F5] rounded-3xl p-6 sm:p-8 border border-[#2E332D] space-y-6 shadow-xl">
-              
+
               <div className="flex items-center justify-between pb-4 border-b border-[#2E332D]">
                 <div>
                   <span className="text-xs font-mono text-[#84A955] uppercase font-bold">
@@ -226,7 +226,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
 
               {/* Waterfall Rows */}
               <div className="space-y-3 font-mono text-xs">
-                
+
                 <div className="flex items-center justify-between p-3 bg-[#242823] rounded-xl border border-[#2E332D]">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-[#D97706]" />
@@ -259,7 +259,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
 
                 <div className="flex items-center justify-between p-3 bg-[#181A18] rounded-xl border border-[#2E332D] text-[#A6AEA0]">
                   <div className="flex items-center gap-2">
-                    <span>4. Veggie POS SaaS Subscription</span>
+                    <span>4. Aatmyam POS SaaS Subscription</span>
                   </div>
                   <span className="font-bold text-[#E57373]">
                     -{formatCurrency(estimatedSaaSMonthlyCost)}

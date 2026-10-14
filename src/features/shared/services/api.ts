@@ -98,6 +98,11 @@ export class ApiClient {
     return this.inMemorySessionId;
   }
 
+  public static authenticatedFetch(input:RequestInfo | URL,init:RequestInit={}):Promise<Response> {
+    const headers=new Headers(init.headers);
+    if(this.inMemorySessionId) headers.set("x-session-id",this.inMemorySessionId);
+    return fetch(input,{...init,headers,credentials:"include"});
+  }
   public static generateIdempotencyKey(prefix: string = "ik"): string {
     const random = Math.random().toString(36).substring(2, 10);
     return `${prefix}_${Date.now()}_${random}`;
@@ -174,6 +179,7 @@ export class ApiClient {
   public static async getTenantSync(tenantId: string, sessionId?: string): Promise<SyncResponse> {
     try {
       const response = await fetch(`/api/sync?tenantId=${encodeURIComponent(tenantId)}`, {
+        signal: AbortSignal.timeout(30000),
         headers: this.getHeaders(tenantId, sessionId),
         credentials: "include"
       });

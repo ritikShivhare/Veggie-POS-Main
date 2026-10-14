@@ -96,7 +96,7 @@ ${lowStockList}
   ): Promise<{ report: string; isSimulated: boolean }> {
     const apiKey = process.env.GEMINI_API_KEY;
 
-    if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || apiKey === "") {
+    if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || !process.env.GEMINI_MODEL) {
       return {
         report: this.generateSimulatedReport(salesData, inventoryData, shiftsData, language),
         isSimulated: true
@@ -144,7 +144,7 @@ ${lowStockList}
       try {
         const response = await executeWithRetry(() => 
           ai.models.generateContent({
-            model: "gemini-3.8-flash",
+            model: process.env.GEMINI_MODEL!,
             contents: prompt,
           })
         );
@@ -153,7 +153,7 @@ ${lowStockList}
         try {
           const fallbackResponse = await executeWithRetry(() =>
             ai.models.generateContent({
-              model: "gemini-flash-latest",
+              model: process.env.GEMINI_MODEL!,
               contents: prompt,
             }),
             1,

@@ -207,6 +207,8 @@ export interface RestaurantTenant {
 }
 
 export interface InventorySettings {
+  version?:number;
+  updated_at?:string;
   autoDeductStock: boolean;
   blockOrdersIfInsufficient: boolean;
   managerCanAddPurchases: boolean;

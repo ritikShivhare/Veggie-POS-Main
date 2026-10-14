@@ -33,7 +33,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
       friction:
         "Servers spend too much time walking back to a single desktop terminal, courses arrive out of sync, and guests wait 10+ minutes just to get their bill split at dinner peak.",
       solution:
-        "Veggie POS gives servers instant 4-digit PIN table-side ordering. KOTs are automatically paced (Starters ➔ Mains ➔ Desserts), and bills can be split by item or guest in two taps.",
+        "Aatmyam POS gives servers instant 4-digit PIN table-side ordering. KOTs are automatically paced (Starters ➔ Mains ➔ Desserts), and bills can be split by item or guest in two taps.",
       highlights: [
         "Visual table status (Occupied, Dining, Billing, Vacant)",
         "Multi-course KOT holding & firing",
@@ -71,7 +71,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
       friction:
         "Tracking syrup pumps, specialty milks (oat/almond), and batch-baked croissants in traditional POS systems is messy, leading to stock discrepancies and wasted inventory.",
       solution:
-        "Veggie POS recipes account for gram-level coffee bean doses and specialty milk portions. Low-stock alerts remind baristas before morning espresso runs dry.",
+        "Aatmyam POS recipes account for gram-level coffee bean doses and specialty milk portions. Low-stock alerts remind baristas before morning espresso runs dry.",
       highlights: [
         "Modifier-based inventory deduction (Oat, Almond, Decaf)",
         "Daily batch bakery yield tracking",
@@ -97,7 +97,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
         "Order dispatch status tracking for riders",
         "Item-level margin calculations including packaging"
       ],
-      impactMetric: "99.8% order fulfillment accuracy",
+      impactMetric: "Kitchen order tracking",
       accent: "#6E8F45"
     },
     {
@@ -116,7 +116,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
         "Universal staff role permissions and audit logs",
         "Consolidated group purchasing insights"
       ],
-      impactMetric: "100% centralized menu governance",
+      impactMetric: "Separate workspace per restaurant",
       accent: "#D97706"
     }
   ];
@@ -132,7 +132,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
 
   return (
     <div className="bg-[#FBF9F5] text-[#1C1E1B] min-h-screen">
-      
+
       {/* 1. SOLUTIONS HEADER */}
       <section className="pt-28 pb-16 md:pt-36 md:pb-24 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -146,7 +146,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
               <span className="text-[#6E8F45] italic">Tuned</span> for your floor.
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              Every hospitality concept faces different bottlenecks. Discover how Veggie POS adapts to table turn dynamics, counter queues, recipe batches, and multi-outlet governance.
+              Every hospitality concept faces different bottlenecks. Discover how Aatmyam POS adapts to table turn dynamics, counter queues, recipe batches, and restaurant operations.
             </p>
           </div>
         </div>
@@ -155,7 +155,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
       {/* 2. FORMAT FILTER BAR & STORY CARDS */}
       <section className="py-16 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
+
           {/* Filter Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
             <span className="text-xs font-mono font-bold text-[#787F74] uppercase mr-2 shrink-0">
@@ -193,7 +193,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
                   className="bg-[#F4F0E8] border border-[#EAE5DA] rounded-3xl p-6 sm:p-10 transition-all duration-200 hover:shadow-md"
                 >
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                    
+
                     {/* Left Details */}
                     <div className="lg:col-span-7 space-y-6">
                       <div className="space-y-2">
@@ -287,7 +287,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
             Not sure which configuration fits your concept?
           </h2>
           <p className="text-sm text-[#5A6056] leading-relaxed">
-            Our hospitality specialists can map your existing floor plan, kitchen pass, and recipe inventory directly into Veggie POS during a free 15-minute consultation.
+            Our hospitality specialists can map your existing floor plan, kitchen pass, and recipe inventory directly into Aatmyam POS during a free 15-minute consultation.
           </p>
           <div className="pt-2">
             <button

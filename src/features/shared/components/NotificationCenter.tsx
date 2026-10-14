@@ -1,3 +1,4 @@
+import { ApiClient } from "../services/api";
 import React, { useState, useEffect } from "react";
 import {
   Bell,
@@ -59,7 +60,7 @@ export default function NotificationCenter() {
   const fetchNotificationData = async (silent = false) => {
     if (!silent) setRefreshing(true);
     try {
-      const res = await fetch("/api/notifications");
+      const res = await ApiClient.authenticatedFetch("/api/notifications");
       const data = await res.json();
       if (data.success) {
         setNotifications(data.notifications || []);
@@ -81,7 +82,7 @@ export default function NotificationCenter() {
 
   const handleMarkAsRead = async (id: string) => {
     try {
-      const res = await fetch("/api/notifications/read", {
+      const res = await ApiClient.authenticatedFetch("/api/notifications/read", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
@@ -100,7 +101,7 @@ export default function NotificationCenter() {
 
   const handleMarkAllAsRead = async () => {
     try {
-      const res = await fetch("/api/notifications/read-all", { method: "POST" });
+      const res = await ApiClient.authenticatedFetch("/api/notifications/read-all", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
@@ -112,7 +113,7 @@ export default function NotificationCenter() {
 
   const handleDeleteNotification = async (id: string) => {
     try {
-      const res = await fetch("/api/notifications", {
+      const res = await ApiClient.authenticatedFetch("/api/notifications", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
@@ -129,7 +130,7 @@ export default function NotificationCenter() {
   const handleClearLogs = async () => {
     if (!window.confirm("Confirm clearing the multi-channel dispatch log history?")) return;
     try {
-      const res = await fetch("/api/notifications/clear-logs", { method: "POST" });
+      const res = await ApiClient.authenticatedFetch("/api/notifications/clear-logs", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         setDispatchLogs([]);
@@ -154,7 +155,7 @@ export default function NotificationCenter() {
     setSendResult(null);
 
     try {
-      const res = await fetch("/api/notifications/send", {
+      const res = await ApiClient.authenticatedFetch("/api/notifications/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -207,7 +208,7 @@ export default function NotificationCenter() {
 
   return (
     <div className="h-full p-4 sm:p-6 bg-[#f8fafc] overflow-y-auto space-y-6">
-      
+
       {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -219,7 +220,7 @@ export default function NotificationCenter() {
             Enterprise multi-channel dispatch hub linking In-App inbox queues, transactional Email templates, and high-priority SMS gateway protocols.
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => fetchNotificationData(false)}
@@ -287,7 +288,7 @@ export default function NotificationCenter() {
             </span>
           )}
         </button>
-        
+
         <button
           onClick={() => { setActiveTab("compose"); setSendResult(null); }}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
@@ -311,7 +312,7 @@ export default function NotificationCenter() {
 
       {/* MAIN VIEWPORT BODY */}
       <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden min-h-[400px] flex flex-col">
-        
+
         {/* TAB 1: INBOX */}
         {activeTab === "inbox" && (
           <div className="flex-1 flex flex-col">
@@ -399,7 +400,7 @@ export default function NotificationCenter() {
                           </button>
                         </div>
                       </div>
-                      
+
                       <p className="text-xs text-slate-600 leading-relaxed max-w-3xl">
                         {item.message}
                       </p>
@@ -414,7 +415,7 @@ export default function NotificationCenter() {
         {/* TAB 2: DISPATCH LAB */}
         {activeTab === "compose" && (
           <div className="p-6 max-w-3xl mx-auto w-full space-y-6">
-            
+
             <div className="border-b border-slate-100 pb-4">
               <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-pink-600 animate-pulse" />

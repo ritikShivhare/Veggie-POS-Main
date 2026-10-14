@@ -1,3 +1,5 @@
+import { ApiClient } from "../services/api";
+import { offlineRepository } from "../services/offline";
 import React, { useState, useEffect } from "react";
 import { Settings, ShieldCheck, RefreshCw, UserMinus, AlertTriangle, CheckCircle2, Bell, Mail, Activity, Lock, Globe, Percent, Receipt, QrCode, Smartphone, Copy, Check, Info, IndianRupee, Sparkles, ExternalLink } from "lucide-react";
 import QRCode from "qrcode";
@@ -91,8 +93,9 @@ export default function SettingsPanel({
   // Live UPI QR code generation preview
   useEffect(() => {
     const rawVpa = (upiInputVpa || activeTenant.vpa || "").trim();
-    const vpa = rawVpa || "veggiepos@upi";
-    const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Veggie POS").trim());
+    if(!rawVpa) {setQrPreviewUrl(null);return;}
+    const vpa = rawVpa;
+    const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam POS").trim());
     const amt = parseFloat(testAmount) > 0 ? parseFloat(testAmount).toFixed(2) : "1.00";
     const note = encodeURIComponent(`Test QR - ${activeTenant.name}`);
     const uri = `upi://pay?pa=${vpa}&pn=${name}&am=${amt}&cu=INR&tn=${note}`;
@@ -131,52 +134,52 @@ export default function SettingsPanel({
     const statePrefix = clean.length >= 2 ? clean.substring(0, 2) : "";
     const stateName = INDIAN_STATE_CODES[statePrefix];
     const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    
+
     if (clean.length === 15) {
       if (gstinRegex.test(clean)) {
-        return { 
-          isOptionalEmpty: false, 
-          text: `Valid GSTIN: ${stateName ? `${stateName} (${statePrefix})` : "Format OK"}`, 
-          color: "text-emerald-700 font-bold", 
-          valid: true 
+        return {
+          isOptionalEmpty: false,
+          text: `Valid GSTIN: ${stateName ? `${stateName} (${statePrefix})` : "Format OK"}`,
+          color: "text-emerald-700 font-bold",
+          valid: true
         };
       }
-      return { 
-        isOptionalEmpty: false, 
-        text: "15 characters entered, but does not match standard 22AAAAA0000A1Z5 pattern.", 
-        color: "text-amber-600 font-medium", 
-        valid: false 
+      return {
+        isOptionalEmpty: false,
+        text: "15 characters entered, but does not match standard 22AAAAA0000A1Z5 pattern.",
+        color: "text-amber-600 font-medium",
+        valid: false
       };
     }
-    return { 
-      isOptionalEmpty: false, 
-      text: `${clean.length}/15 chars. ${stateName ? `State: ${stateName}. ` : ""}Standard: 2 state + 10 PAN + 1 entity + Z + 1 check`, 
-      color: "text-blue-600 font-medium", 
-      valid: false 
+    return {
+      isOptionalEmpty: false,
+      text: `${clean.length}/15 chars. ${stateName ? `State: ${stateName}. ` : ""}Standard: 2 state + 10 PAN + 1 entity + Z + 1 check`,
+      color: "text-blue-600 font-medium",
+      valid: false
     };
   };
 
   const getUpiStatus = (val: string) => {
     const clean = val.trim();
     if (!clean || clean === "veggiepos@upi") {
-      return { 
-        isConfigured: false, 
-        text: "Unconfigured: Customer payment apps will show 'Invalid UPI ID'. Please enter your real UPI ID.", 
-        color: "text-amber-800 bg-amber-50 border-amber-200" 
+      return {
+        isConfigured: false,
+        text: "Unconfigured: Customer payment apps will show 'Invalid UPI ID'. Please enter your real UPI ID.",
+        color: "text-amber-800 bg-amber-50 border-amber-200"
       };
     }
     const upiRegex = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z0-9.\-_]{2,64}$/;
     if (upiRegex.test(clean)) {
-      return { 
-        isConfigured: true, 
-        text: "Valid UPI VPA: Ready for real-time customer payments to your bank account.", 
-        color: "text-emerald-800 bg-emerald-50 border-emerald-200" 
+      return {
+        isConfigured: true,
+        text: "Valid UPI VPA: Ready for real-time customer payments to your bank account.",
+        color: "text-emerald-800 bg-emerald-50 border-emerald-200"
       };
     }
-    return { 
-      isConfigured: false, 
-      text: "Invalid UPI format. Expected format: username@bank (e.g. restaurant@okhdfcbank or 9876543210@paytm).", 
-      color: "text-rose-800 bg-rose-50 border-rose-200" 
+    return {
+      isConfigured: false,
+      text: "Invalid UPI format. Expected format: username@bank (e.g. restaurant@okhdfcbank or 9876543210@paytm).",
+      color: "text-rose-800 bg-rose-50 border-rose-200"
     };
   };
 
@@ -232,7 +235,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Production Monitoring & Alerting",
       gdprPrivacy: "GDPR Privacy & Data Portability",
       staffCredentials: "Staff Credentials & Permissions Control",
-      settingsTitle: "VeggiePOS Administration Settings",
+      settingsTitle: "Aatmyam POS Administration Settings",
       generalTab: "General Settings",
       passwordTab: "Change PIN / Password",
       languageTab: "Language Change",
@@ -266,7 +269,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Monitoreo de Producción y Alertas",
       gdprPrivacy: "Privacidad GDPR y Portabilidad de Datos",
       staffCredentials: "Credenciales de Personal y Control de Permisos",
-      settingsTitle: "Configuración Administrativa de VeggiePOS",
+      settingsTitle: "Configuración Administrativa de Aatmyam POS",
       generalTab: "Configuración General",
       passwordTab: "Cambiar PIN / Contraseña",
       languageTab: "Cambiar Idioma",
@@ -283,7 +286,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Surveillance de Production et Alertes",
       gdprPrivacy: "Confidentialité GDPR et Portabilité des Données",
       staffCredentials: "Identifiants du Personnel et Contrôle des Permissions",
-      settingsTitle: "Paramètres d'Administration VeggiePOS",
+      settingsTitle: "Paramètres d'Administration Aatmyam POS",
       generalTab: "Paramètres Généraux",
       passwordTab: "Modifier le PIN / Mot de passe",
       languageTab: "Changer de Langue",
@@ -301,78 +304,14 @@ export default function SettingsPanel({
     return translations[currentLang]?.[key] || translations["en"]?.[key] || key;
   };
 
-  const handlePasswordChange = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPwError("");
-    setPwSuccess("");
-
-    if (!currentStaff) {
-      setPwError(currentLang === "hi" ? "पासवर्ड/पिन बदलने के लिए कोई स्टाफ सदस्य लॉग इन नहीं है।" : "No staff member logged in to change password/PIN.");
-      return;
-    }
-
-    if (currentPinInput !== currentStaff.pin) {
-      setPwError(currentLang === "hi" ? "वर्तमान पिन गलत है।" : "Current PIN is incorrect.");
-      return;
-    }
-
-    if (!/^\d{4,6}$/.test(newPinInput)) {
-      setPwError(currentLang === "hi" ? "नया पिन 4 से 6 अंकों का होना चाहिए।" : "New PIN must be 4 to 6 digits.");
-      return;
-    }
-
-    if (newPinInput !== confirmPinInput) {
-      setPwError(currentLang === "hi" ? "पुष्टि पिन नए पिन से मेल नहीं खाता है।" : "Confirm PIN does not match the New PIN.");
-      return;
-    }
-
-    // Check if another staff uses this PIN
-    const pinExists = staffList.some(s => s.id !== currentStaff.id && s.pin === newPinInput);
-    if (pinExists) {
-      setPwError(currentLang === "hi" ? "यह पिन पहले से ही किसी अन्य स्टाफ सदस्य द्वारा उपयोग में है। कृपया एक अद्वितीय पिन चुनें।" : "This PIN is already in use by another staff member. Please select a unique PIN.");
-      return;
-    }
-
+  const handlePasswordChange=async(e:React.FormEvent)=>{
+    e.preventDefault();setPwError("");setPwSuccess("");
+    if(!/^\d{4,6}$/.test(newPinInput) || newPinInput!==confirmPinInput) {setPwError("Enter matching 4–6 digit PINs.");return;}
     try {
-      // Update staffList
-      const updatedList = staffList.map((s) =>
-        s.id === currentStaff.id ? { ...s, pin: newPinInput } : s
-      );
-      setStaffList(updatedList);
-
-      // Save updated staff list to localStorage
-      localStorage.setItem(`veggiepos_staff_list_${activeTenant.tenantId}`, JSON.stringify(updatedList));
-
-      // Update currentStaff in localStorage
-      const updatedCurrent = { ...currentStaff, pin: newPinInput };
-      localStorage.setItem("veggiepos_current_staff", JSON.stringify(updatedCurrent));
-
-      // Synchronize owner PIN on tenant if current staff is Owner
-      if (currentStaff.role === "Owner" && setActiveTenant) {
-        const updatedTenant: RestaurantTenant = { ...activeTenant, ownerPin: newPinInput };
-        setActiveTenant(updatedTenant);
-        const updatedTenants = tenants.map((t) =>
-          t.tenantId === activeTenant.tenantId ? updatedTenant : t
-        );
-        setTenants(updatedTenants);
-        try {
-          localStorage.setItem("veggiepos_tenants", JSON.stringify(updatedTenants));
-        } catch (e) {}
-      }
-
-      // Set Success message
-      setPwSuccess(currentLang === "hi" ? "आपका सुरक्षा पिन सफलतापूर्वक बदल दिया गया है!" : "Your security PIN has been successfully changed!");
-      setCurrentPinInput("");
-      setNewPinInput("");
-      setConfirmPinInput("");
-
-      setToastMessage({
-        type: "success",
-        text: currentLang === "hi" ? "पिन सफलतापूर्वक बदला गया!" : "PIN successfully changed!"
-      });
-    } catch (err: any) {
-      setPwError(err.message || "Failed to change PIN.");
-    }
+      const data=await (await ApiClient.authenticatedFetch("/api/auth/change-pin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({currentPin:currentPinInput,newPin:newPinInput})})).json();
+      if(!data.success) throw new Error(data.message || data.error || "PIN change failed.");
+      setCurrentPinInput("");setNewPinInput("");setConfirmPinInput("");setPwSuccess("PIN changed. Log in again.");handleLogout();
+    }catch(error:any){setPwError(error.message);}
   };
 
   const handleLanguageSelect = (lang: string) => {
@@ -483,7 +422,7 @@ export default function SettingsPanel({
 
       {subTab === "general" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto animate-fadeIn">
-        
+
         <div className="lg:col-span-5 flex flex-col gap-6 w-full">
           {/* Restaurant Tax Rate & GSTIN (Optional) Configuration Card */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-5" id="settings-gst-config-card">
@@ -747,7 +686,7 @@ export default function SettingsPanel({
                     type="button"
                     onClick={() => {
                       const vpa = (upiInputVpa || activeTenant.vpa || "veggiepos@upi").trim();
-                      const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Veggie POS").trim());
+                      const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam POS").trim());
                       const amt = parseFloat(testAmount) > 0 ? parseFloat(testAmount).toFixed(2) : "1.00";
                       const uri = `upi://pay?pa=${vpa}&pn=${name}&am=${amt}&cu=INR&tn=TestQR`;
                       navigator.clipboard?.writeText(uri);
@@ -804,7 +743,7 @@ export default function SettingsPanel({
             </h2>
 
             <div className="space-y-4 divide-y divide-slate-100 text-slate-700 text-xs">
-              
+
               <div className="flex items-center justify-between py-3">
                 <div>
                   <h3 className="font-bold text-slate-800 text-sm">Auto-Deduct Stock on POS Orders</h3>
@@ -912,7 +851,7 @@ export default function SettingsPanel({
                 {t("monitoringAlerting")}
               </h2>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                Configure direct integrations to forward VeggiePOS application crashes and database errors to Slack channels, Sentry telemetry, or your operations email address.
+                Configure direct integrations to forward Aatmyam POS application crashes and database errors to Slack channels, Sentry telemetry, or your operations email address.
               </p>
             </div>
 
@@ -1027,7 +966,7 @@ export default function SettingsPanel({
                 {t("gdprPrivacy")}
               </h2>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                In accordance with the General Data Protection Regulation (GDPR), VeggiePOS empowers you with direct control over your business data assets.
+                In accordance with the General Data Protection Regulation (GDPR), Aatmyam POS empowers you with direct control over your business data assets.
               </p>
             </div>
 
@@ -1036,50 +975,21 @@ export default function SettingsPanel({
               <div className="p-3.5 bg-slate-50 border border-slate-150 rounded-xl space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h4 className="font-bold text-slate-800 text-xs">Right to Portability (Export)</h4>
+                    <h4 className="font-bold text-slate-800 text-xs">Export server data</h4>
                     <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
                       Download a comprehensive JSON data matrix containing all ingredients, menus, transaction histories, staff lists, and CRM records under your Tenant ID.
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => {
+                  onClick={async()=>{
                     try {
-                      const exportData = {
-                        exportDate: new Date().toISOString(),
-                        tenantId: activeTenant.tenantId,
-                        restaurantName: activeTenant.name,
-                        schemaVersion: "1.2",
-                        complianceStatus: "GDPR Compliant",
-                        records: {
-                          tenant: activeTenant,
-                          menuItems: menuItems,
-                          ingredients: ingredients,
-                          recipes: recipes,
-                          staffList: staffList,
-                          orders: orders,
-                          customers: customers,
-                          purchases: purchases,
-                          shifts: shifts,
-                          settings: settings
-                        }
-                      };
-
-                      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
-                      const downloadAnchor = document.createElement('a');
-                      downloadAnchor.setAttribute("href", dataStr);
-                      downloadAnchor.setAttribute("download", `veggiepos_data_export_${activeTenant.tenantId}.json`);
-                      document.body.appendChild(downloadAnchor);
-                      downloadAnchor.click();
-                      downloadAnchor.remove();
-
-                      setToastMessage({
-                        type: "success",
-                        text: "GDPR Data Portability export compiled and downloaded successfully!"
-                      });
-                    } catch (err: any) {
-                      alert("Failed to export data: " + err.message);
-                    }
+                      const response=await ApiClient.authenticatedFetch("/api/privacy/export");const result=await response.json();
+                      if(!response.ok || !result.success) throw new Error(result.message || "Export failed.");
+                      const url=URL.createObjectURL(new Blob([JSON.stringify(result.data,null,2)],{type:"application/json"}));
+                      const anchor=document.createElement("a");anchor.href=url;anchor.download=`aatmyam-export-${activeTenant.tenantId}.json`;anchor.click();URL.revokeObjectURL(url);
+                      setToastMessage({type:"success",text:"Server data export downloaded."});
+                    }catch(error:any){setToastMessage({type:"error",text:error.message});}
                   }}
                   className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   id="settings-export-data-btn"
@@ -1093,50 +1003,30 @@ export default function SettingsPanel({
               <div className="p-3.5 bg-rose-50/50 border border-rose-100 rounded-xl space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h4 className="font-bold text-rose-800 text-xs">Right to Erasure (Delete Account)</h4>
+                    <h4 className="font-bold text-rose-800 text-xs">Clear data on this device</h4>
                     <p className="text-[10px] text-rose-600/80 mt-0.5 leading-relaxed">
-                      Permanently and irreversibly delete your restaurant profile and purge all inventory logs, transaction tables, and shift rosters from VeggiePOS system storage.
+                      Clear this browser’s saved restaurant data. Cloud records remain available. Account deletion requires contacting the service owner.
                     </p>
                   </div>
                 </div>
 
                 {(!currentStaff || currentStaff.role !== "Owner") ? (
                   <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-700 font-medium">
-                    Only the Restaurant Owner can delete this establishment.
+                    Only the Restaurant Owner can clear cached restaurant data.
                   </div>
                 ) : (
                   <button
-                    onClick={() => {
-                      const prompt1 = window.confirm(
-                        "WARNING: You are requesting permanent deletion of this restaurant profile and all associated logs in accordance with GDPR Article 17 (Right to Erasure).\n\nThis action is completely irreversible. All orders, inventory databases, and staff accounts will be immediately deleted. Do you wish to proceed?"
-                      );
-                      if (!prompt1) return;
-
-                      const prompt2 = window.prompt(
-                        `To confirm deletion of your establishment, please type the exact restaurant name "${activeTenant.name}" below:`
-                      );
-                      if (prompt2 !== activeTenant.name) {
-                        alert("Verification failed. Restaurant name did not match. Deletion aborted.");
-                        return;
-                      }
-
-                      try {
-                        const updatedTenants = tenants.filter(t => t.tenantId !== activeTenant.tenantId);
-                        setTenants(updatedTenants);
-                        localStorage.setItem("veggiepos_tenants", JSON.stringify(updatedTenants));
-
-                        handleLogout();
-
-                        alert(`Establishment "${activeTenant.name}" has been permanently deleted, and all local and cloud resources have been scrubbed.`);
-                      } catch (err: any) {
-                        alert("Failed to complete account deletion: " + err.message);
-                      }
+                    onClick={async()=>{
+                      const pending=(await offlineRepository.getAllOutbox(activeTenant.tenantId)).filter(o=>!["SYNCED","completed"].includes(o.status));
+                      if(pending.length) {setToastMessage({type:"error",text:`Sync or resolve ${pending.length} pending operations before clearing this device.`});return;}
+                      if(!window.confirm("Clear cached restaurant data on this device? Cloud records remain available.")) return;
+                      try {await offlineRepository.clearTenantOfflineData(activeTenant.tenantId);for(const key of Object.keys(localStorage)) if(key.includes(activeTenant.tenantId)) localStorage.removeItem(key);handleLogout();setToastMessage({type:"success",text:"This device’s cached data was cleared."});}catch(error:any){setToastMessage({type:"error",text:error.message});}
                     }}
                     className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                     id="settings-delete-account-btn"
                   >
                     <UserMinus className="w-3.5 h-3.5" />
-                    <span>Delete my account & purge data</span>
+                    <span>Clear this device</span>
                   </button>
                 )}
               </div>
@@ -1151,7 +1041,7 @@ export default function SettingsPanel({
               <ShieldCheck className="w-5 h-5 text-blue-600" />
               {t("staffCredentials")}
             </h2>
-            
+
             {(!currentStaff || currentStaff.role !== "Owner") ? (
               <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 flex items-start gap-2.5 mt-4">
                 <AlertTriangle className="w-4.5 h-4.5 shrink-0 mt-0.5 text-amber-600" />
@@ -1281,7 +1171,7 @@ export default function SettingsPanel({
               <span>{t("passwordTab")}</span>
             </h2>
             <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-              {currentLang === "hi" 
+              {currentLang === "hi"
                 ? "सुरक्षा कारणों से, सुनिश्चित करें कि आपका नया पिन मजबूत है और केवल आपके पास ही सुरक्षित है।"
                 : "For security, ensure your terminal pin is confidential and only known to authorized users."}
             </p>

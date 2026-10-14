@@ -52,6 +52,7 @@ describe("Optimistic Locking and Versioning Concurrency Engine", () => {
     );
 
     // Reset test slices
+    await ingredientRepo.saveAll(tenantId, []);
     await orderRepo.saveAll(tenantId, []);
     await menuRepo.saveAll(tenantId, []);
     await staffRepo.saveAll(tenantId, []);
@@ -212,56 +213,56 @@ describe("Optimistic Locking and Versioning Concurrency Engine", () => {
         staffList: [
           { id: "s-1", name: "Rahul", role: "Owner", pin: "1234", permissions: ["billing"] }
         ],
-        orders: [
-          { id: "o-1", orderNumber: "#1", total: 150, status: "Completed" }
+        ingredients: [
+          { id: "o-1", name: "#1", currentStock: 150, unit: "Completed" }
         ]
       };
 
       const result = await syncService.saveFullState(tenantId, payload);
       expect(result.menuItems[0].version).toBe(1);
       expect(result.staffList[0].version).toBe(1);
-      expect(result.orders[0].version).toBe(1);
+      expect(result.ingredients[0].version).toBe(1);
     });
 
     it("should increment version on modified slice items when incoming version matches", async () => {
       // Seed initial state
       await syncService.saveFullState(tenantId, {
-        orders: [
-          { id: "o-sync-1", orderNumber: "#10", total: 100, status: "Pending", version: 1 }
+        ingredients: [
+          { id: "o-sync-1", name: "#10", currentStock: 100, unit: "Pending", version: 1 }
         ]
       });
 
       // Update status with correct matching version 1
       const updated = await syncService.saveFullState(tenantId, {
-        orders: [
-          { id: "o-sync-1", orderNumber: "#10", total: 100, status: "Ready", version: 1 }
+        ingredients: [
+          { id: "o-sync-1", name: "#10", currentStock: 100, unit: "Ready", version: 1 }
         ]
       });
 
-      expect(updated.orders[0].version).toBe(2);
-      expect(updated.orders[0].status).toBe("Ready");
+      expect(updated.ingredients[0].version).toBe(2);
+      expect(updated.ingredients[0].unit).toBe("Ready");
     });
 
     it("should reject full state sync with 409 when an item has stale version", async () => {
       // Step 1: Initial state (version 1)
       await syncService.saveFullState(tenantId, {
-        orders: [
-          { id: "o-conflict-1", orderNumber: "#20", total: 200, status: "Pending", version: 1 }
+        ingredients: [
+          { id: "o-conflict-1", name: "#20", currentStock: 200, unit: "Pending", version: 1 }
         ]
       });
 
       // Step 2: Update to version 2
       await syncService.saveFullState(tenantId, {
-        orders: [
-          { id: "o-conflict-1", orderNumber: "#20", total: 200, status: "Preparing", version: 1 }
+        ingredients: [
+          { id: "o-conflict-1", name: "#20", currentStock: 200, unit: "Preparing", version: 1 }
         ]
       });
 
       // Step 3: Stale update attempting to save version 1 again
       await expect(
         syncService.saveFullState(tenantId, {
-          orders: [
-            { id: "o-conflict-1", orderNumber: "#20", total: 200, status: "Cancelled", version: 1 }
+          ingredients: [
+            { id: "o-conflict-1", name: "#20", currentStock: 200, unit: "Cancelled", version: 1 }
           ]
         })
       ).rejects.toThrow(OptimisticLockConflictError);
@@ -289,41 +290,41 @@ describe("Optimistic Locking and Versioning Concurrency Engine", () => {
     it("CRITICAL DATA-LOSS TEST: stale client snapshot with A + B must NOT delete Order C created concurrently", async () => {
       // Initial server state: Order A, Order B
       await syncService.saveFullState(tenantId, {
-        orders: [
-          { id: "order-A", orderNumber: "#A", total: 100, status: "Completed", version: 1 },
-          { id: "order-B", orderNumber: "#B", total: 200, status: "Completed", version: 1 }
+        ingredients: [
+          { id: "order-A", name: "#A", currentStock: 100, unit: "Completed", version: 1 },
+          { id: "order-B", name: "#B", currentStock: 200, unit: "Completed", version: 1 }
         ]
       });
 
       // Device 1 downloads snapshot containing A + B
       const device1Snapshot = await syncService.getFullState(tenantId);
-      expect(device1Snapshot.orders).toHaveLength(2);
+      expect(device1Snapshot.ingredients).toHaveLength(2);
 
       // Device 2 creates Order C concurrently on server
       await syncService.saveFullState(tenantId, {
-        orders: [
-          ...device1Snapshot.orders,
-          { id: "order-C", orderNumber: "#C", total: 300, status: "Completed", version: 1 }
+        ingredients: [
+          ...device1Snapshot.ingredients,
+          { id: "order-C", name: "#C", currentStock: 300, unit: "Completed", version: 1 }
         ]
       });
 
       // Server now has A + B + C
       const serverCurrent = await syncService.getFullState(tenantId);
-      expect(serverCurrent.orders.map((o: any) => o.id).sort()).toEqual(["order-A", "order-B", "order-C"]);
+      expect(serverCurrent.ingredients.map((o: any) => o.id).sort()).toEqual(["order-A", "order-B", "order-C"]);
 
       // Device 1 still has old snapshot (A + B) and submits its old full snapshot
       await syncService.saveFullState(tenantId, {
-        orders: device1Snapshot.orders
+        ingredients: device1Snapshot.ingredients
       });
 
       // EXPECTED: C MUST REMAIN! Server must retain Order C
       const finalState = await syncService.getFullState(tenantId);
-      const finalOrderIds = finalState.orders.map((o: any) => o.id);
+      const finalOrderIds = finalState.ingredients.map((o: any) => o.id);
 
       expect(finalOrderIds).toContain("order-C");
       expect(finalOrderIds).toContain("order-A");
       expect(finalOrderIds).toContain("order-B");
-      expect(finalState.orders).toHaveLength(3);
+      expect(finalState.ingredients).toHaveLength(3);
     });
   });
 

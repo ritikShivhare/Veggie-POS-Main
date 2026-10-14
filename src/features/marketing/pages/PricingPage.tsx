@@ -20,76 +20,23 @@ interface PricingPageProps {
 }
 
 export default function PricingPage({ onNavigate }: PricingPageProps) {
-  const [annualBilling, setAnnualBilling] = useState<boolean>(true);
+  const [annualBilling, setAnnualBilling] = useState<boolean>(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   const plans = [
-    {
-      id: "starter",
-      name: "Starter / Counter",
-      tagline: "For single-counter QSRs, coffee bars, and boutique bakeries.",
-      monthlyPrice: 999,
-      annualPrice: 799,
-      popular: false,
-      features: [
-        "Single counter touch billing terminal",
-        "Fast 4-digit staff PIN switches",
-        "Dynamic UPI QR code generation",
-        "Thermal receipt & digital invoice printing",
-        "Basic daily sales & tax summary reports",
-        "Standard email & chat support",
-        "Zero hardware lock-in (use your own tablet/PC)"
-      ],
-      ctaText: "Start Starter Plan"
-    },
-    {
-      id: "pro",
-      name: "Full-Service Pro",
-      tagline: "For busy dine-in restaurants, casual dining, and cloud kitchens.",
-      monthlyPrice: 1999,
-      annualPrice: 1599,
-      popular: true,
-      features: [
-        "Everything in Starter, plus:",
-        "Interactive Floor Plan & Table Management",
-        "Multi-Station Kitchen Display (KDS) & Split KOTs",
-        "Recipe-Linked BOM Inventory & Auto-Deduction",
-        "Cash Drawer Pop Audit & Blind Shift Reconciliation",
-        "Customer CRM & Repeat Loyalty Points",
-        "Item Modifiers & Special Cooking Instructions",
-        "Live Owner Mobile Reporting Dashboard"
-      ],
-      ctaText: "Start Pro Plan"
-    },
-    {
-      id: "enterprise",
-      name: "Multi-Outlet Chain",
-      tagline: "For expanding restaurant groups, chains, and franchise operators.",
-      monthlyPrice: 3499,
-      annualPrice: 2799,
-      popular: false,
-      features: [
-        "Everything in Full-Service Pro, plus:",
-        "Centralized SaaS Owner Console for all branches",
-        "1-Click Global Menu & Price Tier Distribution",
-        "Cross-Outlet Sales & Margin Benchmarking",
-        "Multi-Tier Role Access Control (Area Manager / GM)",
-        "Consolidated Group Purchasing & Supplier Ledger",
-        "Dedicated Implementation Specialist & Priority SLA",
-        "Custom API & Webhook Data Export"
-      ],
-      ctaText: "Contact Enterprise Sales"
-    }
+    {id:"free",name:"Free Starter",tagline:"Try one restaurant outlet.",monthlyPrice:0,annualPrice:0,popular:false,features:["3 staff accounts","30 orders per month","Cash and manual UPI billing","Kitchen display and recipe inventory","Browser receipt printing"],ctaText:"Create a free restaurant"},
+    {id:"pro",name:"Professional Pro",tagline:"For a growing single outlet.",monthlyPrice:999,annualPrice:999,popular:true,features:["10 staff accounts","500 orders per month","Customer profiles and loyalty","Purchase and stock ledgers","Sales reports"],ctaText:"Contact for Pro setup"},
+    {id:"enterprise",name:"Higher Volume",tagline:"Higher limits for a single outlet.",monthlyPrice:2999,annualPrice:2999,popular:false,features:["Up to 100,000 orders per month","Higher staff limit","The same restaurant tools","One outlet per restaurant","Provider setup required for optional AI and billing"],ctaText:"Contact for setup"}
   ];
 
   const faqs = [
     {
       q: "Are there any hidden transaction fees or per-order commissions?",
-      a: "No. Veggie POS charges a simple, transparent flat subscription fee. We never take a percentage cut of your restaurant sales, UPI payments, or card orders."
+      a: "No. Aatmyam POS charges a simple, transparent flat subscription fee. We never take a percentage cut of your restaurant sales, UPI payments, or card orders."
     },
     {
       q: "Do I need to buy expensive proprietary hardware from you?",
-      a: "Never. Veggie POS runs natively inside any modern web browser on the devices you already own—whether iPads, Android tablets, Windows All-in-One touch terminals, or laptops. It connects seamlessly to standard ESC/POS thermal printers and electronic cash drawers."
+      a: "Never. Aatmyam POS runs natively inside any modern web browser on the devices you already own—whether iPads, Android tablets, Windows All-in-One touch terminals, or laptops. It connects seamlessly to standard ESC/POS thermal printers and electronic cash drawers."
     },
     {
       q: "How fast can we onboard and import our menu?",
@@ -101,13 +48,13 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     },
     {
       q: "What happens if our restaurant internet disconnects during service?",
-      a: "Veggie POS uses local state caching in the browser. Active tables, orders, and local PIN terminals remain responsive, and data synchronizes to the cloud the moment connectivity is restored."
+      a: "Aatmyam POS uses local state caching in the browser. Active tables, orders, and local PIN terminals remain responsive, and data synchronizes to the cloud the moment connectivity is restored."
     }
   ];
 
   return (
     <div className="bg-[#FBF9F5] text-[#1C1E1B] min-h-screen">
-      
+
       {/* 1. PRICING HERO */}
       <section className="pt-28 pb-16 md:pt-36 md:pb-24 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -153,7 +100,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                   Annual Billing
                 </span>
                 <span className="px-2 py-0.5 rounded-full bg-[#EBF2E4] text-[#567234] text-[10px] font-mono font-bold border border-[#D5E3C8]">
-                  Save 20%
+                  Save 0%
                 </span>
               </div>
             </div>
@@ -165,7 +112,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
       {/* 2. PLAN CARDS */}
       <section className="py-20 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
             {plans.map((plan) => {
               const activePrice = annualBilling ? plan.annualPrice : plan.monthlyPrice;
@@ -266,7 +213,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
       {/* 3. TRANSPARENT PRICING FAQ */}
       <section className="py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
+
           <div className="text-center space-y-3">
             <span className="text-xs font-mono uppercase tracking-widest text-[#567234] font-bold">
               Frequently Asked Questions

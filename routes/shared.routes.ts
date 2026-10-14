@@ -1,4 +1,6 @@
 import express from "express";
+import { validateSettings } from "../server/features/shared/validation";
+import { publicState,publicTenant,publicSettings } from "../server/features/shared/security";
 import { Database, handleApiError } from "../server/features/shared/database";
 import { redisCacheService } from "../server/features/shared/RedisCacheService";
 import {
@@ -17,7 +19,8 @@ import {
   requireRole,
   orderRepo,
   ingredientRepo,
-  shiftRepo
+  shiftRepo,
+  orderItemRepo, paymentRepo, inventoryMovementRepo, getGlobalTenantsList
 } from "../server/context";
 
 const router = express.Router();
@@ -29,7 +32,7 @@ router.get("/settings", authMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     const data = await settingsRepo.get(tenantId);
-    res.json({ success: true, data });
+    res.json({ success: true, data: publicSettings(data) });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -38,7 +41,12 @@ router.get("/settings", authMiddleware, async (req, res) => {
 router.post("/settings", authMiddleware, requirePermission("settings"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await settingsRepo.save(tenantId, req.body);
+    validateSettings(req.body);
+    await Database.getInstance().runTransaction(tenantId,async()=>{
+      const current:any=await settingsRepo.get(tenantId);
+      if(current?.version && req.body.version!==current.version) throw Object.assign(new Error("Settings changed on another device. Reload before saving."),{status:409});
+      await settingsRepo.save(tenantId, {...current,...req.body});
+    });
     res.json({ success: true, message: "Settings saved successfully." });
   } catch (error: any) {
     handleApiError(res, error);
@@ -46,6 +54,16 @@ router.post("/settings", authMiddleware, requirePermission("settings"), async (r
 });
 
 // Backward compatibility wrapper route: bulk loads everything via the separate tables
+router.get("/privacy/export",authMiddleware,requireRole("Owner"),async(req,res)=>{
+  try {
+    const tenantId=(req as any).tenantId;
+    const state=publicState(await syncService.getFullState(tenantId),"Owner");
+    const [items,payments,movements]=await Promise.all([orderItemRepo.getAll(tenantId),paymentRepo.getAll(tenantId),inventoryMovementRepo.getAll(tenantId)]);
+    const tenant=(await getGlobalTenantsList()).find(t=>t.tenantId===tenantId);
+    res.json({success:true,data:{exportedAt:new Date().toISOString(),tenant:publicTenant(tenant),...state,orderItems:items,payments,inventoryMovements:movements}});
+  } catch(error) {handleApiError(res,error);}
+});
+
 router.get("/sync", authMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
@@ -53,7 +71,7 @@ router.get("/sync", authMiddleware, async (req, res) => {
     res.json({
       success: true,
       initialized: data !== null,
-      data: data
+      data: publicState(data, (req as any).session?.role,(req as any).session?.permissions,(req as any).session?.userId)
     });
   } catch (error: any) {
     console.error(`Sync GET error for tenant ${tenantId}:`, error);
@@ -62,14 +80,21 @@ router.get("/sync", authMiddleware, async (req, res) => {
 });
 
 // Backward compatibility wrapper route: bulk saves everything via separate tables
-router.post("/sync", authMiddleware, requireRole("Owner", "Manager", "Staff", "Cashier", "Waiter", "Chef"), idempotencyMiddleware, async (req, res) => {
+router.post("/sync", authMiddleware, requireRole("Owner", "Manager"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    const data = await syncService.saveFullState(tenantId, req.body);
+    if ((req as any).session.role === "Manager" && (req.body.staffList || req.body.settings)) {
+      return res.status(403).json({ success: false, error: "FORBIDDEN" });
+    }
+    if ((req as any).session.role === "Manager" && req.body.recipes && (await settingsRepo.get(tenantId))?.managerCanEditRecipes === false) return res.status(403).json({success:false,error:"FORBIDDEN"});
+    if (req.body.orders || req.body.purchases) {
+      return res.status(400).json({ success: false, error: "BUSINESS_COMMAND_REQUIRED", message: "Orders and purchases must use their command endpoints." });
+    }
+    const data = await syncService.saveFullState(tenantId, req.body,(req as any).session.userId);
     res.json({
       success: true,
       initialized: true,
-      data: data
+      data: publicState(data, (req as any).session?.role,(req as any).session?.permissions,(req as any).session?.userId)
     });
   } catch (error: any) {
     console.error(`Sync POST error for tenant ${tenantId}:`, error);
@@ -95,7 +120,7 @@ router.get("/reports", authMiddleware, requirePermission("reports"), async (req,
     const ingredients = (await ingredientRepo.getAll(tenantId)) || [];
     const shifts = (await shiftRepo.getAll(tenantId)) || [];
 
-    const completedOrders = orders.filter((o) => o.status === "Completed" || o.status === "Ready");
+    const completedOrders = orders.filter((o) => o.status === "Completed" && Boolean(o.paidAt));
     const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
     const cashRevenue = completedOrders.filter((o) => o.paymentMethod === "Cash").reduce((sum, o) => sum + o.total, 0);
     const upiRevenue = completedOrders.filter((o) => o.paymentMethod === "UPI").reduce((sum, o) => sum + o.total, 0);
@@ -145,7 +170,7 @@ router.post("/copilot-chat", async (req, res) => {
       prompt,
       history,
       effectiveTenantId,
-      tenantName || "VeggiePOS Website Visitor",
+      tenantName || "Aatmyam POS Website Visitor",
       staffName || "Guest User",
       staffRole || "Visitor"
     );
@@ -160,7 +185,7 @@ router.post("/copilot-chat", async (req, res) => {
 });
 
 // Background Jobs System Endpoints (Administrative: Only Owner/Manager can inspect, Owner can mutate)
-router.get("/jobs", authMiddleware, requireRole("Owner", "Manager"), (req, res) => {
+router.get("/jobs", authMiddleware, requireRole("SaaS Owner"), (req, res) => {
   try {
     res.json({
       success: true,
@@ -172,7 +197,7 @@ router.get("/jobs", authMiddleware, requireRole("Owner", "Manager"), (req, res) 
   }
 });
 
-router.post("/jobs/trigger", authMiddleware, requireRole("Owner"), async (req, res) => {
+router.post("/jobs/trigger", authMiddleware, requireRole("SaaS Owner"), async (req, res) => {
   const { jobId } = req.body;
   try {
     const triggered = await jobsService.runJob(jobId);
@@ -185,7 +210,7 @@ router.post("/jobs/trigger", authMiddleware, requireRole("Owner"), async (req, r
   }
 });
 
-router.post("/jobs/toggle", authMiddleware, requireRole("Owner"), (req, res) => {
+router.post("/jobs/toggle", authMiddleware, requireRole("SaaS Owner"), (req, res) => {
   const { jobId, enabled } = req.body;
   try {
     const success = jobsService.toggleJobEnabled(jobId, enabled);
@@ -198,7 +223,7 @@ router.post("/jobs/toggle", authMiddleware, requireRole("Owner"), (req, res) => 
   }
 });
 
-router.post("/jobs/clear-logs", authMiddleware, requireRole("Owner"), (req, res) => {
+router.post("/jobs/clear-logs", authMiddleware, requireRole("SaaS Owner"), (req, res) => {
   try {
     jobsService.clearLogs();
     res.json({ success: true, message: "Job logs cleared successfully" });
@@ -226,7 +251,7 @@ router.get("/notifications", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/notifications/send", authMiddleware, async (req, res) => {
+router.post("/notifications/send", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
@@ -294,7 +319,7 @@ router.post("/notifications/clear-logs", authMiddleware, async (req, res) => {
 });
 
 // Central Event-Driven Architecture Endpoints (Owner & Manager authorized, strictly tenant-scoped)
-router.get("/events", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
+router.get("/events", authMiddleware, requireRole("Owner","Manager"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
@@ -322,7 +347,7 @@ router.get("/events", authMiddleware, requireRole("Owner", "Manager"), async (re
   }
 });
 
-router.post("/events/publish", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
+router.post("/events/publish", authMiddleware, requireRole("SaaS Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
@@ -336,7 +361,7 @@ router.post("/events/publish", authMiddleware, requireRole("Owner", "Manager"), 
   }
 });
 
-router.post("/events/clear", authMiddleware, requireRole("Owner"), async (req, res) => {
+router.post("/events/clear", authMiddleware, requireRole("SaaS Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
@@ -364,7 +389,7 @@ router.post("/events/clear", authMiddleware, requireRole("Owner"), async (req, r
 });
 
 // Real-Time Logging & Monitoring Dashboard API Endpoints (Owner-only operations)
-router.post("/monitoring/report-error", async (req, res) => {
+router.post("/monitoring/report-error", authMiddleware, async (req, res) => {
   const { message, stack, level, component, tenantId, userId, url, userAgent } = req.body;
   try {
     await monitoringService.log(
@@ -374,8 +399,8 @@ router.post("/monitoring/report-error", async (req, res) => {
       {
         component: component || "UnknownComponent",
         stack: stack || "No stack trace",
-        tenantId: tenantId || "Unknown Tenant",
-        userId: userId || "Unknown User",
+        tenantId: (req as any).tenantId,
+        userId: (req as any).session.userId,
         url: url || "Unknown URL",
         userAgent: userAgent || "Unknown Agent"
       }
@@ -387,7 +412,7 @@ router.post("/monitoring/report-error", async (req, res) => {
   }
 });
 
-router.get("/monitoring/telemetry", authMiddleware, requireRole("Owner"), async (req, res) => {
+router.get("/monitoring/telemetry", authMiddleware, requireRole("SaaS Owner"), async (req, res) => {
   try {
     const logs = await monitoringService.getLogs();
     const metrics = await monitoringService.getMetrics();
@@ -401,7 +426,7 @@ router.get("/monitoring/telemetry", authMiddleware, requireRole("Owner"), async 
   }
 });
 
-router.post("/monitoring/clear", authMiddleware, requireRole("Owner"), async (req, res) => {
+router.post("/monitoring/clear", authMiddleware, requireRole("SaaS Owner"), async (req, res) => {
   try {
     await monitoringService.clearLogs();
     await monitoringService.info("SYSTEM", "Centralized telemetry logs cleared by administrator.");
@@ -411,7 +436,7 @@ router.post("/monitoring/clear", authMiddleware, requireRole("Owner"), async (re
   }
 });
 
-router.get("/monitoring/redis-status", authMiddleware, requireRole("Owner"), async (req, res) => {
+router.get("/monitoring/redis-status", authMiddleware, requireRole("SaaS Owner"), async (req, res) => {
   try {
     const active = redisCacheService.isActive();
     const redisHost = process.env.REDIS_HOST || "127.0.0.1";
@@ -431,7 +456,7 @@ router.get("/monitoring/redis-status", authMiddleware, requireRole("Owner"), asy
   }
 });
 
-router.post("/monitoring/redis-flush", authMiddleware, requireRole("Owner"), async (req, res) => {
+router.post("/monitoring/redis-flush", authMiddleware, requireRole("SaaS Owner"), async (req, res) => {
   try {
     await redisCacheService.clearAll();
     await monitoringService.info("SYSTEM", "Administrator flushed all Redis cache databases manually.");
@@ -441,141 +466,17 @@ router.post("/monitoring/redis-flush", authMiddleware, requireRole("Owner"), asy
   }
 });
 
-router.get("/monitoring/backups", authMiddleware, requireRole("Owner"), async (req, res) => {
-  try {
-    const db = Database.getInstance();
-    
-    // Retrieve PITR setting
-    const systemSettings = await db.getObject<any>("system-tenant", "system_settings") || {};
-    const pitrEnabled = systemSettings.pitrEnabled !== false; // Default to true
-
-    // Retrieve backup history
-    let backups = await db.getObject<any[]>("system-tenant", "db_backup_history");
-    if (!backups || backups.length === 0) {
-      // Seed initial automated daily backup history
-      backups = [
-        {
-          id: `backup-${Date.now() - 12 * 3600 * 1000}`,
-          timestamp: new Date(Date.now() - 12 * 3600 * 1000).toISOString(),
-          status: "success",
-          sizeBytes: 15420,
-          checksum: "sha256-1F2D3A4B5C6E7F80",
-          recordCounts: { menuItems: 14, ingredients: 24, orders: 125, customers: 35, hasSettings: true },
-          totalRecords: 198,
-          pitrActive: pitrEnabled,
-          storageProvider: "Supabase Storage (secure-backups-bucket)",
-          retentionDays: 30
-        },
-        {
-          id: `backup-${Date.now() - 36 * 3600 * 1000}`,
-          timestamp: new Date(Date.now() - 36 * 3600 * 1000).toISOString(),
-          status: "success",
-          sizeBytes: 15110,
-          checksum: "sha256-D7E6C5B4A3F2E1D0",
-          recordCounts: { menuItems: 14, ingredients: 24, orders: 112, customers: 32, hasSettings: true },
-          totalRecords: 182,
-          pitrActive: pitrEnabled,
-          storageProvider: "Supabase Storage (secure-backups-bucket)",
-          retentionDays: 30
-        },
-        {
-          id: `backup-${Date.now() - 60 * 3600 * 1000}`,
-          timestamp: new Date(Date.now() - 60 * 3600 * 1000).toISOString(),
-          status: "success",
-          sizeBytes: 14850,
-          checksum: "sha256-9A8B7C6D5E4F3A2B",
-          recordCounts: { menuItems: 14, ingredients: 24, orders: 98, customers: 30, hasSettings: true },
-          totalRecords: 166,
-          pitrActive: pitrEnabled,
-          storageProvider: "Supabase Storage (secure-backups-bucket)",
-          retentionDays: 30
-        }
-      ];
-      await db.saveObject("system-tenant", "db_backup_history", backups);
-    }
-
-    res.json({
-      success: true,
-      pitrEnabled,
-      backups
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+router.get("/monitoring/backups", authMiddleware, requireRole("SaaS Owner"), (_req, res) => {
+  res.json({ success: true, backups: [], pitrEnabled: null, providerManaged: true,
+    message: "Manage and verify database backups in your database provider dashboard." });
 });
+for (const path of ["/monitoring/backups/trigger", "/monitoring/backups/toggle-pitr", "/monitoring/test-alert"]) {
+  router.post(path, authMiddleware, requireRole("SaaS Owner"), (_req, res) => {
+    res.status(501).json({ success: false, error: "NOT_CONFIGURED", message: "Configure this operation in the hosting provider dashboard." });
+  });
+}
 
-router.post("/monitoring/backups/trigger", authMiddleware, requireRole("Owner"), async (req, res) => {
-  try {
-    // Run the backup background job on-demand
-    await jobsService.runJob("job-5");
-    await monitoringService.info("DATABASE", "On-demand automated database snapshot manually compiled and dispatched successfully.");
-    res.json({ success: true, message: "On-demand database snapshot compiled and verified." });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.post("/monitoring/backups/toggle-pitr", authMiddleware, requireRole("Owner"), async (req, res) => {
-  try {
-    const { enabled } = req.body;
-    const db = Database.getInstance();
-    
-    const systemSettings = await db.getObject<any>("system-tenant", "system_settings") || {};
-    systemSettings.pitrEnabled = enabled;
-    await db.saveObject("system-tenant", "system_settings", systemSettings);
-
-    // Sync state in existing backup records as well
-    const backups = await db.getObject<any[]>("system-tenant", "db_backup_history") || [];
-    const updatedBackups = backups.map(b => ({ ...b, pitrActive: enabled }));
-    await db.saveObject("system-tenant", "db_backup_history", updatedBackups);
-
-    await monitoringService.info("DATABASE", `Supabase Point-in-Time-Recovery (PITR) is now ${enabled ? "ENABLED (Active coverage)" : "DISABLED (Warning)"} by Administrator.`);
-    
-    res.json({ success: true, message: `Point-in-Time Recovery has been successfully ${enabled ? "enabled" : "disabled"}.` });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.post("/monitoring/test-alert", authMiddleware, requireRole("Owner"), async (req, res) => {
-  const { sentryDsn, slackWebhookUrl, emailAlertAddress, type } = req.body;
-  const tenantId = (req as any).tenantId;
-  try {
-    const alertType = type || "Slack Webhook";
-    const serviceName = "ALERT_TESTER";
-    const msg = `[TEST ALERT] VeggiePOS monitoring connection test for ${alertType}! Integration is working correctly.`;
-    
-    const testContext = {
-      tenantId,
-      userId: "System Administrator",
-      component: "AlertConfigurationPanel",
-      stack: "Error: Connection Test\n  at AlertTester.ts:15:10\n  at RouteHandler.ts:342:12",
-      url: "/settings"
-    };
-
-    // Temporarily apply request keys to test connections in real time
-    const originalEnvSlack = process.env.SLACK_WEBHOOK_URL;
-    const originalEnvSentry = process.env.SENTRY_DSN;
-    const originalEnvEmail = process.env.EMAIL_ALERT_ADDRESS;
-
-    if (slackWebhookUrl) process.env.SLACK_WEBHOOK_URL = slackWebhookUrl;
-    if (sentryDsn) process.env.SENTRY_DSN = sentryDsn;
-    if (emailAlertAddress) process.env.EMAIL_ALERT_ADDRESS = emailAlertAddress;
-
-    await monitoringService.sendAlerts("ERROR", serviceName, msg, testContext);
-
-    // Restore
-    process.env.SLACK_WEBHOOK_URL = originalEnvSlack;
-    process.env.SENTRY_DSN = originalEnvSentry;
-    process.env.EMAIL_ALERT_ADDRESS = originalEnvEmail;
-
-    res.json({ success: true, message: `Simulated test dispatch completed successfully for ${alertType}!` });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.post("/monitoring/simulate", authMiddleware, requireRole("Owner"), async (req, res) => {
+router.post("/monitoring/simulate", authMiddleware, requireRole("SaaS Owner"), async (req, res) => {
   const { type } = req.body;
   try {
     switch (type) {

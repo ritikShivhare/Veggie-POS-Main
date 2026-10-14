@@ -1,4 +1,8 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
+import inventoryRouter from "./inventory.routes";
+import { publicStaff,publicState } from "../server/features/shared/security";
+import { validateEntity,customerProfile,finiteAmount } from "../server/features/shared/validation";
 import { Database, handleApiError } from "../server/features/shared/database";
 import {
   staffRepo,
@@ -32,7 +36,7 @@ router.get("/staff", authMiddleware, requirePermission("staff"), async (req, res
   const tenantId = (req as any).tenantId;
   try {
     const data = await staffRepo.getAll(tenantId);
-    res.json({ success: true, data });
+    res.json({ success: true, data: data?.filter(s=>s.status!=='inactive').map(publicStaff) });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -45,13 +49,13 @@ router.get("/staff/:id", authMiddleware, requirePermission("staff"), async (req,
     if (!item) {
       return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Staff member not found." });
     }
-    res.json({ success: true, data: item });
+    res.json({ success: true, data: publicStaff(item) });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
-router.post("/staff", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
+router.post("/staff", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   const sub = (req as any).subscription;
   try {
@@ -64,6 +68,7 @@ router.post("/staff", authMiddleware, requireRole("Owner", "Manager"), async (re
         message: `Your current subscription plan (${sub.plan.toUpperCase()}) only supports up to ${limit} staff members. Please upgrade your plan in settings to add more team members.`
       });
     }
+    validateEntity("staffList",req.body,true);
     await staffRepo.add(tenantId, req.body);
     res.json({ success: true, message: "Staff member added successfully." });
   } catch (error: any) {
@@ -71,30 +76,35 @@ router.post("/staff", authMiddleware, requireRole("Owner", "Manager"), async (re
   }
 });
 
-router.post("/staff/bulk", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
+router.post("/staff/bulk", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await staffRepo.saveAll(tenantId, req.body);
+    return res.status(400).json({success:false,error:"EXPLICIT_STAFF_COMMAND_REQUIRED"});
     res.json({ success: true, message: "Staff list synchronized." });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
-router.put("/staff/:id", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
+router.put("/staff/:id", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
+    const current=await staffRepo.getById(tenantId,req.params.id);
+    validateEntity("staffList",{...publicStaff(current),...req.body,id:req.params.id});
+    if(current?.role==="Owner" && (req.body.role && req.body.role!=="Owner" || ["inactive","suspended"].includes(req.body.status))) return res.status(400).json({success:false,error:"OWNER_REQUIRED"});
     const updated = await staffRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
-    res.json({ success: true, message: "Staff updated successfully.", data: updated });
+    res.json({ success: true, message: "Staff updated successfully.", data: publicStaff(updated) });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
-router.delete("/staff/:id", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
+router.delete("/staff/:id", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await staffRepo.delete(tenantId, req.params.id);
+    const current=await staffRepo.getById(tenantId,req.params.id);
+    if(current?.role==="Owner") return res.status(400).json({success:false,error:"OWNER_REQUIRED"});
+    await staffRepo.update(tenantId,{...current,status:"inactive"} as any);
     res.json({ success: true, message: "Staff deleted successfully." });
   } catch (error: any) {
     handleApiError(res, error);
@@ -108,7 +118,8 @@ router.get("/orders", authMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     const data = await orderRepo.getAll(tenantId);
-    res.json({ success: true, data });
+    const session=(req as any).session;
+    res.json({ success: true, data: publicState({orders:data},session.role,session.permissions,session.userId).orders });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -121,13 +132,15 @@ router.get("/orders/:id", authMiddleware, async (req, res) => {
     if (!item) {
       return res.status(404).json({ success: false, error: "NOT_FOUND", message: "Order not found." });
     }
+    const session=(req as any).session;
+    if(!publicState({orders:[item]},session.role,session.permissions,session.userId).orders.length) return res.status(404).json({success:false,error:"NOT_FOUND"});
     res.json({ success: true, data: item });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
-router.post("/orders", authMiddleware, idempotencyMiddleware, async (req, res) => {
+router.post("/orders", authMiddleware, requirePermission("billing", "orders"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const sub = (req as any).subscription;
   const user = (req as any).user;
@@ -186,7 +199,7 @@ router.post("/orders", authMiddleware, idempotencyMiddleware, async (req, res) =
 });
 
 // Dedicated Payment Endpoint: Validates and atomically commits order payment
-router.post("/orders/:id/pay", authMiddleware, idempotencyMiddleware, async (req, res) => {
+router.post("/orders/:id/pay", authMiddleware, requirePermission("billing"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const user = (req as any).user;
   const session = (req as any).session;
@@ -225,73 +238,21 @@ router.post("/orders/:id/pay", authMiddleware, idempotencyMiddleware, async (req
   }
 });
 
-router.post("/orders/bulk", authMiddleware, idempotencyMiddleware, async (req, res) => {
-  const tenantId = (req as any).tenantId;
+router.post("/orders/bulk",authMiddleware,requireRole("Owner"),(_req,res)=>res.status(400).json({success:false,error:"BUSINESS_COMMAND_REQUIRED"}));
+
+router.put("/orders/:id",authMiddleware,requirePermission("orders","billing"),idempotencyMiddleware,async(req,res)=>{
   try {
-    await orderRepo.saveAll(tenantId, req.body);
-    try {
-      realtimeService.broadcastSyncUpdate(tenantId, "orders");
-    } catch {}
-    res.json({ success: true, message: "Orders synchronized successfully.", data: req.body });
-  } catch (error: any) {
-    handleApiError(res, error);
-  }
-});
-
-router.put("/orders/:id", authMiddleware, idempotencyMiddleware, async (req, res) => {
-  const tenantId = (req as any).tenantId;
-  const session = (req as any).session;
-  const user = (req as any).user;
-
-  try {
-    // 1. Order cancellation protection & atomic execution:
-    // Only Owner or Manager can transition order status to 'Cancelled'
-    if (req.body && req.body.status === "Cancelled") {
-      const role = session?.role || user?.role;
-      const isOwnerOrManager = role === "Owner" || role === "Manager" || role === "SaaS Owner";
-      if (!isOwnerOrManager) {
-        return res.status(403).json({
-          success: false,
-          error: "FORBIDDEN",
-          message: "Cancelling an order requires Owner or Manager role authorization."
-        });
-      }
-
-      const cancelledOrder = await financialTransactionService.executeOrderCancellation(
-        tenantId,
-        req.params.id,
-        {
-          cancelledBy: session?.name || user?.name || "Manager",
-          reason: req.body.cancellationReason || req.body.reason || "Cancelled via POS",
-          expectedVersion: req.body.version
-        }
-      );
-
-      try {
-        realtimeService.broadcastToTenant(tenantId, "order:updated", { entityId: req.params.id, slice: "orders" });
-      } catch {}
-
-      return res.json({ success: true, message: "Order cancelled successfully.", data: cancelledOrder });
-    }
-
-    // 2. Prevent modifying items or totals on already completed and paid orders
-    const existing = await orderRepo.getById(tenantId, req.params.id);
-    if (existing && existing.status === "Completed" && existing.paidAt && req.body.status && req.body.status !== "Completed") {
-      return res.status(400).json({
-        success: false,
-        error: "ORDER_SEALED",
-        message: "Completed and paid orders cannot have their status reversed or items modified."
-      });
-    }
-
-    const updatedOrder = await orderRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
-    try {
-      realtimeService.broadcastToTenant(tenantId, "order:updated", { entityId: req.params.id, slice: "orders" });
-    } catch {}
-    res.json({ success: true, message: "Order updated successfully.", data: updatedOrder || req.body });
-  } catch (error: any) {
-    handleApiError(res, error);
-  }
+    const tenantId=(req as any).tenantId;
+    if(req.body.status==="Cancelled" && !["Owner","Manager"].includes((req as any).session.role)) return res.status(403).json({success:false,error:"FORBIDDEN"});
+    const existing=await orderRepo.getById(tenantId,req.params.id);
+    if(!existing) return res.status(404).json({success:false,error:"NOT_FOUND"});
+    if(existing.paidAt || ["Completed","Cancelled"].includes(existing.status)) return res.status(400).json({success:false,error:"ORDER_SEALED"});
+    const allowed=Object.keys(req.body).every(k=>["status","version","tenantId","branchId","deviceId","updatedAt"].includes(k));
+    if(!allowed || !["Preparing","Ready"].includes(req.body.status)) return res.status(400).json({success:false,error:"BUSINESS_COMMAND_REQUIRED",message:"Use the payment or cancellation command for financial changes."});
+    if(existing.status==="Ready" && req.body.status==="Preparing") return res.status(400).json({success:false,error:"INVALID_STATUS_TRANSITION"});
+    const data=await orderRepo.update(tenantId,{id:existing.id,status:req.body.status} as any,req.body.version);
+    realtimeService.broadcastSyncUpdate(tenantId,"orders");res.json({success:true,data});
+  } catch(error) {handleApiError(res,error);}
 });
 
 router.delete("/orders/:id", authMiddleware, requireRole("Owner", "Manager"), async (req, res) => {
@@ -341,7 +302,7 @@ router.delete("/orders/:id", authMiddleware, requireRole("Owner", "Manager"), as
       {
         cancelledBy,
         reason: String(reason).trim(),
-        expectedVersion: req.body?.version
+        expectedVersion: req.body?.version,refundConfirmed:req.body?.refundConfirmed===true,staffId:(req as any).session.userId
       }
     );
 
@@ -363,7 +324,7 @@ router.delete("/orders/:id", authMiddleware, requireRole("Owner", "Manager"), as
 // ============================================================================
 // REST ENDPOINTS: CUSTOMERS
 // ============================================================================
-router.get("/customers", authMiddleware, async (req, res) => {
+router.get("/customers", authMiddleware, requirePermission("billing","reports"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     const data = await customerRepo.getAll(tenantId);
@@ -373,7 +334,7 @@ router.get("/customers", authMiddleware, async (req, res) => {
   }
 });
 
-router.get("/customers/:id", authMiddleware, async (req, res) => {
+router.get("/customers/:id", authMiddleware, requirePermission("billing","reports"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     const item = await customerRepo.getById(tenantId, req.params.id);
@@ -386,10 +347,12 @@ router.get("/customers/:id", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/customers", authMiddleware, idempotencyMiddleware, async (req, res) => {
+router.post("/customers", authMiddleware, requirePermission("billing","reports"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await customerRepo.add(tenantId, req.body);
+    if(req.body.tenant_id && req.body.tenant_id!==tenantId) return res.status(403).json({success:false,error:"CROSS_TENANT_VIOLATION"});
+    const profile=customerProfile(req.body);
+    await customerRepo.add(tenantId, profile);
     const savedCustomer = await customerRepo.getById(tenantId, req.body.id);
     try {
       realtimeService.broadcastToTenant(tenantId, "customer:updated", { entityId: req.body.id, slice: "customers" });
@@ -403,7 +366,7 @@ router.post("/customers", authMiddleware, idempotencyMiddleware, async (req, res
 router.post("/customers/bulk", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await customerRepo.saveAll(tenantId, req.body);
+    return res.status(400).json({success:false,error:"EXPLICIT_CUSTOMER_COMMAND_REQUIRED"});
     try {
       realtimeService.broadcastSyncUpdate(tenantId, "customers");
     } catch {}
@@ -413,10 +376,26 @@ router.post("/customers/bulk", authMiddleware, idempotencyMiddleware, async (req
   }
 });
 
-router.put("/customers/:id", authMiddleware, idempotencyMiddleware, async (req, res) => {
+router.post("/customers/:id/points",authMiddleware,requireRole("Owner","Manager"),idempotencyMiddleware,async(req,res)=>{
+  try {
+    const tenantId=(req as any).tenantId;
+    const customer=await customerRepo.getById(tenantId,req.params.id);if(!customer) return res.status(404).json({success:false,error:"NOT_FOUND"});
+    const delta=req.body.delta;
+    if(!Number.isInteger(delta) || Math.abs(delta)>10000 || !req.body.reason?.trim()) return res.status(400).json({success:false,error:"INVALID_POINTS_ADJUSTMENT"});
+    if(customer.loyaltyPoints+delta<0) return res.status(400).json({success:false,error:"INSUFFICIENT_POINTS"});
+    const data=await customerRepo.update(tenantId,{...customer,loyaltyPoints:customer.loyaltyPoints+delta},req.body.version);
+    await auditLogService.log(tenantId,"LOYALTY_ADJUSTED",(req as any).session.userName,req.body.reason,{customerId:customer.id,delta});
+    res.json({success:true,data});
+  } catch(error) {handleApiError(res,error);}
+});
+
+router.put("/customers/:id", authMiddleware, requirePermission("billing","reports"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    const updatedCustomer = await customerRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
+    const existing=await customerRepo.getById(tenantId,req.params.id);
+    if(!existing) return res.status(404).json({success:false,error:"NOT_FOUND"});
+    const profile=customerProfile({...req.body,id:req.params.id},existing);
+    const updatedCustomer = await customerRepo.update(tenantId, profile, req.body.version);
     try {
       realtimeService.broadcastToTenant(tenantId, "customer:updated", { entityId: req.params.id, slice: "customers" });
     } catch {}
@@ -426,7 +405,7 @@ router.put("/customers/:id", authMiddleware, idempotencyMiddleware, async (req, 
   }
 });
 
-router.delete("/customers/:id", authMiddleware, async (req, res) => {
+router.delete("/customers/:id", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await customerRepo.delete(tenantId, req.params.id);
@@ -452,7 +431,11 @@ router.get("/shifts", authMiddleware, async (req, res) => {
 router.post("/shifts", authMiddleware, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await shiftRepo.add(tenantId, req.body);
+    const session=(req as any).session;
+    if(req.body.staffId!==session.userId && !["Owner","Manager"].includes(session.role)) return res.status(403).json({success:false,error:"FORBIDDEN"});
+    if(req.body.status!=="Active") return res.status(400).json({success:false,error:"INVALID_SHIFT"});
+    finiteAmount(req.body.openingCash ?? 0,"Opening cash");
+    await shiftRepo.add(tenantId, {...req.body,status:"Active",startTime:new Date().toISOString(),staffName:session.userName,role:session.role});
     const savedShift = await shiftRepo.getById(tenantId, req.body.id);
     try {
       realtimeService.broadcastToTenant(tenantId, "shift:updated", { entityId: req.body.id, slice: "shifts" });
@@ -463,38 +446,9 @@ router.post("/shifts", authMiddleware, idempotencyMiddleware, async (req, res) =
   }
 });
 
-router.post("/shifts/bulk", authMiddleware, idempotencyMiddleware, async (req, res) => {
-  const tenantId = (req as any).tenantId;
-  try {
-    await shiftRepo.saveAll(tenantId, req.body);
-    try {
-      realtimeService.broadcastSyncUpdate(tenantId, "shifts");
-    } catch {}
-    res.json({ success: true, message: "Shifts synchronized successfully.", data: req.body });
-  } catch (error: any) {
-    handleApiError(res, error);
-  }
-});
-
-router.put("/shifts/:id", authMiddleware, idempotencyMiddleware, async (req, res) => {
-  const tenantId = (req as any).tenantId;
-  try {
-    const updated = await shiftRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
-    res.json({ success: true, message: "Shift updated.", data: updated || req.body });
-  } catch (error: any) {
-    handleApiError(res, error);
-  }
-});
-
-router.delete("/shifts/:id", authMiddleware, async (req, res) => {
-  const tenantId = (req as any).tenantId;
-  try {
-    await shiftRepo.delete(tenantId, req.params.id);
-    res.json({ success: true, message: "Shift log deleted." });
-  } catch (error: any) {
-    handleApiError(res, error);
-  }
-});
+router.post("/shifts/bulk",authMiddleware,(_req,res)=>res.status(400).json({success:false,error:"BUSINESS_COMMAND_REQUIRED"}));
+router.put("/shifts/:id",authMiddleware,(_req,res)=>res.status(400).json({success:false,error:"USE_BLIND_SHIFT_CLOSE"}));
+router.delete("/shifts/:id",authMiddleware,(_req,res)=>res.status(400).json({success:false,error:"SHIFT_LEDGER_IMMUTABLE"}));
 
 // ============================================================================
 // OFFLINE SYNC ENGINE ENDPOINT: /sync/outbox
@@ -504,231 +458,27 @@ router.delete("/shifts/:id", authMiddleware, async (req, res) => {
 // 4. Returns canonical entity and optimistic version
 // 5. Broadcasts realtime sync event
 // ============================================================================
-router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, res) => {
-  const tenantId = (req as any).tenantId;
-  const branchId = (req as any).branchId || (req.headers["x-branch-id"] as string) || req.body.branchId || "main";
-  const deviceId = (req.headers["x-device-id"] as string) || req.body.deviceId || "unknown-device";
-  const idempotencyKey = (req.headers["idempotency-key"] || req.headers["x-idempotency-key"] || req.body.idempotencyKey) as string;
-  const { operationId, entityType, entityId, operationType, payload, createdAt, retryCount } = req.body;
-
-  // Step 6 Validation: Cross-tenant isolation protection
-  if (req.body.tenantId && req.body.tenantId !== tenantId) {
-    return res.status(403).json({
-      success: false,
-      error: "CROSS_TENANT_VIOLATION",
-      message: "Client-supplied tenantId does not match authenticated session tenant."
-    });
-  }
-  if (payload && payload.tenantId && payload.tenantId !== tenantId) {
-    return res.status(403).json({
-      success: false,
-      error: "CROSS_TENANT_VIOLATION",
-      message: "Outbox payload tenantId does not match authenticated session tenant."
-    });
-  }
-
-  if (!operationId || !entityType || !entityId || !operationType || !payload) {
-    return res.status(422).json({
-      success: false,
-      error: "VALIDATION_ERROR",
-      message: "operationId, entityType, entityId, operationType, and payload are required for sync operation."
-    });
-  }
-
-  try {
-    let canonicalEntity: any = null;
-
-    await Database.getInstance().runTransaction(tenantId, async (trx) => {
-      const enrichedPayload = {
-        ...payload,
-        tenantId,
-        branchId,
-        updatedAt: new Date().toISOString()
-      };
-
-      switch (entityType) {
-        case "order": {
-          if (operationType === "CREATE") {
-            const existing = await orderRepo.getById(tenantId, entityId);
-            if (!existing) {
-              const res = await financialTransactionService.executeOrderPlacement(
-                tenantId,
-                { ...enrichedPayload, id: entityId },
-                { role: "Cashier", staffName: "Offline Outbox" }
-              );
-              canonicalEntity = res.order;
-            } else {
-              canonicalEntity = existing;
-            }
-          } else if (operationType === "UPDATE") {
-            if (payload.status === "Cancelled") {
-              canonicalEntity = await financialTransactionService.executeOrderCancellation(
-                tenantId,
-                entityId,
-                {
-                  cancelledBy: payload.cancelledBy || "Offline Outbox",
-                  reason: payload.cancellationReason || "Cancelled via Outbox",
-                  expectedVersion: payload.version
-                }
-              );
-            } else {
-              canonicalEntity = await orderRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version, trx);
-            }
-          } else if (operationType === "DELETE") {
-            const existingOrder = await orderRepo.getById(tenantId, entityId);
-            if (existingOrder && existingOrder.status !== "Cancelled") {
-              canonicalEntity = await financialTransactionService.executeOrderCancellation(
-                tenantId,
-                entityId,
-                {
-                  cancelledBy: payload.cancelledBy || "Offline Terminal",
-                  reason: payload.cancellationReason || payload.reason || "Voided via Offline Outbox",
-                  expectedVersion: payload.version
-                }
-              );
-            } else {
-              canonicalEntity = existingOrder || { id: entityId, status: "Cancelled", version: 1 };
-            }
-          }
-          break;
-        }
-        case "payment": {
-          const existing = await orderRepo.getById(tenantId, entityId);
-          if (existing) {
-            if (existing.status !== "Completed" || !existing.paidAt) {
-              const res = await financialTransactionService.executeOrderPayment(
-                tenantId,
-                entityId,
-                {
-                  amount: payload.amount !== undefined ? Number(payload.amount) : existing.total,
-                  paymentMethod: payload.paymentMethod || "Cash",
-                  transactionReference: payload.transactionReference,
-                  cashierId: payload.cashierId,
-                  cashierName: payload.cashierName
-                }
-              );
-              canonicalEntity = res.order;
-            } else {
-              canonicalEntity = existing;
-            }
-          } else {
-            canonicalEntity = enrichedPayload;
-          }
-          break;
-        }
-        case "customer": {
-          if (operationType === "CREATE") {
-            const existing = await customerRepo.getById(tenantId, entityId);
-            if (!existing) {
-              await customerRepo.add(tenantId, enrichedPayload, trx);
-            }
-            canonicalEntity = (await customerRepo.getById(tenantId, entityId)) || enrichedPayload;
-          } else if (operationType === "UPDATE") {
-            canonicalEntity = await customerRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version, trx);
-          } else if (operationType === "DELETE") {
-            await customerRepo.delete(tenantId, entityId, trx);
-            canonicalEntity = { id: entityId, deleted: true, version: 1 };
-          }
-          break;
-        }
-        case "shift": {
-          if (operationType === "CREATE") {
-            const existing = await shiftRepo.getById(tenantId, entityId);
-            if (!existing) {
-              await shiftRepo.add(tenantId, enrichedPayload, trx);
-            }
-            canonicalEntity = (await shiftRepo.getById(tenantId, entityId)) || enrichedPayload;
-          } else if (operationType === "UPDATE") {
-            canonicalEntity = await shiftRepo.update(tenantId, { ...enrichedPayload, id: entityId }, payload.version, trx);
-          } else if (operationType === "DELETE") {
-            await shiftRepo.delete(tenantId, entityId, trx);
-            canonicalEntity = { id: entityId, deleted: true, version: 1 };
-          }
-          break;
-        }
-        case "purchase": {
-          if (operationType === "CREATE") {
-            const existing = await purchaseRepo.getById(tenantId, entityId);
-            if (!existing) {
-              await purchaseRepo.add(tenantId, enrichedPayload, trx);
-
-              // Update ingredient stock and calculate weighted average cost
-              const ingId = payload.ingredientId;
-              const qty = Number(payload.quantity);
-              const cost = Number(payload.cost);
-              if (ingId && !isNaN(qty) && qty > 0) {
-                const ing = await ingredientRepo.getById(tenantId, ingId);
-                if (ing) {
-                  const previousStock = ing.currentStock;
-                  const currentStockValid = Math.max(0, previousStock);
-                  const newStock = Number((previousStock + qty).toFixed(3));
-                  let newCostPerUnit = ing.costPerUnit;
-                  if (qty > 0 && cost > 0) {
-                    if (currentStockValid > 0 && ing.costPerUnit > 0) {
-                      const currentValue = currentStockValid * ing.costPerUnit;
-                      newCostPerUnit = Number(((currentValue + cost) / (currentStockValid + qty)).toFixed(2));
-                    } else {
-                      newCostPerUnit = Number((cost / qty).toFixed(2));
-                    }
-                  }
-                  await ingredientRepo.update(tenantId, {
-                    ...ing,
-                    currentStock: newStock,
-                    costPerUnit: newCostPerUnit,
-                    updated_at: new Date().toISOString()
-                  }, ing.version, trx);
-                }
-              }
-            }
-            canonicalEntity = (await purchaseRepo.getById(tenantId, entityId)) || enrichedPayload;
-          } else if (operationType === "DELETE") {
-            await purchaseRepo.delete(tenantId, entityId, trx);
-            canonicalEntity = { id: entityId, deleted: true, version: 1 };
-          }
-          break;
-        }
-        default: {
-          canonicalEntity = enrichedPayload;
-          break;
-        }
-      }
-    });
-
-    // 5. Broadcast realtime event to tenant
-    try {
-      realtimeService.broadcastToTenant(tenantId, `${entityType}:synced`, {
-        slice: entityType,
-        entityId,
-        metadata: {
-          operationId,
-          branchId,
-          canonicalEntity
-        }
-      });
-    } catch {}
-
-    // 6. Return canonical entity/version and verified outbox command structure
-    res.json({
-      success: true,
-      message: "Sync operation committed transactionally.",
-      operationId,
-      idempotencyKey: idempotencyKey || operationId,
-      tenantId,
-      branchId,
-      deviceId,
-      entityType,
-      entityId,
-      operationType,
-      canonicalData: canonicalEntity,
-      data: canonicalEntity,
-      status: "SYNCED",
-      createdAt: createdAt || new Date().toISOString(),
-      retryCount: typeof retryCount === "number" ? retryCount : 0,
-      lastError: null
-    });
-  } catch (error: any) {
-    handleApiError(res, error);
-  }
+// Reuse the real command routes so an offline envelope cannot bypass their
+// permissions, validation, payment ledger or manager approval.
+router.post("/sync/outbox",authMiddleware,(req,res,next)=>{
+  const {operationId,entityType,entityId,operationType,payload}=req.body;
+  if(!operationId || typeof entityId!=="string" || !payload || typeof payload!=="object" || !["CREATE","UPDATE","DELETE"].includes(operationType)) return res.status(422).json({success:false,error:"VALIDATION_ERROR"});
+  const tenantId=(req as any).tenantId;
+  if((payload.tenantId && payload.tenantId!==tenantId) || (payload.tenant_id && payload.tenant_id!==tenantId)) return res.status(403).json({success:false,error:"CROSS_TENANT_VIOLATION"});
+  const paths:any={order:"orders",customer:"customers",shift:"shifts",purchase:"purchases",ingredient:"ingredients"};
+  let path=paths[entityType],method=operationType==="CREATE"?"POST":operationType==="DELETE"?"DELETE":"PUT";
+  if(entityType==="payment") {path=`orders/${encodeURIComponent(entityId)}/pay`;method="POST";}
+  else if(path && operationType!=="CREATE") path+=`/${encodeURIComponent(entityId)}`;
+  if(!path || (entityType==="payment" && operationType==="DELETE")) return res.status(422).json({success:false,error:"UNSUPPORTED_OPERATION"});
+  req.headers["idempotency-key"]=String(req.headers["idempotency-key"] || req.body.idempotencyKey || operationId);
+  req.url=`/${path}`;req.originalUrl=`/api/${path}`;req.method=method;req.body={...payload,id:entityId};
+  const originalJson=res.json;
+  res.json=function(body:any) {
+    if(body.success) body={...body,status:"SYNCED",operationId,tenantId,branchId:"main",deviceId:req.headers["x-device-id"],idempotencyKey:req.headers["idempotency-key"],canonicalData:body.data || body.order};
+    return originalJson.call(this,body);
+  };
+  const target=["purchase","ingredient"].includes(entityType)?inventoryRouter:router;
+  (target as any).handle(req,res,next);
 });
 
 // ============================================================================
@@ -736,7 +486,7 @@ router.post("/sync/outbox", authMiddleware, idempotencyMiddleware, async (req, r
 // ============================================================================
 
 // Verify Manager/Owner PIN for Privileged Operations
-router.post("/pos/verify-pin", authMiddleware, async (req, res) => {
+router.post("/pos/verify-pin", authMiddleware, rateLimit({windowMs:15*60*1000,limit:20,standardHeaders:true,legacyHeaders:false}), async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { pin, requiredPermission } = req.body;
   if (!pin) {
@@ -800,7 +550,7 @@ router.post("/orders/:id/cancel", authMiddleware, requireRole("Owner", "Manager"
       orderId,
       {
         cancelledBy: manager.name,
-        reason: reason.trim()
+        reason: reason.trim(),refundConfirmed:req.body.refundConfirmed===true,staffId:(req as any).session.userId
       }
     );
 
@@ -1001,7 +751,7 @@ router.post("/menu/audit-price-change", authMiddleware, async (req, res) => {
 });
 
 // Problem 3 Solution 2: Cash Drawer Open Audit Log & Alert
-router.post("/pos/open-cash-drawer", authMiddleware, idempotencyMiddleware, async (req, res) => {
+router.post("/pos/open-cash-drawer", authMiddleware, requirePermission("billing"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { staffName = "Cashier", reason } = req.body;
 
@@ -1018,14 +768,14 @@ router.post("/pos/open-cash-drawer", authMiddleware, idempotencyMiddleware, asyn
       { staffName, reason: reason.trim(), timestamp: new Date().toISOString() }
     );
 
-    res.json({ success: true, message: "Cash drawer pop audit logged and alert dispatched." });
+    res.json({ success: true, message: "Cash drawer request recorded. Open the physical drawer manually; no hardware connection is configured." });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
 // Problem 3 Solution 1 & 3: Blind Cash Drop & Manager Override for Cash Variance
-router.post("/shifts/:id/close-blind", authMiddleware, async (req, res) => {
+router.post("/shifts/:id/close-blind", authMiddleware, rateLimit({windowMs:15*60*1000,limit:20,standardHeaders:true,legacyHeaders:false}), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const shiftId = req.params.id;
   const { physicalCashCount, managerPin, closingNotes = "" } = req.body;
@@ -1035,23 +785,27 @@ router.post("/shifts/:id/close-blind", authMiddleware, async (req, res) => {
   }
 
   try {
+    const result = await Database.getInstance().runTransaction(tenantId,async () => {
     const shifts = (await shiftRepo.getAll(tenantId)) || [];
-    const activeShift = shifts.find((s) => s.id === shiftId || (s.staffId === req.body.staffId && s.status === "Active"));
+    const activeShift = shifts.find((s) => s.id === shiftId);
 
     if (!activeShift) {
-      return res.status(404).json({ success: false, error: "SHIFT_NOT_FOUND", message: "No active shift found to close." });
+      return {status:404,body:{ success: false, error: "SHIFT_NOT_FOUND", message: "No active shift found to close." }};
     }
 
-    // Compute expected cash during this shift from orders
-    const orders = (await orderRepo.getAll(tenantId)) || [];
+    if(activeShift.staffId!==(req as any).session.userId && !["Owner","Manager"].includes((req as any).session.role)) return {status:403,body:{success:false,error:"FORBIDDEN"}};
+    if(activeShift.status!=="Active") return {status:400,body:{success:false,error:"SHIFT_ALREADY_CLOSED"}};
+    finiteAmount(Number(physicalCashCount),"Physical cash count");
+    // Count settlements received during the shift, including older pending orders.
+    const payments = await financialTransactionService.getPaymentRepo().getAll(tenantId);
     const shiftStartTime = new Date(activeShift.startTime).getTime();
-    const shiftCashOrders = orders.filter((o) => {
-      const orderTime = new Date(o.date).getTime();
-      return orderTime >= shiftStartTime && o.paymentMethod === "Cash" && o.status === "Completed";
+    const shiftCashPayments = payments.filter((p) => {
+      const settlementTime = new Date(p.created_at).getTime();
+      return settlementTime >= shiftStartTime && p.cashierId===activeShift.staffId && p.paymentMethod === "Cash" && p.status === "Completed";
     });
 
-    const totalCashCollected = shiftCashOrders.reduce((sum, o) => sum + o.total, 0);
-    const openingCash = (activeShift as any).openingCash || 500; // default initial drawer float
+    const totalCashCollected = shiftCashPayments.reduce((sum, p) => sum + p.amount, 0);
+    const openingCash = (activeShift as any).openingCash ?? 0; // default initial drawer float
     const expectedCash = openingCash + totalCashCollected;
     const physicalCount = Number(physicalCashCount);
     const variance = Number((physicalCount - expectedCash).toFixed(2));
@@ -1060,26 +814,26 @@ router.post("/shifts/:id/close-blind", authMiddleware, async (req, res) => {
     let managerName = "";
     if (Math.abs(variance) > 0) {
       if (!managerPin) {
-        return res.json({
+        return {status:200,body:{
           success: false,
           requireManagerOverride: true,
           variance,
           expectedCash,
           physicalCashCount: physicalCount,
           message: `Discrepancy detected! Blind Cash Count (INR ${physicalCount}) differs from Expected Cash (INR ${expectedCash}) by INR ${variance > 0 ? "+" : ""}${variance}. Manager PIN override required.`
-        });
+        }};
       }
 
       const staffList = (await staffRepo.getAll(tenantId)) || [];
-      const authorizedStaff = staffList.filter((s) => s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("close_shift" as any));
+      const authorizedStaff = staffList.filter((s) => s.status!=="inactive" && s.status!=="suspended" && (s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("close_shift" as any)));
       const manager = await findStaffByPinConstantTime(authorizedStaff, managerPin);
 
       if (!manager) {
-        return res.status(403).json({
+        return {status:403,body:{
           success: false,
           error: "UNAUTHORIZED_PIN",
           message: "Invalid Manager PIN code. Override failed."
-        });
+        }};
       }
       managerName = manager.name;
     }
@@ -1126,14 +880,16 @@ router.post("/shifts/:id/close-blind", authMiddleware, async (req, res) => {
       );
     }
 
-    res.json({
+    return {status:200,body:{
       success: true,
       message: `Shift closed successfully! ${variance !== 0 ? `Cash Variance (INR ${variance}) override recorded.` : "Drawer cash balanced perfectly."}`,
       shift: activeShift,
       expectedCash,
       physicalCashCount: physicalCount,
       variance
+    }};
     });
+    res.status(result.status).json(result.body);
   } catch (error: any) {
     handleApiError(res, error);
   }

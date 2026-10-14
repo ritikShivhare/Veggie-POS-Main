@@ -571,7 +571,7 @@ export default function InventoryManagement({
 
       {/* Main Inner Views */}
       <div className="flex-1 overflow-y-auto pr-1">
-        
+
         {/* SUBTAB 1: RAW MATERIALS */}
         {activeSubTab === "raw" && (
           <div className="space-y-4">
