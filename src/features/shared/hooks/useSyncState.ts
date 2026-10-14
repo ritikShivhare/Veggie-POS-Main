@@ -68,6 +68,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   });
 
   const [isInitialSyncLoading, setIsInitialSyncLoading] = useState<boolean>(false);
+  const [isTenantDataReady, setIsTenantDataReady] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Gemini AI Report State
@@ -140,6 +141,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     loadFromIndexedDB();
 
     isLoadedRef.current = false;
+    setIsTenantDataReady(false);
     loadedTenantIdRef.current = "";
     lastFetchedStateRef.current = "";
 
@@ -171,12 +173,14 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   // Initial Sync load & Background Sync Polling
   useEffect(() => {
     if (!currentStaff || !currentSessionId) {
+      setIsTenantDataReady(false);
       setIsInitialSyncLoading(false);
       return;
     }
     let active = true;
     offlineRepository.resumeAuthOperations(activeTenantId).then(()=>OutboxProcessor.triggerDrain(activeTenantId)).catch(console.warn);
     isLoadedRef.current = false;
+    setIsTenantDataReady(false);
 
     let ws: WebSocket | null = null;
     let reconnectTimer: any = null;
@@ -199,8 +203,10 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
         if (json.success && json.initialized && json.data) {
           const d = json.data;
           await offlineRepository.saveFullTenantState(activeTenantId,d);
+          if (!active) return;
           d.orders=await offlineRepository.getOrders(activeTenantId) as Order[];
-          if (loadedTenantIdRef.current === activeTenantId) {
+          if (!active) return;
+          {
             const serverStateStr = JSON.stringify({
               menuItems: d.menuItems,
               ingredients: d.ingredients,
@@ -223,6 +229,10 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
             if (d.purchases) setPurchases(d.purchases);
             if (d.shifts) setShifts(d.shifts);
             if (d.settings) setSettings(d.settings);
+            loadedTenantIdRef.current = activeTenantId;
+            isLoadedRef.current = true;
+            setIsTenantDataReady(true);
+            setIsInitialSyncLoading(false);
 
             try {
               offlineRepository.saveFullTenantState(activeTenantId, d).catch(e => console.warn(e));
@@ -236,19 +246,15 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
 
     const fetchSync = async () => {
       try {
-        // Enforce 3-second network timeout so initial sync never blocks applet
-        const json = await Promise.race([
-          ApiClient.getTenantSync(activeTenantId, currentSessionId || undefined),
-          new Promise<SyncResponse>((_, reject) =>
-            setTimeout(() => reject(new Error("INITIAL_SYNC_TIMEOUT")), 3000)
-          )
-        ]);
+        const json = await ApiClient.getTenantSync(activeTenantId, currentSessionId || undefined);
         if (!active) return;
 
         if (json.success && json.initialized && json.data) {
           const d = json.data;
           await offlineRepository.saveFullTenantState(activeTenantId,d);
+          if (!active) return;
           d.orders=await offlineRepository.getOrders(activeTenantId) as Order[];
+          if (!active) return;
           
           const serverStateStr = JSON.stringify({
             menuItems: d.menuItems,
@@ -279,6 +285,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
 
           loadedTenantIdRef.current = activeTenantId;
           isLoadedRef.current = true;
+          setIsTenantDataReady(true);
           setIsInitialSyncLoading(false);
         } else if (json.success && !json.initialized) {
           setToastMessage({type:"error",text:"Restaurant setup is incomplete. Contact the owner."});
@@ -655,6 +662,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     shifts,
     setShifts,
     isInitialSyncLoading,
+    isTenantDataReady,
     setIsInitialSyncLoading,
     settings,
     setSettings,

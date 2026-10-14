@@ -70,6 +70,7 @@ function AppContent() {
     purchases,
     shifts,
     isInitialSyncLoading,
+    isTenantDataReady,
     setIsInitialSyncLoading,
     settings,
     setSettings,
@@ -527,6 +528,13 @@ function AppContent() {
             </div>
           )}
 
+          {!isTenantDataReady ? (
+            <div role="status" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+              <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
+              <h2 className="font-semibold">Loading restaurant data</h2>
+              <p className="text-sm text-slate-500">Keep this page open. Editing becomes available once your restaurant data is synchronized.</p>
+            </div>
+          ) : <>
           {activeTab === "dashboard" && (
             <Dashboard
               dashboardStats={dashboardStats}
@@ -728,6 +736,8 @@ function AppContent() {
               onSessionTerminated={handleLogout}
             />
           )}
+
+          </>}
 
         </div>
 

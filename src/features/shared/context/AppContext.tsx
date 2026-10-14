@@ -42,6 +42,7 @@ export interface AppContextType {
   shifts: Shift[];
   setShifts: (shifts: Shift[]) => void;
   isInitialSyncLoading: boolean;
+  isTenantDataReady: boolean;
   setIsInitialSyncLoading: (loading: boolean) => void;
   settings: InventorySettings;
   setSettings: React.Dispatch<React.SetStateAction<InventorySettings>>;

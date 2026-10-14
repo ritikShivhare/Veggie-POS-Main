@@ -179,6 +179,7 @@ export class ApiClient {
   public static async getTenantSync(tenantId: string, sessionId?: string): Promise<SyncResponse> {
     try {
       const response = await fetch(`/api/sync?tenantId=${encodeURIComponent(tenantId)}`, {
+        signal: AbortSignal.timeout(30000),
         headers: this.getHeaders(tenantId, sessionId),
         credentials: "include"
       });
