@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Order, OrderStatus } from "../shared/types";
-import { ChefHat, Play, CheckCircle, Flame, Trash2, Clock, AlertTriangle } from "lucide-react";
+import { ChefHat, Play, CheckCircle, Flame, Clock, AlertTriangle } from "lucide-react";
 
 interface KitchenKDSProps {
   orders: Order[];
@@ -257,14 +257,9 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
                   )}
 
                   {order.status === "Ready" && (
-                    <button
-                      onClick={() => handleActionClick(order, "Completed")}
-                      className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center space-x-2 border border-slate-200 transition duration-150 active:scale-[0.98]"
-                      id={`kds-clear-btn-${order.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span>Clear Order</span>
-                    </button>
+                    <p className="w-full py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs text-center border border-slate-200">
+                      Ready — awaiting cashier settlement
+                    </p>
                   )}
                 </div>
               </div>
