@@ -464,6 +464,31 @@ export default function PinLogin({
               </span>
             </div>
 
+            <form onSubmit={e => { e.preventDefault(); handleManualSubmit(); }} className="w-full mb-3">
+              <label htmlFor="staff-pin-input" className="sr-only">Staff PIN</label>
+              <input
+                id="staff-pin-input"
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={6}
+                pattern="[0-9]{4,6}"
+                placeholder="Staff PIN"
+                value={pin}
+                disabled={isLocked || isSubmitting}
+                onChange={e => {
+                  if (autoSubmitTimerRef.current) clearTimeout(autoSubmitTimerRef.current);
+                  autoSubmitTimerRef.current = null;
+                  const nextPin = e.target.value.replace(/\D/g, "").slice(0, 6);
+                  setPin(nextPin);
+                  setError("");
+                  if (nextPin.length >= 4) {
+                    autoSubmitTimerRef.current = setTimeout(() => triggerLogin(nextPin), nextPin.length === 6 ? 40 : 500);
+                  }
+                }}
+                className="w-full rounded-lg border border-slate-300 p-2 text-center text-sm tracking-widest disabled:opacity-50"
+              />
+            </form>
             <form onSubmit={passwordLogin} className="w-full mb-3 flex gap-2">
               <input type="password" autoComplete="current-password" placeholder="Owner password (optional)" value={ownerPassword} onChange={e=>setOwnerPassword(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-300 p-2 text-xs" />
               <button disabled={isSubmitting || !ownerPassword} className="rounded-lg bg-slate-800 px-3 text-white text-xs disabled:opacity-50">Login</button>
