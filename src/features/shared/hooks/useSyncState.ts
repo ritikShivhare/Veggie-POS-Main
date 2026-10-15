@@ -187,7 +187,10 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     let pingInterval: any = null;
     let pollingInterval: any = null;
 
+    let syncReadInFlight = false;
     const fetchSyncUpdates = async () => {
+      if (!active || syncReadInFlight) return;
+      syncReadInFlight = true;
       try {
         if (hasPendingChangesRef.current || (Date.now() - lastSaveTimeRef.current < 1500)) {
           return;
@@ -241,6 +244,8 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
         }
       } catch (err) {
         console.warn("[Realtime] Skipped background synchronization update due to network status:", err);
+      } finally {
+        syncReadInFlight = false;
       }
     };
 
@@ -443,7 +448,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   useEffect(()=>{
     if(!isLoadedRef.current || loadedTenantIdRef.current!==activeTenantId || !currentSessionId || !["Owner","Manager"].includes(currentStaff?.role || "")) return;
     const baseline=JSON.parse(lastFetchedStateRef.current || "{}");
-    const current:any={menuItems,ingredients,recipes,...(currentStaff?.role==="Owner"?{staffList,settings}:{})};
+    const current:any={menuItems,ingredients,recipes,...(currentStaff?.role==="Owner"?{settings}:{})};
     const payload:any={},deletions:any={};
     const clean=(row:any)=>{const {tenantId,branchId,deviceId,updatedAt,createdAt,...safe}=row;return safe;};
     for(const key of Object.keys(current)) {

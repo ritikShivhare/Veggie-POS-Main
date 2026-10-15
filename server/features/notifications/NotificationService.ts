@@ -355,36 +355,26 @@ export class NotificationService {
     return (await this.db.getObject<InAppNotification[]>(tenantId, "system_notifications")) || [];
   }
 
-  /**
-   * Mark specific in-app notification as read
-   */
-  public async markAsRead(tenantId: string, id: string): Promise<boolean> {
-    const list = await this.getInAppNotifications(tenantId);
-    const item = list.find((n) => n.id === id);
-    if (!item) return false;
-    item.read = true;
-    await this.db.saveObject(tenantId, "system_notifications", list);
-    return true;
+  public canView(notification:any, actor:{userId:string;role:string}):boolean {
+    const visible=Array.isArray(notification.recipientIds)
+      ? notification.recipientIds.includes(actor.userId)
+      : ['Owner','Manager'].includes(actor.role);
+    return visible && !(notification.dismissedBy || []).includes(actor.userId);
   }
-
-  /**
-   * Mark all in-app notifications as read
-   */
-  public async markAllAsRead(tenantId: string): Promise<void> {
-    const list = await this.getInAppNotifications(tenantId);
-    list.forEach((n) => { n.read = true; });
-    await this.db.saveObject(tenantId, "system_notifications", list);
+  public async getInbox(tenantId:string,actor:{userId:string;role:string}) {
+    return (await this.getInAppNotifications(tenantId)).filter(n=>this.canView(n,actor)).map((n:any)=>{
+      const {recipientIds,readBy,dismissedBy,eventKey,...safe}=n;
+      return {...safe,read:(readBy || []).includes(actor.userId)};
+    });
   }
-
-  /**
-   * Delete specific in-app notification
-   */
-  public async deleteNotification(tenantId: string, id: string): Promise<boolean> {
-    const list = await this.getInAppNotifications(tenantId);
-    const filtered = list.filter((n) => n.id !== id);
-    if (filtered.length === list.length) return false;
-    await this.db.saveObject(tenantId, "system_notifications", filtered);
-    return true;
+  public async updateInbox(tenantId:string,actor:{userId:string;role:string},action:'read'|'read-all'|'dismiss',id?:string):Promise<boolean> {
+    return this.db.runTransaction(tenantId,async()=>{
+      const list=await this.getInAppNotifications(tenantId);let changed=false;
+      for(const n of list as any[]) if(this.canView(n,actor) && (action==='read-all' || n.id===id)) {
+        const key=action==='dismiss'?'dismissedBy':'readBy';n[key]=[...new Set([...(n[key] || []),actor.userId])];changed=true;
+      }
+      if(changed)await this.db.saveObject(tenantId,'system_notifications',list);return changed;
+    });
   }
 
   /**
@@ -407,6 +397,7 @@ export class NotificationService {
     tenantId: string,
     notification: Omit<InAppNotification, "id" | "timestamp" | "read">
   ): Promise<string> {
+    return this.db.runTransaction(tenantId,async()=>{
     const id = `notify-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const list = await this.getInAppNotifications(tenantId);
 
@@ -418,9 +409,10 @@ export class NotificationService {
     };
 
     list.unshift(newNotification);
-    // Maintain maximum 50 recent notifications
-    await this.db.saveObject(tenantId, "system_notifications", list.slice(0, 50));
+    // Maintain maximum 100 recent notifications
+    await this.db.saveObject(tenantId, "system_notifications", list.slice(0, 100));
     return id;
+    });
   }
 
   private async saveDispatchLogs(tenantId: string, newLogs: DispatchLog[]): Promise<void> {

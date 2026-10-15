@@ -157,25 +157,24 @@ function AppContent() {
 
   const [unreadNotifsCount, setUnreadNotifsCount] = useState<number>(0);
 
-  // Poll notifications for real-time badge count
+  // Recipient-scoped alerts: one request at a time, discard late tenant/session responses.
   useEffect(() => {
-    const fetchUnreadCount = async () => {
-      if (!currentStaff) return;
+    let active=true,busy=false,seen:Set<string>|null=null;
+    setUnreadNotifsCount(0);toast.clearAll();
+    const fetchUnreadCount=async()=>{
+      if(!currentStaff || busy)return;busy=true;
       try {
-        const res = await ApiClient.authenticatedFetch("/api/notifications");
-        const data = await res.json();
-        if (data.success && data.notifications) {
-          const unread = data.notifications.filter((n: any) => !n.read).length;
-          setUnreadNotifsCount(unread);
-        }
-      } catch (err) {
-        console.warn("Failed to poll unread notifications:", err);
-      }
+        const res=await ApiClient.authenticatedFetch('/api/notifications');const data=await res.json();
+        if(!active || !res.ok || !data.success)return;
+        const notifications=data.notifications || [];
+        if(seen)for(const n of notifications)if(!n.read && n.metadata?.kind && !seen.has(n.id))toast.info(n.message,n.title,8000);
+        seen=new Set(notifications.map((n:any)=>n.id));
+        setUnreadNotifsCount(notifications.filter((n:any)=>!n.read).length);
+      }catch(err){console.warn('Failed to poll unread notifications:',err);}finally{busy=false;}
     };
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 10000);
-    return () => clearInterval(interval);
-  }, [activeTab, currentStaff]);
+    fetchUnreadCount();const interval=setInterval(fetchUnreadCount,10000);
+    return()=>{active=false;clearInterval(interval);};
+  },[activeTenant.tenantId,currentStaff?.id,currentSessionId]);
 
   const handleSignupSuccess = (data: {
     tenant: RestaurantTenant;
@@ -572,7 +571,7 @@ function AppContent() {
                 <p className="text-sm font-medium text-slate-400 font-mono">Loading Kitchen Display System...</p>
               </div>
             }>
-              <KitchenKDS
+              <KitchenKDS key={activeTenant.tenantId+':'+currentStaff.id}
                 orders={orders}
                 onUpdateOrderStatus={handleUpdateOrderStatus}
                 kdsSoundAlerts={settings.kdsSoundAlerts}
@@ -609,7 +608,6 @@ function AppContent() {
               onUpdateRecipes={handleUpdateRecipes}
               onUpdateMenuItems={handleUpdateMenuItems}
               onAddPurchase={handleAddPurchase}
-              onUpdateSettings={setSettings}
             />
           )}
 
@@ -691,7 +689,7 @@ function AppContent() {
           )}
 
           {activeTab === "notifications" && (
-            <NotificationCenter />
+            <NotificationCenter key={activeTenant.tenantId+':'+currentStaff.id}/>
           )}
 
           {activeTab === "events" && (

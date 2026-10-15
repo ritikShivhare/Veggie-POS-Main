@@ -1,9 +1,10 @@
+import { isActiveStaff } from "../../../src/features/shared/staffStatus";
 import crypto from 'node:crypto';
 
 export function publicStaff(member: any) {
   if (!member) return member;
   const { pin, passwordHash, password, ...safe } = member;
-  return safe;
+  return {...safe,version: safe.version || 1};
 }
 
 export function publicTenant(tenant: any) {
@@ -20,7 +21,7 @@ export function publicSettings(settings: any) {
 
 export function publicState(state: any, role: string, permissions:string[] = [], userId?:string) {
   if (!state) return state;
-  const result = { ...state, staffList: (state.staffList || []).filter((s:any)=>s.status!=='inactive').map(publicStaff),
+  const result = { ...state, staffList: (state.staffList || []).filter(isActiveStaff).map(publicStaff),
     orders: (state.orders || []).map(({ managerPin, ...order }: any) => order) };
   if (result.settings) result.settings = publicSettings(result.settings);
   if (!['Owner', 'Manager', 'SaaS Owner'].includes(role)) {

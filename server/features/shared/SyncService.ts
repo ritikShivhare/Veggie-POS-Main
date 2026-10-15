@@ -17,7 +17,8 @@ export class SyncService {
   private db=Database.getInstance();
   constructor(private menuRepo:MenuRepository,private ingredientRepo:IngredientRepository,private recipeRepo:RecipeRepository,private staffRepo:StaffRepository,private orderRepo:OrderRepository,private customerRepo:CustomerRepository,private purchaseRepo:PurchaseRepository,private shiftRepo:ShiftRepository,private settingsRepo:SettingsRepository) {}
   async getFullState(tenantId:string):Promise<any> {
-    const values=await Promise.all([this.menuRepo.getAll(tenantId),this.ingredientRepo.getAll(tenantId),this.recipeRepo.getAll(tenantId),this.staffRepo.getAll(tenantId),this.orderRepo.getAll(tenantId),this.customerRepo.getAll(tenantId),this.purchaseRepo.getAll(tenantId),this.shiftRepo.getAll(tenantId),this.settingsRepo.get(tenantId)]);
+    const values=await Promise.all([this.menuRepo.getAll(tenantId),this.ingredientRepo.getAll(tenantId),this.recipeRepo.getAll(tenantId),this.staffRepo.getAll(tenantId),this.orderRepo.getAll(tenantId),this.customerRepo.getAll(tenantId),this.purchaseRepo.getAll(tenantId),this.shiftRepo.getAll(tenantId),this.settingsRepo.get(tenantId),this.db.getObject<Record<string,any>>(tenantId,'order_service_state')]);
+    values[4]=(values[4] as any[] || []).map(order=>({...order,...((values[9] as any)?.[order.id] || {})}));
     return Object.fromEntries(['menuItems','ingredients','recipes','staffList','orders','customers','purchases','shifts','settings'].map((k,i)=>[k,values[i]]));
   }
   /** Sync contains versioned management changes only. Financial mutations are commands. */
@@ -61,6 +62,7 @@ export class SyncService {
           merged.delete(deletion.id);
         }
         if(key==='staffList' && existing.some((r:any)=>r.role==='Owner') && ![...merged.values()].some(r=>r.role==='Owner' && !['inactive','suspended'].includes(r.status))) throw Object.assign(new Error('Keep an active owner account.'),{status:400});
+        if(key==='staffList') await this.staffRepo.assertActiveCapacity(tenantId,[...merged.values()]);
         await repo.saveAll(tenantId,[...merged.values()],trx);
       }
       if(payload.settings!==undefined) {validateSettings(payload.settings);const existing:any=(await this.settingsRepo.get(tenantId)) || {};if(existing.version && payload.settings.version !== existing.version) throw new OptimisticLockConflictError(undefined,{entityId:"settings",expectedVersion:payload.settings.version,currentVersion:existing.version});await this.settingsRepo.save(tenantId,{...existing,...payload.settings},trx);}

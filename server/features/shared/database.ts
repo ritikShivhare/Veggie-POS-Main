@@ -131,6 +131,9 @@ function sanitizeErrorMessage(rawMessage: string | undefined, status: number): s
 }
 
 export function handleApiError(res: any, error: any, defaultMessage?: string) {
+  if (error?.code === "PLAN_LIMIT_EXCEEDED") {
+    return res.status(403).json({success: false, error: "PLAN_LIMIT_EXCEEDED", message: error.message});
+  }
   if (
     error?.code === "NOT_FOUND" ||
     error?.status === 404 ||
@@ -258,7 +261,7 @@ export class Database {
     if (active && active.tenantId !== tenantId) throw new CrossTenantViolationError('A transaction cannot cross tenant boundaries.');
   }
   private dbError(error: any): never {
-    if (error?.code === '40001' || error?.message?.includes('STALE_TENANT_REVISION')) throw new OptimisticLockConflictError();
+    if (error?.code === 'PT409' || error?.code === '40001' || error?.message?.includes('STALE_TENANT_REVISION')) throw new OptimisticLockConflictError();
     if (error?.code === '42501') throw new CrossTenantViolationError();
     if (['23503','23505','23514','22P02','22003'].includes(error?.code)) throw Object.assign(new Error('Invalid data or conflicting record.'), {code:'INVALID_DATA', status:400});
     throw new DatabaseUnavailableError('Database operation failed. Verify migrations and database availability.');

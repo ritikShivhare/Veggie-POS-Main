@@ -1,5 +1,6 @@
+import {useAppContext} from '../context/AppContext';
 import { ApiClient } from "../services/api";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Bell,
   CheckCircle2,
@@ -41,6 +42,9 @@ interface DispatchLog {
 }
 
 export default function NotificationCenter() {
+  const {currentStaff}=useAppContext();
+  const canCompose=['Owner','Manager'].includes(currentStaff?.role || '');
+  const canViewLogs=currentStaff?.role==='Owner';
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
   const [dispatchLogs, setDispatchLogs] = useState<DispatchLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -57,7 +61,9 @@ export default function NotificationCenter() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<any[] | null>(null);
 
+  const polling=useRef(false);
   const fetchNotificationData = async (silent = false) => {
+    if(polling.current)return;polling.current=true;
     if (!silent) setRefreshing(true);
     try {
       const res = await ApiClient.authenticatedFetch("/api/notifications");
@@ -70,7 +76,7 @@ export default function NotificationCenter() {
       console.error("Error retrieving notifications:", err);
     } finally {
       setLoading(false);
-      setRefreshing(false);
+      setRefreshing(false);polling.current=false;
     }
   };
 
@@ -214,10 +220,10 @@ export default function NotificationCenter() {
         <div>
           <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <Bell className="w-5 h-5 text-pink-600 animate-swing" />
-            Central Notification Orchestrator
+            Central Notification Center
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Enterprise multi-channel dispatch hub linking In-App inbox queues, transactional Email templates, and high-priority SMS gateway protocols.
+            Your assigned order, service and stock alerts. Owners can configure recipients in Settings.
           </p>
         </div>
 
@@ -289,7 +295,7 @@ export default function NotificationCenter() {
           )}
         </button>
 
-        <button
+        {canCompose && <button
           onClick={() => { setActiveTab("compose"); setSendResult(null); }}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             activeTab === "compose" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
@@ -297,9 +303,9 @@ export default function NotificationCenter() {
         >
           <Send className="w-4 h-4 text-indigo-600" />
           Dispatch Lab
-        </button>
+        </button>}
 
-        <button
+        {canViewLogs && <button
           onClick={() => { setActiveTab("history"); setSendResult(null); }}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             activeTab === "history" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
@@ -307,7 +313,7 @@ export default function NotificationCenter() {
         >
           <Clock className="w-4 h-4 text-emerald-600" />
           Gateway Logs
-        </button>
+        </button>}
       </div>
 
       {/* MAIN VIEWPORT BODY */}
@@ -334,7 +340,7 @@ export default function NotificationCenter() {
                 <Bell className="w-10 h-10 text-slate-200" />
                 <p className="font-bold text-slate-600 text-sm">Your inbox is crystal clear</p>
                 <p className="text-xs text-slate-400 max-w-xs">
-                  Background jobs and automated events will broadcast messages here in real-time. Use the **Dispatch Lab** to test immediately.
+                  No alerts assigned to you yet. Order and stock alerts appear here when you are a recipient.
                 </p>
               </div>
             ) : (
@@ -413,7 +419,7 @@ export default function NotificationCenter() {
         )}
 
         {/* TAB 2: DISPATCH LAB */}
-        {activeTab === "compose" && (
+        {canCompose && activeTab === "compose" && (
           <div className="p-6 max-w-3xl mx-auto w-full space-y-6">
 
             <div className="border-b border-slate-100 pb-4">
@@ -591,7 +597,7 @@ export default function NotificationCenter() {
         )}
 
         {/* TAB 3: GATEWAY AUDIT HISTORY */}
-        {activeTab === "history" && (
+        {canViewLogs && activeTab === "history" && (
           <div className="flex-1 flex flex-col">
             <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono">

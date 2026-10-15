@@ -27,6 +27,7 @@ describe('PostgreSQL deployment integration',()=>{
     }
     const result=await financialTransactionService.executeOrderPlacement(tenant,{id:'order',items:[{menuItemId:'meal',quantity:1}] as any,status:'Completed',paymentMethod:'Cash'},{role:'Owner',staffId:'owner',staffName:'Owner'});
     expect(result.order.total).toBe(105);
+    expect((await Database.getInstance().getObject<any[]>(tenant,'system_notifications'))?.some(n=>n.eventKey==='order-new:order' && n.recipientIds.includes('owner'))).toBe(true);
     expect((await orderRepo.getById(tenant,'order'))?.items[0].menuItem.name).toBe('Meal');
     expect((await paymentRepo.getAll(tenant))?.[0]).toMatchObject({orderId:'order',paymentMethod:'Cash',cashierId:'owner',amount:105});
     expect((await inventoryMovementRepo.getAll(tenant))?.[0]).toMatchObject({ingredientId:'rice',movementType:'SALE_DEDUCTION',quantityDelta:-1,performedBy:'owner'});
@@ -60,7 +61,21 @@ describe('PostgreSQL deployment integration',()=>{
     const old=await client.rpc('get_tenant_revision',{p_tenant_id:tenant});
     await ingredientRepo.update(tenant,{...(await ingredientRepo.getById(tenant,'rice'))!,minStock:2});
     const result=await client.rpc('commit_tenant_transaction',{p_tenant_id:tenant,p_expected_revision:Number(old.data),p_changes:[],p_objects:[{key:'should-not-exist',value:{secret:'test'}}]});
-    expect(result.error?.code).toBe('40001');expect(await Database.getInstance().getObject(tenant,'should-not-exist')).toBeNull();
+    expect(result.error?.code).toBe('PT409');expect(await Database.getInstance().getObject(tenant,'should-not-exist')).toBeNull();
+  });
+  it('upgrades the old revision guard idempotently without changing RPC privileges or tenant state',async()=>{
+    const before=await pg.query<any>("SELECT revision FROM tenant_revisions WHERE tenant_id=$1",[tenant]);
+    const aclBefore=await pg.query<any>("SELECT proacl::text FROM pg_proc WHERE oid='public.commit_tenant_transaction(text,bigint,jsonb,jsonb)'::regprocedure");
+    // Only restore the legacy function, not the surrounding schema migration.
+    const current=await pg.query<any>("SELECT pg_get_functiondef('public.commit_tenant_transaction(text,bigint,jsonb,jsonb)'::regprocedure) AS definition");
+    await pg.exec(current.rows[0].definition.replace("ERRCODE='PT409'","ERRCODE='40001'"));
+    const filename=(await readdir('supabase/migrations')).find(f=>f.endsWith('_avoid_postgrest_revision_retry_loop.sql'))!;
+    const migration=await readFile('supabase/migrations/'+filename,'utf8');
+    await pg.exec(migration);await pg.exec(migration);
+    const result=await client.rpc('commit_tenant_transaction',{p_tenant_id:tenant,p_expected_revision:-1,p_changes:[],p_objects:[]});
+    expect(result.error?.code).toBe('PT409');
+    expect((await pg.query<any>("SELECT revision FROM tenant_revisions WHERE tenant_id=$1",[tenant])).rows).toEqual(before.rows);
+    expect((await pg.query<any>("SELECT proacl::text FROM pg_proc WHERE oid='public.commit_tenant_transaction(text,bigint,jsonb,jsonb)'::regprocedure")).rows).toEqual(aclBefore.rows);
   });
   it('paginates beyond the Supabase 1000-row default and merges cold-cache updates',async()=>{
     await pg.query(`INSERT INTO customers(id,tenant_id,name,phone) SELECT 'c-'||g,$1,'Customer '||g,'900'||g FROM generate_series(1,1205) g`,[tenant]);

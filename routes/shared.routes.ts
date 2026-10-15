@@ -1,3 +1,4 @@
+import {operationalAlerts} from '../server/features/notifications/OperationalAlerts';
 import express from "express";
 import { validateSettings } from "../server/features/shared/validation";
 import { publicState,publicTenant,publicSettings } from "../server/features/shared/security";
@@ -232,6 +233,10 @@ router.post("/jobs/clear-logs", authMiddleware, requireRole("SaaS Owner"), (req,
   }
 });
 
+// Alert configuration has its own version and explicit save; never rides settings autosave.
+router.get('/notification-settings',authMiddleware,requireRole('Owner'),async(req,res)=>{try{res.json({success:true,data:await operationalAlerts.rules((req as any).tenantId)});}catch(error){handleApiError(res,error);}});
+router.put('/notification-settings',authMiddleware,requireRole('Owner'),async(req,res)=>{try{res.json({success:true,data:await operationalAlerts.saveRules((req as any).tenantId,req.body)});}catch(error){handleApiError(res,error);}});
+
 // Central Notification System Endpoints
 router.get("/notifications", authMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
@@ -239,8 +244,8 @@ router.get("/notifications", authMiddleware, async (req, res) => {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
   }
   try {
-    const inApp = await notificationService.getInAppNotifications(tenantId);
-    const logs = await notificationService.getDispatchLogs(tenantId);
+    const inApp = await notificationService.getInbox(tenantId,(req as any).session);
+    const logs = (req as any).session.role==='Owner' ? await notificationService.getDispatchLogs(tenantId) : [];
     res.json({
       success: true,
       notifications: inApp,
@@ -280,7 +285,7 @@ router.post("/notifications/read", authMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { id } = req.body;
   try {
-    const success = await notificationService.markAsRead(tenantId, id);
+    const success = await notificationService.updateInbox(tenantId,(req as any).session,'read',id);
     res.json({ success, message: success ? "Notification marked as read" : "Notification not found" });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -290,7 +295,7 @@ router.post("/notifications/read", authMiddleware, async (req, res) => {
 router.post("/notifications/read-all", authMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await notificationService.markAllAsRead(tenantId);
+    await notificationService.updateInbox(tenantId,(req as any).session,'read-all');
     res.json({ success: true, message: "All notifications marked as read" });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -301,14 +306,14 @@ router.delete("/notifications", authMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { id } = req.body;
   try {
-    const success = await notificationService.deleteNotification(tenantId, id);
+    const success = await notificationService.updateInbox(tenantId,(req as any).session,'dismiss',id);
     res.json({ success, message: success ? "Notification deleted" : "Notification not found" });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-router.post("/notifications/clear-logs", authMiddleware, async (req, res) => {
+router.post("/notifications/clear-logs", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await notificationService.clearDispatchLogs(tenantId);

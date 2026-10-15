@@ -1,3 +1,5 @@
+import NotificationRoutingSettings from './NotificationRoutingSettings';
+import StaffAccessEditor from "../../staff/StaffAccessEditor";
 import { ApiClient } from "../services/api";
 import { offlineRepository } from "../services/offline";
 import React, { useState, useEffect } from "react";
@@ -15,7 +17,7 @@ interface SettingsPanelProps {
   setToastMessage: (msg: { type: "success" | "error"; text: string } | null) => void;
   currentStaff: StaffMember | null;
   staffList: StaffMember[];
-  setStaffList: (list: StaffMember[]) => void;
+  setStaffList: React.Dispatch<React.SetStateAction<StaffMember[]>>;
   menuItems: MenuItem[];
   ingredients: Ingredient[];
   recipes: Recipe[];
@@ -54,7 +56,6 @@ export default function SettingsPanel({
   const [testingSlack, setTestingSlack] = useState(false);
   const [testingSentry, setTestingSentry] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const [subTab, setSubTab] = useState<"general" | "password" | "language">("general");
   const [currentLang, setCurrentLang] = useState<string>(() => {
@@ -735,6 +736,8 @@ export default function SettingsPanel({
             </div>
           </div>
 
+          {currentStaff.role==='Owner' && <NotificationRoutingSettings key={activeTenant.tenantId+':'+currentStaff.id}/> }
+
           {/* Terminal & Operational Rules */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
             <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
@@ -1055,104 +1058,16 @@ export default function SettingsPanel({
                   As the <b>Restaurant Owner</b>, you have the administrative privilege to manage the 4 to 6 digit numeric PIN codes and module permissions for your team.
                 </p>
 
-                <div className="space-y-4 divide-y divide-slate-100">
-                  {staffList.map((staff) => (
-                    <div key={staff.id} className="pt-4 first:pt-0 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-sm">{staff.name}</h4>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{staff.role}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-slate-500">PIN:</span>
-                            <input
-                              type="text"
-                              maxLength={6}
-                              placeholder="PIN"
-                              value={staff.pin}
-                              onChange={(e) => {
-                                const val = e.target.value.replace(/\D/g, "").slice(0, 6);
-                                const updatedList = staffList.map((s) =>
-                                  s.id === staff.id ? { ...s, pin: val } : s
-                                );
-                                setStaffList(updatedList);
-                              }}
-                              className="w-20 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-center font-mono font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:bg-white text-xs"
-                            />
-                          </div>
-                          {staff.role !== "Owner" && (
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {deleteConfirmId === staff.id ? (
-                                <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 p-1 rounded-xl animate-fadeIn">
-                                  <span className="text-[10px] text-rose-750 font-bold px-1 select-none">Sure?</span>
-                                  <button
-                                    onClick={() => {
-                                      const updatedList = staffList.filter((s) => s.id !== staff.id);
-                                      setStaffList(updatedList);
-                                      setDeleteConfirmId(null);
-                                    }}
-                                    className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold uppercase transition cursor-pointer"
-                                  >
-                                    Delete
-                                  </button>
-                                  <button
-                                    onClick={() => setDeleteConfirmId(null)}
-                                    className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-semibold transition cursor-pointer"
-                                  >
-                                    No
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => setDeleteConfirmId(staff.id)}
-                                  className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200/50 transition cursor-pointer"
-                                  title="Delete Staff Member"
-                                >
-                                  <UserMinus className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">View Permissions</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                          {(["billing", "inventory", "reports", "settings"] as const).map((perm) => {
-                            const hasPerm = staff.permissions.includes(perm);
-                            return (
-                              <label key={perm} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 p-2 rounded-lg border border-slate-200/60 cursor-pointer transition select-none">
-                                <input
-                                  type="checkbox"
-                                  checked={hasPerm}
-                                  onChange={(e) => {
-                                    const newPerms = e.target.checked
-                                      ? [...staff.permissions, perm]
-                                      : staff.permissions.filter((p) => p !== perm);
-                                    const updatedList = staffList.map((s) =>
-                                      s.id === staff.id ? { ...s, permissions: newPerms } : s
-                                    );
-                                    setStaffList(updatedList);
-                                  }}
-                                  className="w-3.5 h-3.5 accent-blue-600 rounded cursor-pointer"
-                                />
-                                <span className="capitalize text-slate-600 font-medium text-[11px]">{perm}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <StaffAccessEditor key={activeTenant.tenantId} tenantId={activeTenant.tenantId} staffList={staffList} currentStaffId={currentStaff.id}
+                  onSaved={saved=>setStaffList(previous=>previous.map(staff=>staff.id===saved.id?saved:staff))}
+                  onDeleted={id=>setStaffList(previous=>previous.filter(staff=>staff.id!==id))}
+                  onOwnChange={handleLogout}/>
 
                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-start gap-2.5 text-xs text-blue-700">
                   <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-blue-600" />
                   <div>
-                    <p className="font-bold">Real-time update active:</p>
-                    <p className="text-blue-600/90 mt-0.5">Any adjustments made above are instantly applied to the live terminal system state.</p>
+                    <p className="font-bold">Save each staff member separately:</p>
+                    <p className="text-blue-600/90 mt-0.5">Typing does not save changes. Select Save changes after entering a complete PIN or reviewing permissions.</p>
                   </div>
                 </div>
               </div>

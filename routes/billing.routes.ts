@@ -1,4 +1,5 @@
 import express from "express";
+import { countActiveStaff } from "../src/features/shared/staffStatus";
 import Stripe from "stripe";
 import { Database } from "../server/features/shared/database";
 import {
@@ -54,7 +55,7 @@ router.get("/billing/subscription", authMiddleware, requireRole("Owner", "Manage
       subscription: sub,
       limits,
       usage: {
-        staffCount: staffList.length,
+        staffCount: countActiveStaff(staffList || []),
         monthlyOrders: monthlyCount
       }
     });

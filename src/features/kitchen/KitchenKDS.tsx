@@ -1,3 +1,4 @@
+import {ApiClient} from '../shared/services/api';
 import React, { useState } from "react";
 import { Order, OrderStatus } from "../shared/types";
 import { ChefHat, Play, CheckCircle, Flame, Clock, AlertTriangle } from "lucide-react";
@@ -9,12 +10,18 @@ interface KitchenKDSProps {
 }
 
 export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts }: KitchenKDSProps) {
+  const [servedIds,setServedIds]=useState<string[]>([]),[servingId,setServingId]=useState<string|null>(null),[serveError,setServeError]=useState('');
+  const markServed=async(order:Order)=>{
+    if(servingId)return;setServingId(order.id);setServeError('');
+    try {const res=await ApiClient.authenticatedFetch(`/api/orders/${encodeURIComponent(order.id)}/serve`,{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':ApiClient.generateIdempotencyKey('serve')},body:JSON.stringify({version:order.version || 1})});const data=await res.json();if(!res.ok || !data.success)throw new Error(data.message || 'Order was not marked served.');setServedIds(ids=>[...ids,order.id]);}
+    catch(e:any){setServeError(e.message);}finally{setServingId(null);}
+  };
   // Local sub-tab state under Kitchen KDS
   const [kdsTab, setKdsTab] = useState<"pending" | "preparing" | "ready">("pending");
 
   // Filter active kitchen orders
   const activeOrders = orders.filter(
-    (o) => o.status === "Pending" || o.status === "Preparing" || o.status === "Ready"
+    (o) => !o.servedAt && !servedIds.includes(o.id) && (o.status === "Pending" || o.status === "Preparing" || o.status === "Ready")
   );
 
   const pendingOrders = activeOrders.filter((o) => o.status === "Pending");
@@ -67,6 +74,7 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
 
   return (
     <div className="h-full bg-[#f8fafc] flex flex-col p-4 sm:p-6 font-sans text-slate-800 overflow-hidden">
+      {serveError && <p role="alert" className="text-red-700">{serveError}</p>}
       {/* Title & Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 shrink-0 border-b border-slate-200 pb-4">
         <div className="flex items-center space-x-3">
@@ -257,9 +265,7 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
                   )}
 
                   {order.status === "Ready" && (
-                    <p className="w-full py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs text-center border border-slate-200">
-                      Ready — awaiting cashier settlement
-                    </p>
+                    <button type="button" disabled={servingId!==null} onClick={()=>markServed(order)} className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl text-xs disabled:opacity-50">{servingId===order.id?'Saving…':'Mark Served to Customer'}</button>
                   )}
                 </div>
               </div>

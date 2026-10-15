@@ -1,3 +1,4 @@
+import { isActiveStaff } from "../src/features/shared/staffStatus";
 import express from "express";
 import crypto from "node:crypto";
 import rateLimit from "express-rate-limit";
@@ -559,7 +560,7 @@ router.post("/auth/login", async (req, res) => {
 
     if (!targetTenant) return res.status(404).json({ success:false, error:"TENANT_NOT_FOUND", message:"Register and verify this restaurant before signing in." });
     let staff = effectiveTenantId ? ((await staffRepo.getAll(effectiveTenantId)) || []) : [];
-    staff=staff.filter(s=>s.status!=="inactive" && s.status!=="suspended");
+    staff=staff.filter(isActiveStaff);
     let matchingUser = validPin(pin) ? await findStaffByPinConstantTime(staff, pin) : null;
     if (validPassword(password)) {
       const owner=staff.find(s=>s.role==="Owner");
@@ -912,7 +913,7 @@ router.get("/auth/staff-directory", async (req, res) => {
   try {
     const staff = (await staffRepo.getAll(targetTenantId)) || [];
     // Only return ID, name, role, and avatar to avoid leaking PIN codes
-    const publicStaff = staff.filter(s=>s.status!=='inactive' && s.status!=='suspended').map((s) => ({
+    const publicStaff = staff.filter(isActiveStaff).map((s) => ({
       id: s.id,
       name: s.name,
       role: s.role,

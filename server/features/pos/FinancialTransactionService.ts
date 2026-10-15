@@ -1,3 +1,4 @@
+import {operationalAlerts} from '../notifications/OperationalAlerts';
 import { Database, NotFoundError, CrossTenantViolationError, DatabaseUnavailableError, OptimisticLockConflictError } from "../shared/database";
 import { posPricingEngine, FinancialValidationError } from "./POSPricingEngine";
 import {
@@ -229,6 +230,7 @@ export class FinancialTransactionService {
         },
         trx
       );
+    await operationalAlerts.newOrder(tenantId,finalOrder);
     return { order: finalOrder, items: orderItemsToInsert, payment: paymentRecord };
     });
   }
