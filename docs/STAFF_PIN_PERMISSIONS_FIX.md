@@ -98,3 +98,20 @@ Do not merge it solely because unit tests pass. Existing release gates remain.
 The general settings autosave path and infrastructure read timeouts are separate
 from this staff-editor repair; this change does not claim to resolve every settings
 revision conflict or hosting/network delay.
+
+## Deployment diagnostic follow-up
+
+The production build succeeded but the provider Data API returned HTTP 504 /
+PGRST003 during the startup schema check. A direct administrator SQL query can
+succeed while the PostgREST API connection pool is unavailable. Do not replay
+already-applied migrations based only on this transport error.
+
+`server-startup-validation.ts` now distinguishes pool/network/permission failures
+from a missing schema-version RPC and an actually old/invalid schema. It remains
+fail-closed: API unavailability never skips readiness checks or enables an
+in-memory production fallback. `tests/startupDatabaseReadiness.test.ts` covers
+these cases without exposing provider error text. Updated local validation:
+305 tests across 32 files, TypeScript and production build passed.
+
+This diagnostic change does not repair a provider connection pool by itself.
+Restore Data API availability, then verify the exact deployed commit and health.
