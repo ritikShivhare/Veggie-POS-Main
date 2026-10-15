@@ -105,6 +105,8 @@ export interface Order {
   discount?: number;
   total: number;
   status: OrderStatus;
+  servedAt?: string;
+  servedBy?: string;
   paymentMethod?: 'Cash' | 'UPI';
   paidAt?: string;
   cashierId: string;

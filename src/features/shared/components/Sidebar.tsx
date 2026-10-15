@@ -95,7 +95,7 @@ export default function Sidebar({
     { id: "shifts", label: "Staff Shifts", icon: Clock, permission: "billing" },
     { id: "ai-reports", label: "Automated AI Reports", icon: FileText, permission: "reports" },
     { id: "jobs", label: "Background Jobs", icon: Cpu, permission: "settings" },
-    { id: "notifications", label: "Notification Center", icon: Bell, permission: "billing" },
+    { id: "notifications", label: "Notification Center", icon: Bell },
     { id: "events", label: "Events & Audit", icon: Zap, permission: "billing" },
     { id: "security", label: "Security & Sessions", icon: Shield, permission: "settings" },
     { id: "settings", label: "Settings", icon: Settings, permission: "settings" }

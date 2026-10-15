@@ -17,7 +17,8 @@ export class SyncService {
   private db=Database.getInstance();
   constructor(private menuRepo:MenuRepository,private ingredientRepo:IngredientRepository,private recipeRepo:RecipeRepository,private staffRepo:StaffRepository,private orderRepo:OrderRepository,private customerRepo:CustomerRepository,private purchaseRepo:PurchaseRepository,private shiftRepo:ShiftRepository,private settingsRepo:SettingsRepository) {}
   async getFullState(tenantId:string):Promise<any> {
-    const values=await Promise.all([this.menuRepo.getAll(tenantId),this.ingredientRepo.getAll(tenantId),this.recipeRepo.getAll(tenantId),this.staffRepo.getAll(tenantId),this.orderRepo.getAll(tenantId),this.customerRepo.getAll(tenantId),this.purchaseRepo.getAll(tenantId),this.shiftRepo.getAll(tenantId),this.settingsRepo.get(tenantId)]);
+    const values=await Promise.all([this.menuRepo.getAll(tenantId),this.ingredientRepo.getAll(tenantId),this.recipeRepo.getAll(tenantId),this.staffRepo.getAll(tenantId),this.orderRepo.getAll(tenantId),this.customerRepo.getAll(tenantId),this.purchaseRepo.getAll(tenantId),this.shiftRepo.getAll(tenantId),this.settingsRepo.get(tenantId),this.db.getObject<Record<string,any>>(tenantId,'order_service_state')]);
+    values[4]=(values[4] as any[] || []).map(order=>({...order,...((values[9] as any)?.[order.id] || {})}));
     return Object.fromEntries(['menuItems','ingredients','recipes','staffList','orders','customers','purchases','shifts','settings'].map((k,i)=>[k,values[i]]));
   }
   /** Sync contains versioned management changes only. Financial mutations are commands. */

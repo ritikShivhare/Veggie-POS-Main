@@ -988,7 +988,7 @@ export default function POSBilling({
                                 ) : isReady ? (
                                   <span className="text-[10px] bg-emerald-500 text-white font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm animate-pulse">
                                     <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping" />
-                                    <span>Served / Ready</span>
+                                    <span>{order.servedAt?'Served':'Ready to serve'}</span>
                                   </span>
                                 ) : order.status === "Preparing" ? (
                                   <span className="text-[10px] bg-amber-500 text-white font-bold px-2 py-0.5 rounded-full">

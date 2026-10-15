@@ -27,6 +27,7 @@ describe('PostgreSQL deployment integration',()=>{
     }
     const result=await financialTransactionService.executeOrderPlacement(tenant,{id:'order',items:[{menuItemId:'meal',quantity:1}] as any,status:'Completed',paymentMethod:'Cash'},{role:'Owner',staffId:'owner',staffName:'Owner'});
     expect(result.order.total).toBe(105);
+    expect((await Database.getInstance().getObject<any[]>(tenant,'system_notifications'))?.some(n=>n.eventKey==='order-new:order' && n.recipientIds.includes('owner'))).toBe(true);
     expect((await orderRepo.getById(tenant,'order'))?.items[0].menuItem.name).toBe('Meal');
     expect((await paymentRepo.getAll(tenant))?.[0]).toMatchObject({orderId:'order',paymentMethod:'Cash',cashierId:'owner',amount:105});
     expect((await inventoryMovementRepo.getAll(tenant))?.[0]).toMatchObject({ingredientId:'rice',movementType:'SALE_DEDUCTION',quantityDelta:-1,performedBy:'owner'});

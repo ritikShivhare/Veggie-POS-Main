@@ -1,3 +1,4 @@
+import {operationalAlerts} from '../server/features/notifications/OperationalAlerts';
 import express from "express";
 import { isActiveStaff } from "../src/features/shared/staffStatus";
 import rateLimit from "express-rate-limit";
@@ -200,6 +201,14 @@ router.post("/orders", authMiddleware, requirePermission("billing", "orders"), i
   } catch (error: any) {
     handleApiError(res, error);
   }
+});
+
+// Operational service confirmation never records a payment or changes stock.
+router.post('/orders/:id/serve',authMiddleware,requirePermission('orders','billing'),idempotencyMiddleware,async(req,res)=>{
+ try {const tenant=(req as any).tenantId,session=(req as any).session;
+  const order=await orderRepo.getById(tenant,req.params.id);
+  if(!order || !publicState({orders:[order]},session.role,session.permissions,session.userId).orders.length)return res.status(404).json({success:false,error:'NOT_FOUND'});
+  const data=await operationalAlerts.serve(tenant,req.params.id,req.body.version,session.userId);res.json({success:true,data});}catch(error){handleApiError(res,error);}
 });
 
 // Dedicated Payment Endpoint: Validates and atomically commits order payment

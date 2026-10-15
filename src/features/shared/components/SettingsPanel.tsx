@@ -1,3 +1,4 @@
+import NotificationRoutingSettings from './NotificationRoutingSettings';
 import StaffAccessEditor from "../../staff/StaffAccessEditor";
 import { ApiClient } from "../services/api";
 import { offlineRepository } from "../services/offline";
@@ -734,6 +735,8 @@ export default function SettingsPanel({
               </button>
             </div>
           </div>
+
+          {currentStaff.role==='Owner' && <NotificationRoutingSettings key={activeTenant.tenantId+':'+currentStaff.id}/> }
 
           {/* Terminal & Operational Rules */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
