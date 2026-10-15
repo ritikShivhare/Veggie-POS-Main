@@ -6,9 +6,6 @@ import {
   CheckCircle2,
   ShieldCheck,
   ArrowRight,
-  Sparkles,
-  Phone,
-  Mail,
   Building,
   Store,
   Terminal,
@@ -124,20 +121,20 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
 
   const checklistItems = [
     {
-      title: "15-Minute Personalized Walkthrough",
-      desc: "Live demonstration tailored to your exact floor plan, kitchen pass, and recipe inventory."
+      title: "Review the current product",
+      desc: "See the available order, kitchen, inventory, and staff workflows."
     },
     {
-      title: "Zero Hardware Audit",
-      desc: "We verify compatibility with your existing iPads, Android tablets, PCs, and thermal printers."
+      title: "Discuss your device setup",
+      desc: "Share the devices and printers you use so we can discuss compatibility."
     },
     {
-      title: "Leakage & Payback Assessment",
-      desc: "Review your outlet's potential monthly margin savings based on your average ticket volume."
+      title: "Talk through your restaurant workflow",
+      desc: "We can review your menu, staff roles, and kitchen process together."
     },
     {
-      title: "24-48 Hour Rapid Go-Live",
-      desc: "Our menu formatting specialists configure your full catalog, modifiers, and staff PINs."
+      title: "Discuss early-access setup",
+      desc: "We will explain the current setup process and any steps still in progress."
     }
   ];
 
@@ -179,24 +176,24 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                   </div>
                   <div className="space-y-2">
                     <h2 className="font-serif text-3xl font-bold text-[#181A18]">
-                      Walkthrough Scheduled!
+                      Walkthrough Request Received
                     </h2>
                     <p className="text-sm text-[#5A6056] max-w-md mx-auto leading-relaxed">
-                      Thank you, <span className="font-bold text-[#181A18]">{formData.fullName}</span>. A hospitality solutions engineer will contact you shortly to confirm your personalized walkthrough for <span className="font-bold text-[#181A18]">{formData.restaurantName}</span>.
+                      Thank you, <span className="font-bold text-[#181A18]">{formData.fullName}</span>. We received your request to discuss Aatmyam POS for <span className="font-bold text-[#181A18]">{formData.restaurantName}</span>.
                     </p>
                   </div>
 
                   {/* Summary Box with Address Column (Matching Image 3) */}
                   <div className="p-4 bg-[#FBF9F5] rounded-2xl border border-[#EAE5DA] max-w-md mx-auto text-xs text-[#787F74] text-left space-y-2">
                     <div className="flex items-start justify-between gap-2 border-b border-[#EAE5DA] pb-2">
-                      <span className="font-mono text-[10px] uppercase font-bold text-[#567234]">BOOKING SUMMARY</span>
+                      <span className="font-mono text-[10px] uppercase font-bold text-[#567234]">REQUEST SUMMARY</span>
                       {createdLeadId && (
                         <span className="font-mono text-[10px] text-slate-400">ID: {createdLeadId}</span>
                       )}
                     </div>
                     <p className="flex items-center gap-2">
                       <Store className="w-3.5 h-3.5 text-[#181A18] shrink-0" />
-                      <span>Restaurant: <strong className="text-[#181A18]">{formData.restaurantName}</strong></span>
+                        <span>Restaurant: <strong className="text-[#181A18]">{formData.restaurantName}</strong></span>
                     </p>
                     <p className="flex items-start gap-2">
                       <MapPin className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
@@ -219,7 +216,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                       className="px-5 py-3 text-xs font-bold text-[#181A18] bg-[#FBF9F5] hover:bg-[#EAE5DA] rounded-xl border border-[#EAE5DA] transition cursor-pointer flex items-center justify-center gap-1.5"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Schedule Again / Change Slot</span>
+                      <span>Edit Walkthrough Request</span>
                     </button>
                     <button
                       onClick={() => onNavigate("/")}
@@ -299,7 +296,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                       <input
                         type="tel"
                         required
-                        placeholder="+91 98765 43210"
+                        placeholder="+91 XXXXX XXXXX"
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-[#EAE5DA] rounded-xl text-xs text-[#1C1E1B] focus:outline-hidden focus:border-[#6E8F45]"
@@ -355,7 +352,6 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                         <option value="qsr">QSR & Fast Counter</option>
                         <option value="cafe-bakery">Café & Bakery</option>
                         <option value="cloud-kitchen">Cloud Kitchen / Delivery</option>
-                        <option value="multi-outlet">Multi-Outlet Chain</option>
                         <option value="other">Other Food Service</option>
                       </select>
                     </div>
@@ -370,9 +366,6 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                         className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-[#EAE5DA] rounded-xl text-xs text-[#1C1E1B] focus:outline-hidden focus:border-[#6E8F45]"
                       >
                         <option value="1">1 Single Outlet</option>
-                        <option value="2-4">2 to 4 Outlets</option>
-                        <option value="5-10">5 to 10 Outlets</option>
-                        <option value="10+">10+ Outlets (Chain)</option>
                       </select>
                     </div>
                   </div>
@@ -387,20 +380,17 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                       onChange={(e) => setFormData({ ...formData, primaryGoal: e.target.value })}
                       className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-[#EAE5DA] rounded-xl text-xs text-[#1C1E1B] focus:outline-hidden focus:border-[#6E8F45]"
                     >
-                      <option value="Fast PIN billing & speed at register">
-                        Fast PIN billing & queue speed at register
+                      <option value="Order entry and billing">
+                        Order entry and billing
                       </option>
                       <option value="Recipe BOM stock & ingredient leakage control">
                         Recipe BOM stock & ingredient leakage control
                       </option>
-                      <option value="Kitchen display (KDS) & eliminate lost tickets">
-                        Kitchen display (KDS) & eliminate lost tickets
+                      <option value="Kitchen order status">
+                        Kitchen order status
                       </option>
-                      <option value="Owner peace of mind & anti-pilferage controls">
-                        Owner peace of mind & anti-pilferage controls
-                      </option>
-                      <option value="Centralized multi-outlet group oversight">
-                        Centralized multi-outlet group oversight
+                      <option value="Staff roles and permissions">
+                        Staff roles and permissions
                       </option>
                     </select>
                   </div>
@@ -457,7 +447,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                       className="w-full py-4 text-xs font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition duration-150 flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50"
                     >
                       {isSubmitting ? (
-                        <span>Preparing Demonstration Room...</span>
+                        <span>Submitting request...</span>
                       ) : (
                         <>
                           <span>Confirm Walkthrough Request</span>
@@ -466,7 +456,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                       )}
                     </button>
                     <p className="text-[11px] text-[#787F74] text-center mt-2.5">
-                      No credit card required • Response guaranteed within 2 hours
+                      Early access • We’ll contact you to arrange a walkthrough
                     </p>
                   </div>
 
@@ -475,16 +465,16 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
 
             </div>
 
-            {/* Right: Implementation Checklist & Guarantees */}
+            {/* Right: Walkthrough information */}
             <div className="lg:col-span-5 space-y-8">
               
               <div className="bg-[#181A18] text-[#FBF9F5] rounded-3xl p-6 sm:p-8 border border-[#2E332D] space-y-6 shadow-lg">
                 <div className="space-y-2">
                   <span className="text-xs font-mono text-[#84A955] uppercase font-bold">
-                    THE 48-HOUR ONBOARDING GUARANTEE
+                    EARLY-ACCESS WALKTHROUGH
                   </span>
                   <h3 className="font-serif text-2xl font-bold text-[#FBF9F5]">
-                    What happens during & after your walkthrough:
+                    What we can discuss:
                   </h3>
                 </div>
 
@@ -503,29 +493,8 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                 </div>
 
                 <div className="pt-4 border-t border-[#2E332D] flex items-center justify-between text-xs text-[#A6AEA0]">
-                  <span>Direct Support Line:</span>
-                  <span className="font-mono font-bold text-[#6E8F45]">+91 800-VEGGIE-POS</span>
-                </div>
-              </div>
-
-              {/* Quick Direct Contacts */}
-              <div className="bg-[#F4F0E8] p-6 rounded-3xl border border-[#EAE5DA] space-y-4">
-                <h4 className="font-serif text-lg font-bold text-[#181A18]">
-                  Prefer direct communication?
-                </h4>
-                <div className="space-y-2 text-xs">
-                  <div className="flex items-center gap-2.5 text-[#5A6056]">
-                    <Mail className="w-4 h-4 text-[#6E8F45]" />
-                    <span>operations@veggiepos.com</span>
-                  </div>
-                  <div className="flex items-center gap-2.5 text-[#5A6056]">
-                    <Phone className="w-4 h-4 text-[#6E8F45]" />
-                    <span>+91 98765 43210 (Direct WhatsApp Desk)</span>
-                  </div>
-                  <div className="flex items-center gap-2.5 text-[#5A6056]">
-                    <Building className="w-4 h-4 text-[#6E8F45]" />
-                    <span>Bangalore • Mumbai • Delhi NCR • Hyderabad</span>
-                  </div>
+                  <span>Product status:</span>
+                  <span className="font-mono font-bold text-[#6E8F45]">Early access</span>
                 </div>
               </div>
 
