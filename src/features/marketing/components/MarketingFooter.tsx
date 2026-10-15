@@ -30,16 +30,16 @@ export default function MarketingFooter({
     <footer className="bg-[#181A18] text-[#FBF9F5] pt-16 pb-12 border-t border-[#2E332D]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* Live Operational Status Strip */}
+        {/* Early access information */}
         <div className="bg-[#242823] border border-[#2E332D] rounded-2xl p-4 sm:p-5 mb-14 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#6E8F45] animate-pulse"></div>
+            <div className="w-2.5 h-2.5 rounded-full bg-[#6E8F45]"></div>
             <div>
               <p className="text-xs font-mono font-semibold text-[#FBF9F5]">
-                System Status: All Services Operational (99.98% Uptime)
+                Aatmyam POS • Early access
               </p>
               <p className="text-[11px] text-[#A6AEA0]">
-                Encrypted multi-tenant synchronization • Sub-50ms KOT dispatch
+                Explore ordering, billing, kitchen tickets, and inventory workflows
               </p>
             </div>
           </div>
@@ -72,13 +72,13 @@ export default function MarketingFooter({
               </span>
             </div>
             <p className="text-xs text-[#A6AEA0] leading-relaxed max-w-sm">
-              The calm command center for independent restaurants and growing groups. 
-              Eliminate rush-hour scramble, account for every gram in stock, and give operators clear oversight.
+              Software for independent restaurants, currently in early access.
+              Explore order, billing, kitchen, and inventory workflows in a walkthrough.
             </p>
             <div className="pt-2 flex items-center gap-4 text-xs font-mono text-[#787F74]">
               <span className="flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#6E8F45]" />
-                SOC-2 & Role Guard
+                Role-based access
               </span>
               <span className="flex items-center gap-1">
                 <Lock className="w-3.5 h-3.5 text-[#6E8F45]" />

@@ -1,4 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
+import { PLAN_LIMITS } from "../../../shared/planCatalog";
+
+const pricingSummary = Object.values(PLAN_LIMITS)
+  .map((plan) => `• ${plan.label}: ₹${plan.price}/month. ${plan.staffCount >= 100000 ? "Unlimited" : plan.staffCount} staff; ${plan.monthlyOrders >= 100000 ? "unlimited" : plan.monthlyOrders} orders/month.`)
+  .join("\n");
 
 export class CopilotService {
   public async handleChat(
@@ -45,14 +50,14 @@ You have comprehensive, authoritative knowledge about both the Veggie POS restau
 
 KEY PRODUCT KNOWLEDGE:
 1. Core Modules:
-   - Touch POS Billing & Fast PIN Terminal: Sub-100ms multi-server table-side or counter ordering, quick cash/UPI/card split bills, dynamic modifier groups.
+   - Touch POS Billing & PIN Terminal: Table-side or counter ordering, cash/UPI billing, and item modifiers. Speed depends on the device and network.
    - Kitchen Order Tickets (KOT) & KDS: Visual station color-coding (Starters, Mains, Desserts), multi-course holding/firing, kitchen latency timers.
    - Live Recipe Bill of Materials (BOM) & Inventory: Automatic stock deduction per item sold down to grams/milliliters, purchase order logging, vendor management, low-stock threshold alerts.
    - Table Floor Plan: Color-coded live table states (Vacant, Occupied, Dining, Billing), custom table zones (Indoor, Patio, Terrace, Bar).
    - Online Order Aggregator: Direct Swiggy/Zomato/Direct Order centralized inbox with one-click acceptance and automatic KOT printing.
    - Staff PIN & Role Permissions: 4-digit staff PINs with granular roles (Owner, Manager, Cashier, Server, Chef), cash drawer pop audit logs, shift rosters & drawer reconciliation.
    - Business Analytics & Reports: Real-time net sales, hourly demand heatmaps, category margin breakdowns, top selling dishes, staff sales performance, Z-Reports.
-   - Multi-Tenant & Multi-Outlet: Centralized brand dashboard for managing menus, recipes, and outlet performance across chains.
+   - Multi-Tenant: Separate restaurant accounts. The current offering is single outlet per tenant; do not promise multi-outlet rollout.
 
 2. Hardware & Architecture:
    - 100% browser-based (PWA): Runs on existing iPads, Android tablets, Windows/Mac laptops, and phones.
@@ -60,13 +65,11 @@ KEY PRODUCT KNOWLEDGE:
    - Offline-resilient local sync.
 
 3. Pricing Plans:
-   - Starter / Counter: ₹799/month (billed annually) or ₹999/month for single counters, cafés, and bakeries.
-   - Growth / Full Dine-In: ₹1,499/month (billed annually) or ₹1,899/month with table floor plan, KOT pacing, live recipe BOM, and staff PIN audit.
-   - Multi-Outlet / Enterprise: ₹2,999/month (billed annually) or ₹3,499/month with centralized catalog management, cross-outlet inventory transfers, and priority 24/7 hotline.
+${pricingSummary}
+   - Do not invent annual discounts, customer counts, performance results, support response times, or onboarding guarantees. Restaurant deployments and results have not yet been validated with customers.
 
 4. Onboarding:
-   - 48-Hour Rapid Go-Live Guarantee with menu onboarding specialists.
-   - Free 15-minute personalized live walkthrough without aggressive sales pressure.
+   - Walkthrough and onboarding can be requested. Confirm availability, timing, and device compatibility for the restaurant's setup; do not promise a go-live deadline.
 
 COMMUNICATION STYLE:
 - Professional, welcoming, concise, and hospitality-focused.
@@ -145,7 +148,7 @@ User Prompt: ${prompt}`,
       return `Hello ${staffName}! How can I assist you with ${tenantName}'s operations today? You can ask about recipe setups, ingredients tracking, billing configurations, KOT, and table floor plans.`;
     }
     if (lowercasePrompt.includes("price") || lowercasePrompt.includes("plan") || lowercasePrompt.includes("cost") || lowercasePrompt.includes("subscription")) {
-      return `VeggiePOS plans include:\n• Starter / Counter: ₹799/month (billed annually) for single counters, cafés, and bakeries.\n• Growth / Full Dine-In: ₹1,499/month (billed annually) with table floor plan, KOT pacing, live recipe BOM, and staff PIN audit.\n• Multi-Outlet / Enterprise: ₹2,999/month with centralized catalog management and cross-outlet inventory transfers.\nAll plans include zero hardware lock-in and 48-hour rapid go-live!`;
+      return `Aatmyam POS monthly plans:\n${pricingSummary}\nDeployment timing and device compatibility need to be checked for your setup.`;
     }
     if (lowercasePrompt.includes("kot") || lowercasePrompt.includes("kds") || lowercasePrompt.includes("kitchen")) {
       return `VeggiePOS Kitchen Order Tickets (KOT) feature visual station color-coding (Starters, Mains, Desserts), multi-course holding/firing, kitchen latency timers, and direct thermal printing via USB, Bluetooth, or LAN.`;

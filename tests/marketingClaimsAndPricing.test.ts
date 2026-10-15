@@ -20,6 +20,7 @@ describe("marketing claims and pricing", () => {
 
   it("does not publish unverified performance or service guarantees", () => {
     const pages = [
+      "../src/features/marketing/components/MarketingFooter.tsx",
       "../src/features/marketing/pages/HomePage.tsx",
       "../src/features/marketing/pages/ContactPage.tsx",
       "../src/features/marketing/pages/AboutPage.tsx",
