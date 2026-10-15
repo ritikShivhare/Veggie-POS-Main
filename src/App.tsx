@@ -609,7 +609,6 @@ function AppContent() {
               onUpdateRecipes={handleUpdateRecipes}
               onUpdateMenuItems={handleUpdateMenuItems}
               onAddPurchase={handleAddPurchase}
-              onUpdateSettings={setSettings}
             />
           )}
 
