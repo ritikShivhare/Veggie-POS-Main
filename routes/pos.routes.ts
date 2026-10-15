@@ -1,4 +1,5 @@
 import express from "express";
+import { isActiveStaff } from "../src/features/shared/staffStatus";
 import rateLimit from "express-rate-limit";
 import inventoryRouter from "./inventory.routes";
 import { publicStaff,publicState } from "../server/features/shared/security";
@@ -36,7 +37,7 @@ router.get("/staff", authMiddleware, requirePermission("staff"), async (req, res
   const tenantId = (req as any).tenantId;
   try {
     const data = await staffRepo.getAll(tenantId);
-    res.json({ success: true, data: data?.filter(s=>s.status!=='inactive').map(publicStaff) });
+    res.json({ success: true, data: (data || []).filter(isActiveStaff).map(publicStaff) });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -57,20 +58,10 @@ router.get("/staff/:id", authMiddleware, requirePermission("staff"), async (req,
 
 router.post("/staff", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
-  const sub = (req as any).subscription;
   try {
-    const staffList = await staffRepo.getAll(tenantId);
-    const limit = PLAN_LIMITS[sub.plan]?.staffCount ?? 3;
-    if (staffList.length >= limit) {
-      return res.status(403).json({
-        success: false,
-        error: "PLAN_LIMIT_EXCEEDED",
-        message: `Your current subscription plan (${sub.plan.toUpperCase()}) only supports up to ${limit} staff members. Please upgrade your plan in settings to add more team members.`
-      });
-    }
     validateEntity("staffList",req.body,true);
     await staffRepo.add(tenantId, req.body);
-    res.json({ success: true, message: "Staff member added successfully." });
+    res.json({ success: true, message: "Staff member added successfully.", data: publicStaff(await staffRepo.getById(tenantId, req.body.id)) });
   } catch (error: any) {
     handleApiError(res, error);
   }
@@ -103,8 +94,9 @@ router.delete("/staff/:id", authMiddleware, requireRole("Owner"), async (req, re
   const tenantId = (req as any).tenantId;
   try {
     const current=await staffRepo.getById(tenantId,req.params.id);
-    if(current?.role==="Owner") return res.status(400).json({success:false,error:"OWNER_REQUIRED"});
-    await staffRepo.update(tenantId,{...current,status:"inactive"} as any);
+    if(!current) return res.status(404).json({success:false,error:"NOT_FOUND"});
+    if(current.role==="Owner") return res.status(400).json({success:false,error:"OWNER_REQUIRED"});
+    await staffRepo.update(tenantId,{id:current.id,status:"inactive"} as any, current.version);
     res.json({ success: true, message: "Staff deleted successfully." });
   } catch (error: any) {
     handleApiError(res, error);

@@ -13,6 +13,7 @@ export function validateEntity(type:string,item:any,creating=false):void {
   const numeric:Record<string,string[]>={menuItems:['price'],ingredients:['currentStock','minStock','costPerUnit'],purchases:['quantity','cost']};
   for(const field of numeric[type] || []) if(item[field]!==undefined) finiteAmount(item[field],field,field==='quantity'?0.000001:0);
   if(type==='staffList') {
+    if(item.status!==undefined && !['active','inactive','suspended'].includes(item.status)) fail('Invalid staff status.');
     if(!['Owner','Manager','Cashier','Waiter','Chef','Staff'].includes(item.role)) fail('Invalid staff role.');
     if(creating && !validPin(item.pin)) fail('A 4–6 digit PIN is required.');
     if(item.pin!==undefined && item.pin!=='' && !validPin(item.pin)) fail('PIN must contain 4–6 digits.');

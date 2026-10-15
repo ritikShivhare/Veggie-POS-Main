@@ -61,6 +61,7 @@ export class SyncService {
           merged.delete(deletion.id);
         }
         if(key==='staffList' && existing.some((r:any)=>r.role==='Owner') && ![...merged.values()].some(r=>r.role==='Owner' && !['inactive','suspended'].includes(r.status))) throw Object.assign(new Error('Keep an active owner account.'),{status:400});
+        if(key==='staffList') await this.staffRepo.assertActiveCapacity(tenantId,[...merged.values()]);
         await repo.saveAll(tenantId,[...merged.values()],trx);
       }
       if(payload.settings!==undefined) {validateSettings(payload.settings);const existing:any=(await this.settingsRepo.get(tenantId)) || {};if(existing.version && payload.settings.version !== existing.version) throw new OptimisticLockConflictError(undefined,{entityId:"settings",expectedVersion:payload.settings.version,currentVersion:existing.version});await this.settingsRepo.save(tenantId,{...existing,...payload.settings},trx);}

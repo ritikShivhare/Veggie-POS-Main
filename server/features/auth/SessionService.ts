@@ -1,3 +1,4 @@
+import { isActiveStaff } from "../../../src/features/shared/staffStatus";
 import crypto from "crypto";
 import { StaffRepository } from "../staff/StaffRepository";
 import { EventEmitter } from "node:events";
@@ -279,7 +280,7 @@ export class SessionService {
     if (!session || session.securityVersion !== 2) return null;
     if (session.role !== "SaaS Owner") {
       const staff=await new StaffRepository().getById(tenantId,session.userId);
-      if (!staff || staff.status === "inactive" || staff.status === "suspended" || staff.role !== session.role || session.authVersion !== (staff.version || 1)) return null;
+      if (!staff || !isActiveStaff(staff) || staff.role !== session.role || session.authVersion !== (staff.version || 1)) return null;
       session.permissions = staff.permissions || [];
     }
 

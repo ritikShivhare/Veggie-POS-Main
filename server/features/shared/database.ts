@@ -131,6 +131,9 @@ function sanitizeErrorMessage(rawMessage: string | undefined, status: number): s
 }
 
 export function handleApiError(res: any, error: any, defaultMessage?: string) {
+  if (error?.code === "PLAN_LIMIT_EXCEEDED") {
+    return res.status(403).json({success: false, error: "PLAN_LIMIT_EXCEEDED", message: error.message});
+  }
   if (
     error?.code === "NOT_FOUND" ||
     error?.status === 404 ||

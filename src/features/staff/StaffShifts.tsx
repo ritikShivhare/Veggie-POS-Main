@@ -1,3 +1,4 @@
+import { isActiveStaff } from "../shared/staffStatus";
 import React, { useState } from "react";
 import { Shift, StaffMember, StaffRole, RestaurantTenant } from "../shared/types";
 import { Clock, Play, LogOut, CheckCircle2, UserCheck, Eye, UserPlus, AlertCircle, ShieldAlert, Trash2, UserMinus, Zap, QrCode, Smartphone, Share2 } from "lucide-react";
@@ -28,7 +29,8 @@ export default function StaffShifts({
   const isManagerOrOwner = currentStaff.role === "Owner" || currentStaff.role === "Manager";
   const planName = activeTenant?.plan || "free";
   const planCapacity = planName === "pro" ? 10 : planName === "enterprise" ? 100000 : 3;
-  const hasReachedLimit = staffList.length >= planCapacity;
+  const activeStaff = staffList.filter(isActiveStaff);
+  const hasReachedLimit = activeStaff.length >= planCapacity;
   const [activeSubTab, setActiveSubTab] = useState<"duty" | "logs">("duty");
   const [localDeleteId, setLocalDeleteId] = useState<string | null>(null);
   const [showStaffQrModal, setShowStaffQrModal] = useState<boolean>(false);
@@ -130,6 +132,7 @@ export default function StaffShifts({
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
 
   const handleRoleChange = (role: "Owner" | "Manager" | "Cashier" | "Waiter" | "Chef" | "Custom") => {
     setNewRole(role);
@@ -156,12 +159,13 @@ export default function StaffShifts({
 
   const handleRegisterStaff = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving || needsRefresh) return;
     setFormError("");
     setFormSuccess("");
 
     const activePlan = activeTenant?.plan || "free";
     const capacity = activePlan === "pro" ? 10 : activePlan === "enterprise" ? 100000 : 3;
-    if (staffList.length >= capacity) {
+    if (activeStaff.length >= capacity) {
       setFormError(`Plan Limit Reached: Your current ${activePlan.toUpperCase()} Plan only supports up to ${capacity} staff members. Please upgrade your plan to add more team members.`);
       return;
     }
@@ -182,7 +186,7 @@ export default function StaffShifts({
     }
 
     // Ensure PIN code is unique
-    const pinConflict = staffList.find((s) => s.pin === newPin);
+    const pinConflict = activeStaff.find((s) => s.pin === newPin);
     if (pinConflict) {
       setFormError(`PIN conflict: ${pinConflict.name} is already using this PIN.`);
       return;
@@ -195,28 +199,41 @@ export default function StaffShifts({
       name: newName.trim(),
       role: finalRoleTitle as StaffRole,
       pin: newPin,
+      status: "active",
       permissions: (newPerms.length > 0 ? newPerms : ["billing"]) as any
     };
 
     setIsSaving(true);
-    const updatedList = [...staffList, newStaff];
+
     // Publish UI state only after the server confirms the mutation.
 
     try {
       const response=await ApiClient.authenticatedFetch("/api/staff",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(newStaff)});
       const data=await response.json();if(!response.ok || !data.success) throw new Error(data.message || data.error || "Staff save failed.");
-      const fresh=await (await ApiClient.authenticatedFetch("/api/staff")).json();
-      if(fresh.success) onUpdateStaffList(fresh.data);
+      setNewPin("");
+      try { await refreshStaffList(); }
+      catch { setNeedsRefresh(true); throw new Error("Staff was created, but the staff list could not refresh. Reload before creating another member."); }
       setFormSuccess(`Registered ${newName.trim()}.`);setNewName("");setNewPin("");setCustomRoleTitle("");setNewRole("Cashier");setNewPerms(["billing"]);
     }catch(error:any){setFormError(error.message);}finally{setIsSaving(false);}
   };
 
+  const refreshStaffList = async () => {
+    const response = await ApiClient.authenticatedFetch("/api/staff");
+    const result = await response.json();
+    if (!response.ok || !result.success || !Array.isArray(result.data)) throw new Error("Staff list refresh failed.");
+    onUpdateStaffList(result.data.filter(isActiveStaff));
+  };
+
   const handleDeleteStaffMember=async(staffId:string)=>{
+    if (isSaving || needsRefresh) return;
+    setFormError(""); setFormSuccess(""); setIsSaving(true);
     try {
       const response=await ApiClient.authenticatedFetch(`/api/staff/${encodeURIComponent(staffId)}`,{method:"DELETE"});const data=await response.json();
       if(!response.ok || !data.success) throw new Error(data.message || data.error || "Staff removal failed.");
-      const fresh=await (await ApiClient.authenticatedFetch("/api/staff")).json();if(fresh.success) onUpdateStaffList(fresh.data.filter((s:any)=>s.status!=="inactive"));setLocalDeleteId(null);
-    }catch(error:any){setFormError(error.message);}
+      try { await refreshStaffList(); }
+      catch { setNeedsRefresh(true); throw new Error("Staff was deactivated, but the staff list could not refresh. Reload to confirm the current list."); }
+      setLocalDeleteId(null);
+    }catch(error:any){setFormError(error.message || "Staff removal failed.");}finally{setIsSaving(false);}
   };
 
   return (
@@ -526,7 +543,7 @@ export default function StaffShifts({
                               <p className="font-bold text-white">Upgrade Plan Suggestion</p>
                               <p className="text-[11px] leading-relaxed text-slate-300">
                                 Your current <span className="uppercase text-amber-400 font-bold font-mono">{planName}</span> plan only supports up to <span className="font-bold text-white">{planCapacity} staff members</span>.
-                                You currently have <span className="font-bold text-white">{staffList.length} members</span>.
+                                You currently have <span className="font-bold text-white">{activeStaff.length} members</span>.
                               </p>
                             </div>
                           </div>
@@ -545,7 +562,7 @@ export default function StaffShifts({
 
                       <button
                         type="submit"
-                        disabled={hasReachedLimit || isSaving}
+                        disabled={hasReachedLimit || isSaving || needsRefresh}
                         className={`w-full py-2.5 font-bold text-xs rounded-xl transition duration-150 shadow-md cursor-pointer ${
                           hasReachedLimit
                             ? "bg-slate-800 text-slate-500 cursor-not-allowed shadow-none"
@@ -567,7 +584,7 @@ export default function StaffShifts({
                         <span>Manage Registered Staff</span>
                       </div>
                       <span className="text-xs font-mono font-medium text-slate-400 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-full">
-                        {staffList.length} / {planCapacity} Limit
+                        {activeStaff.length} / {planCapacity} Limit
                       </span>
                     </h2>
 
@@ -576,7 +593,7 @@ export default function StaffShifts({
                     </p>
 
                     <div className="space-y-3 pt-2 max-h-[350px] overflow-y-auto pr-1">
-                      {staffList.map((staff) => (
+                      {activeStaff.map((staff) => (
                         <div key={staff.id} className="bg-slate-950 border border-slate-800/60 rounded-2xl p-3.5 flex items-center justify-between hover:border-slate-800 transition">
                           <div className="flex items-center space-x-3 min-w-0">
                             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center font-bold text-emerald-400 text-xs shrink-0 border border-slate-800 uppercase">
@@ -610,6 +627,7 @@ export default function StaffShifts({
                                   <span className="text-[9px] text-rose-300 font-bold px-1 select-none">Sure?</span>
                                   <button
                                     type="button"
+                                    disabled={isSaving || needsRefresh}
                                     onClick={() => handleDeleteStaffMember(staff.id)}
                                     className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[9px] font-bold uppercase transition cursor-pointer"
                                   >
@@ -626,6 +644,7 @@ export default function StaffShifts({
                               ) : (
                                 <button
                                   type="button"
+                                  disabled={isSaving || needsRefresh}
                                   onClick={() => setLocalDeleteId(staff.id)}
                                   className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg border border-rose-500/20 transition cursor-pointer"
                                   title="Delete Staff Member"

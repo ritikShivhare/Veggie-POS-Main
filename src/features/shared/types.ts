@@ -61,7 +61,8 @@ export interface StaffMember {
   pin: string; // 4 to 6 digit PIN
   permissions: ('billing' | 'inventory' | 'reports' | 'settings' | string)[];
   phone?: string;
-  status?: string;
+  // Lowercase persisted values; title-case values supported for legacy records.
+  status?: 'active' | 'inactive' | 'suspended' | 'Active' | 'Inactive' | 'Suspended' | null;
   version?: number;
   created_at?: string;
   updated_at?: string;

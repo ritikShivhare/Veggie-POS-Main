@@ -1,3 +1,4 @@
+import { isActiveStaff } from "../../../src/features/shared/staffStatus";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { StaffMember } from "../../../src/features/shared/types";
@@ -80,7 +81,7 @@ export async function findStaffByPinConstantTime(
 
   for (const member of staffList) {
     const isMatch = await verifyPin(inputPin, member.pin);
-    if (isMatch && !matchedStaff) {
+    if (isMatch && isActiveStaff(member) && !matchedStaff) {
       matchedStaff = member;
     }
   }
