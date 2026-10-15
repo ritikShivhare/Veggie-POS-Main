@@ -187,7 +187,10 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     let pingInterval: any = null;
     let pollingInterval: any = null;
 
+    let syncReadInFlight = false;
     const fetchSyncUpdates = async () => {
+      if (!active || syncReadInFlight) return;
+      syncReadInFlight = true;
       try {
         if (hasPendingChangesRef.current || (Date.now() - lastSaveTimeRef.current < 1500)) {
           return;
@@ -241,6 +244,8 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
         }
       } catch (err) {
         console.warn("[Realtime] Skipped background synchronization update due to network status:", err);
+      } finally {
+        syncReadInFlight = false;
       }
     };
 

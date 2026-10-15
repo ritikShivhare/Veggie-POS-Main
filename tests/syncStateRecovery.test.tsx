@@ -47,6 +47,14 @@ describe('tenant synchronization recovery',()=>{
     await advance(1000);
     expect(mocks.saveSync).not.toHaveBeenCalled();
   });
+  it('does not overlap background polls while a slow sync is pending and resumes afterwards',async()=>{
+    let finish!:(value:any)=>void;
+    mocks.getSync.mockResolvedValueOnce(snapshot('initial')).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;})).mockResolvedValue(snapshot('later'));
+    await render();await advance(3500);expect(mocks.getSync).toHaveBeenCalledTimes(2);
+    await advance(14000);expect(mocks.getSync).toHaveBeenCalledTimes(2);
+    await act(async()=>finish(snapshot('slow-background')));
+    await advance(3500);expect(mocks.getSync).toHaveBeenCalledTimes(3);
+  });
   it('initializes from a later poll after the first request fails',async()=>{
     mocks.getSync.mockResolvedValueOnce({success:false,error:'NETWORK_OFFLINE'}).mockResolvedValue(snapshot('recovered-menu'));
     await render();expect(latest.isTenantDataReady).toBe(false);

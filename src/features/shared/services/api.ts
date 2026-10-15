@@ -89,6 +89,7 @@ export interface CopilotResponse {
  */
 export class ApiClient {
   private static inMemorySessionId: string | null = null;
+  private static syncRequests = new Map<string, Promise<SyncResponse>>();
 
   public static setSessionId(sessionId: string | null): void {
     this.inMemorySessionId = sessionId;
@@ -176,7 +177,21 @@ export class ApiClient {
   /**
    * Fetches the full tenant synchronized state from the server database.
    */
-  public static async getTenantSync(tenantId: string, sessionId?: string): Promise<SyncResponse> {
+  public static getTenantSync(tenantId: string, sessionId?: string): Promise<SyncResponse> {
+    // Share only an in-flight read for this exact tenant/session, never cached data
+    // across users. Release on success and failure so a later poll can retry.
+    const effectiveSession = sessionId || this.inMemorySessionId || undefined;
+    const key = JSON.stringify([tenantId, effectiveSession || null]);
+    const pending = this.syncRequests.get(key);
+    if (pending) return pending;
+    const request = this.fetchTenantSync(tenantId, effectiveSession).finally(() => {
+      if (this.syncRequests.get(key) === request) this.syncRequests.delete(key);
+    });
+    this.syncRequests.set(key, request);
+    return request;
+  }
+
+  private static async fetchTenantSync(tenantId: string, sessionId?: string): Promise<SyncResponse> {
     try {
       const response = await fetch(`/api/sync?tenantId=${encodeURIComponent(tenantId)}`, {
         signal: AbortSignal.timeout(30000),

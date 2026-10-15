@@ -140,3 +140,18 @@ Verified on the hosted database: stale RPC returns `PT409`; schema 9; service-ro
 execution allowed, anon/authenticated denied. Health recovered to HTTP 200 after
 migration. Local validation: 306 tests across 32 files. TypeScript/build results
 must also pass before pushing. These checks do not certify every live user flow.
+
+## Sync timeout follow-up
+
+A browser screenshot showed full-state reads canceled at the configured 30-second
+client deadline. Fallback polling ran every 3.5 seconds without waiting for the
+previous read; realtime messages could also start a concurrent read. This can
+multiply load when backend responses are slow.
+
+`useSyncState` now skips overlapping background reads. `ApiClient.getTenantSync`
+coalesces only concurrent reads for the identical tenant and session, releasing
+the entry after success or failure. No completed-response cache is introduced.
+The 30-second deadline, authentication headers, server tenant authorization and
+offline outbox are preserved. Regression tests cover delayed polling, retry after
+failure and separate tenants/sessions. This removes request amplification; it
+does not claim to eliminate every source of backend latency.
