@@ -112,7 +112,7 @@ BEGIN
   IF p_tenant_id IS NULL OR length(p_tenant_id)=0 OR length(p_tenant_id)>160 THEN RAISE EXCEPTION 'Invalid tenant' USING ERRCODE='42501'; END IF;
   PERFORM pg_advisory_xact_lock(hashtextextended(p_tenant_id,0));
   SELECT COALESCE((SELECT revision FROM tenant_revisions WHERE tenant_id=p_tenant_id),0) INTO rev;
-  IF rev<>p_expected_revision THEN RAISE EXCEPTION 'STALE_TENANT_REVISION' USING ERRCODE='40001'; END IF;
+  IF rev<>p_expected_revision THEN RAISE EXCEPTION 'STALE_TENANT_REVISION' USING ERRCODE='PT409'; END IF;
   IF jsonb_typeof(p_changes)<>'array' OR jsonb_typeof(p_objects)<>'array' THEN RAISE EXCEPTION 'Invalid changes' USING ERRCODE='22023'; END IF;
   SET CONSTRAINTS ALL DEFERRED;
   FOR change IN SELECT value FROM jsonb_array_elements(p_changes) LOOP

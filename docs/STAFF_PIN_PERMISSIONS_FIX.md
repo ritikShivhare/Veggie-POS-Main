@@ -115,3 +115,28 @@ these cases without exposing provider error text. Updated local validation:
 
 This diagnostic change does not repair a provider connection pool by itself.
 Restore Data API availability, then verify the exact deployed commit and health.
+
+## Stale-revision retry loop recovery
+
+Root cause: `commit_tenant_transaction` raised custom stale revisions with
+SQLSTATE `40001`. PostgREST can automatically retry this serialization error with
+the same stale expected revision, exhausting its pool. Return `PT409` instead
+(HTTP 409), so the existing application transaction retry remains bounded and
+reloads state. Genuine database serialization failures retain their handling.
+
+Fresh installs use the corrected guard in `migrations/008_deployment_integrity.sql`.
+Existing deployments apply only
+`supabase/migrations/20261015071856_avoid_postgrest_revision_retry_loop.sql`.
+The incremental migration replaces the exact known guard, aborts on an unknown
+function body, and is idempotent. It preserves advisory locks, tenant validation,
+function privileges and stored data. Do not replay migration 008 on production.
+
+Safe order: apply incremental migration; confirm a deliberately stale RPC returns
+`PT409`, schema remains 9 and anon/authenticated cannot execute the RPC; deploy the
+branch; verify `/api/health` returns 200 with the exact new commit. Then complete
+manual two-tenant and staff-permission acceptance checks before merging/releasing.
+
+Verified on the hosted database: stale RPC returns `PT409`; schema 9; service-role
+execution allowed, anon/authenticated denied. Health recovered to HTTP 200 after
+migration. Local validation: 306 tests across 32 files. TypeScript/build results
+must also pass before pushing. These checks do not certify every live user flow.
