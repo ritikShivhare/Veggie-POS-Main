@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 export function publicStaff(member: any) {
   if (!member) return member;
   const { pin, passwordHash, password, ...safe } = member;
-  return safe;
+  return {...safe,version: safe.version || 1};
 }
 
 export function publicTenant(tenant: any) {

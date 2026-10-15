@@ -40,6 +40,13 @@ describe('tenant synchronization recovery',()=>{
     await advance(500);
     expect(mocks.saveSync).toHaveBeenCalledWith('restaurant-a',expect.objectContaining({menuItems:[expect.objectContaining({id:'new-dish'})]}),'synthetic-session');
   });
+  it('never sends staff PIN or permission drafts through the automatic sync path',async()=>{
+    mocks.getSync.mockResolvedValue(snapshot('loaded'));
+    await render();mocks.saveSync.mockClear();
+    await act(async()=>latest.setStaffList([{...owner,pin:'1234',permissions:['billing']} as any]));
+    await advance(1000);
+    expect(mocks.saveSync).not.toHaveBeenCalled();
+  });
   it('initializes from a later poll after the first request fails',async()=>{
     mocks.getSync.mockResolvedValueOnce({success:false,error:'NETWORK_OFFLINE'}).mockResolvedValue(snapshot('recovered-menu'));
     await render();expect(latest.isTenantDataReady).toBe(false);

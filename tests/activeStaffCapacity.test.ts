@@ -69,6 +69,26 @@ describe('Active staff capacity and lifecycle',()=>{
   const response=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenantId:tenant,pin:'92716'})});
   expect(response.status).toBe(401);expect(await sessionService.validateAndTouchSession(tenant,session.sessionId)).toBeNull();
  });
+ it('updates three staff independently, revoking each target session while preserving Owner access',async()=>{
+  await Database.getInstance().saveObject(tenant,'stripe_subscription',{plan:'pro',status:'active',isReadOnly:false});
+  for(const [id,pin] of [['edit-a','32581'],['edit-b','32582'],['edit-c','32583']]) {
+   await staffRepo.add(tenant,{...member(id),pin});
+   const target=await sessionService.createSession(tenant,id,id,'Cashier','127.0.0.1','Test',['billing']);
+   const edit=await req('/staff/'+id,{pin:'9'+pin.slice(1),permissions:['billing','inventory'],version:1},'PUT');
+   expect(edit.status).toBe(200);expect(edit.data.data).not.toHaveProperty('pin');
+   expect(await sessionService.validateAndTouchSession(tenant,target.sessionId)).toBeNull();
+   expect(await sessionService.validateAndTouchSession(tenant,token)).not.toBeNull();
+  }
+ });
+ it('rejects incomplete PINs, stale versions, and removing Owner permissions without changing records',async()=>{
+  await staffRepo.add(tenant,{...member('editable'),pin:'64281'});
+  expect((await req('/staff/editable',{pin:'12',version:1},'PUT')).status).toBe(400);
+  expect((await req('/staff/editable',{permissions:['inventory'],version:1},'PUT')).status).toBe(200);
+  expect((await req('/staff/editable',{permissions:['reports'],version:1},'PUT')).status).toBe(409);
+  expect((await staffRepo.getById(tenant,'editable'))!.permissions).toEqual(['inventory']);
+  expect((await req('/staff/owner',{permissions:[],version:1},'PUT')).status).toBe(400);
+  expect(await sessionService.validateAndTouchSession(tenant,token)).not.toBeNull();
+ });
  it('returns failure when persistence fails and never seeds staff on empty or failed reads',async()=>{
   vi.spyOn(staffRepo,'add').mockRejectedValueOnce(new Error('synthetic write failure'));
   const result=await req('/staff',member('failed'));expect(result.status).toBeGreaterThanOrEqual(400);expect(result.data.success).toBe(false);

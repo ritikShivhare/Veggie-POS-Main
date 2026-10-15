@@ -7,6 +7,7 @@ import { validateEntity,customerProfile,finiteAmount } from "../server/features/
 import { Database, handleApiError } from "../server/features/shared/database";
 import {
   staffRepo,
+  sessionService,
   orderRepo,
   customerRepo,
   shiftRepo,
@@ -80,10 +81,21 @@ router.post("/staff/bulk", authMiddleware, requireRole("Owner"), async (req, res
 router.put("/staff/:id", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    const current=await staffRepo.getById(tenantId,req.params.id);
-    validateEntity("staffList",{...publicStaff(current),...req.body,id:req.params.id});
-    if(current?.role==="Owner" && (req.body.role && req.body.role!=="Owner" || ["inactive","suspended"].includes(req.body.status))) return res.status(400).json({success:false,error:"OWNER_REQUIRED"});
-    const updated = await staffRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
+    const updated = await Database.getInstance().runTransaction(tenantId,async trx=>{
+      const current=await staffRepo.getById(tenantId,req.params.id);
+      if(!current) throw Object.assign(new Error("Staff member not found."),{status:404});
+      const patch={...req.body,id:req.params.id};
+      if((patch.pin!==undefined || patch.permissions!==undefined) && !Number.isInteger(patch.version)) throw Object.assign(new Error("Load the latest staff record before saving access changes."),{status:400});
+      if(patch.pin!==undefined && !/^\d{4,6}$/.test(patch.pin)) throw Object.assign(new Error("Enter a complete 4–6 digit PIN."),{status:400});
+      validateEntity("staffList",{...publicStaff(current),...patch});
+      if(current.role==="Owner" && ((patch.role && patch.role!=="Owner") || ["inactive","suspended"].includes(patch.status) || (patch.permissions && current.permissions.some(permission=>!patch.permissions.includes(permission))))) throw Object.assign(new Error("Owner access cannot be removed."),{status:400,code:"OWNER_REQUIRED"});
+      if(patch.pin!==undefined && await findStaffByPinConstantTime(((await staffRepo.getAll(tenantId)) || []).filter(staff=>staff.id!==current.id),patch.pin)) throw Object.assign(new Error("Choose a unique PIN for this restaurant."),{status:400});
+      const saved=await staffRepo.update(tenantId,patch,patch.version,trx);
+      const sessions=await sessionService.getActiveSessions(tenantId);
+      for(const session of sessions.filter(session=>session.userId===current.id)) await sessionService.revokeSession(tenantId,session.sessionId);
+      Database.getInstance().afterCommit(()=>realtimeService.broadcastSyncUpdate(tenantId,"staff"));
+      return saved;
+    });
     res.json({ success: true, message: "Staff updated successfully.", data: publicStaff(updated) });
   } catch (error: any) {
     handleApiError(res, error);

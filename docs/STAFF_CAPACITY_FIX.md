@@ -135,5 +135,6 @@ signup is not replaced by a demo seeder.
    no schema change and preserves rows, so it requires no destructive data rollback.
    The previous code may again overcount inactive rows; verify before onboarding.
 
-This patch does not certify the unrelated pending payment, two-device/offline
-release checks or the separate PIN/permission-editor save workflow.
+The PIN/permission editor extension is documented in STAFF_PIN_PERMISSIONS_FIX.md.
+The unrelated pending payment and remaining live two-device/offline release gates
+are not certified by these automated tests.

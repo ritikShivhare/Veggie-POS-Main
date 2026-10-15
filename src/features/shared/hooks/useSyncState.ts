@@ -443,7 +443,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   useEffect(()=>{
     if(!isLoadedRef.current || loadedTenantIdRef.current!==activeTenantId || !currentSessionId || !["Owner","Manager"].includes(currentStaff?.role || "")) return;
     const baseline=JSON.parse(lastFetchedStateRef.current || "{}");
-    const current:any={menuItems,ingredients,recipes,...(currentStaff?.role==="Owner"?{staffList,settings}:{})};
+    const current:any={menuItems,ingredients,recipes,...(currentStaff?.role==="Owner"?{settings}:{})};
     const payload:any={},deletions:any={};
     const clean=(row:any)=>{const {tenantId,branchId,deviceId,updatedAt,createdAt,...safe}=row;return safe;};
     for(const key of Object.keys(current)) {
