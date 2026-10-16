@@ -34,7 +34,7 @@ export const PLAN_LIMITS = {
     label: "Enterprise Elite",
     staffCount: 100000, // unlimited
     monthlyOrders: 100000, // unlimited
-    price: 2999,
+    price: 1999,
     currency: "INR",
     priceId: "price_ent",
     features: {

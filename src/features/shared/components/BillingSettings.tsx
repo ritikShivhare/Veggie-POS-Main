@@ -348,7 +348,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
                 <span className="text-xs font-bold text-slate-800">Enterprise Elite</span>
                 {plan === "enterprise" && <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Active</span>}
               </div>
-              <p className="text-sm font-extrabold text-slate-900">₹2999 / month</p>
+              <p className="text-sm font-extrabold text-slate-900">₹1999 / month</p>
               
               <ul className="text-[11px] text-slate-500 mt-3 space-y-1.5 border-t border-slate-100 pt-3">
                 <li className="flex items-center gap-1 font-medium text-purple-700">✓ Unlimited Staff (∞)</li>

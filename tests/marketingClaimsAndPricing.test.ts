@@ -13,7 +13,7 @@ describe("marketing claims and pricing", () => {
     expect(pricingPage).toContain("PLAN_LIMITS");
     expect(subscription).toContain("from \"../../../shared/planCatalog\"");
     expect(catalog).toContain('price: 999');
-    expect(catalog).toContain('price: 2999');
+    expect(catalog).toContain('price: 1999');
     expect(pricingPage).not.toMatch(/annualBilling|annualPrice|Save 20%/);
     expect(pricingPage).not.toMatch(/monthlyPrice:\s*(1999|3499)/);
   });
