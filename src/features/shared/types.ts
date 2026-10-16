@@ -220,6 +220,7 @@ export interface InventorySettings {
   gstPercentage?: number;
   maxDiscountPercentage?: number;
   gstin?: string;
+  fssaiNumber?: string;
   upiVpa?: string;
   upiMerchantName?: string;
 }

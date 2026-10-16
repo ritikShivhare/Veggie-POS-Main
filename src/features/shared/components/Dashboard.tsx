@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import ReceiptTotals from "./ReceiptTotals";
+import FssaiRegistration from "./FssaiRegistration";
 import { 
   TrendingUp, 
   Activity, 
@@ -1343,8 +1344,9 @@ export default function Dashboard({
                 </h2>
                 <p className="text-[11px] text-slate-500 mt-0.5">Authentic Dining & Quick Billing Hub</p>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  {(settings?.gstin || activeTenant?.gstin) ? `GSTIN: ${(settings?.gstin || activeTenant?.gstin)?.toUpperCase()} • ` : "Retail Cash Bill • "}FSSAI: 10020011000123
+                  {(settings?.gstin || activeTenant?.gstin) ? `GSTIN: ${(settings?.gstin || activeTenant?.gstin)?.toUpperCase()}` : "Retail Cash Bill"}
                 </p>
+                <FssaiRegistration number={settings?.fssaiNumber} />
               </div>
 
               {/* Order Meta Info */}

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import QRCode from "qrcode";
 import ReceiptTotals from "../shared/components/ReceiptTotals";
+import FssaiRegistration from "../shared/components/FssaiRegistration";
 import { MenuItem, Ingredient, Recipe, CartItem, Order, StaffMember, InventorySettings, OrderStatus, Customer } from "../shared/types";
 import { ApiClient } from "../shared/services/api";
 import {
@@ -2082,6 +2083,7 @@ export default function POSBilling({
                     {activeTenant?.name || "VEGGIE RESTAURANT & POS"}
                   </h2>
                   <p className="text-[10px] text-slate-600">Pure Vegetarian Hospitality Suite</p>
+                  <FssaiRegistration number={settings.fssaiNumber} className="text-[9px] text-slate-700 mt-0.5" />
                   {(settings.gstin || activeTenant?.gstin) ? (
                     <p className="text-[9px] text-slate-700 font-bold mt-0.5">
                       GSTIN: {(settings.gstin || activeTenant?.gstin)?.toUpperCase()}
@@ -2155,7 +2157,7 @@ export default function POSBilling({
                 <div className="text-center pt-2 space-y-0.5 text-[9px] text-slate-600">
                   <p className="font-semibold">Thank you for dining with us!</p>
                   <p>Have a wonderful day ahead.</p>
-                  <p className="font-mono text-[8px] text-slate-400 mt-1">*** POWERED BY VEGGIEPOS ENTERPRISE ***</p>
+                  <p className="font-mono text-[8px] text-slate-400 mt-1">*** POWERED BY AATMYAM POS ***</p>
                 </div>
               </div>
             </div>
