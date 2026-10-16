@@ -474,7 +474,7 @@ export default function SaasAdminDashboard({
         <div className="relative z-10 max-w-4xl space-y-2">
           <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider">
             <Crown className="w-3.5 h-3.5 text-amber-350" />
-            <span>VeggiePOS SaaS Master Command Center</span>
+            <span>Aatmyam POS SaaS Master Command Center</span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
             SaaS Owner Dashboard (सॉस एडमिन पैनल)
@@ -1235,7 +1235,7 @@ export default function SaasAdminDashboard({
                             {/* WhatsApp Button (Option 3 & 1) */}
                             <a
                               href={`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
-                                `Hello ${lead.fullName}, I am reaching out from Veggie POS regarding your 15-minute walkthrough request for "${lead.restaurantName}" (Address: ${lead.address || "your outlet"}). Are you available for a demonstration call?`
+                                `Hello ${lead.fullName}, I am reaching out from Aatmyam POS regarding your 15-minute walkthrough request for "${lead.restaurantName}" (Address: ${lead.address || "your outlet"}). Are you available for a demonstration call?`
                               )}`}
                               target="_blank"
                               rel="noopener noreferrer"

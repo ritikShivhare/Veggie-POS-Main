@@ -46,7 +46,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
             className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition mb-6 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-xl cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to VeggiePOS</span>
+            <span>Back to Aatmyam POS</span>
           </button>
 
           <div className="flex items-center gap-4">
@@ -54,7 +54,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               {getPageIcon()}
             </div>
             <div>
-              <span className="text-[10px] uppercase font-bold tracking-widest text-pink-400 font-mono">VeggiePOS Compliance</span>
+              <span className="text-[10px] uppercase font-bold tracking-widest text-pink-400 font-mono">Aatmyam POS Compliance</span>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">{getPageTitle()}</h1>
             </div>
           </div>
@@ -72,21 +72,21 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">1. Acceptance of Terms</h3>
                 <p>
-                  Welcome to VeggiePOS (the "Service"), a multi-tenant software-as-a-service application designed for billing, inventory, and staff shift scheduling. By registering for or using any portion of VeggiePOS, you ("User", "Tenant", or "Owner") agree to be bound by these Terms of Service. If you do not agree, please do not access or use the Service.
+                  Welcome to Aatmyam POS (the "Service"), a multi-tenant software-as-a-service application designed for billing, inventory, and staff shift scheduling. By registering for or using any portion of Aatmyam POS, you ("User", "Tenant", or "Owner") agree to be bound by these Terms of Service. If you do not agree, please do not access or use the Service.
                 </p>
               </section>
 
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">2. Multi-Tenant Service & Account Security</h3>
                 <p>
-                  VeggiePOS isolates data utilizing advanced multi-tenant technology. Each restaurant is assigned a unique <code className="bg-slate-100 text-pink-600 px-1 py-0.5 rounded text-xs font-mono">Tenant ID</code>. You are solely responsible for maintaining the confidentiality of your administrative credentials, including your 5-digit Owner PIN passcode and any employee 4-digit PINs.
+                  Aatmyam POS isolates data utilizing advanced multi-tenant technology. Each restaurant is assigned a unique <code className="bg-slate-100 text-pink-600 px-1 py-0.5 rounded text-xs font-mono">Tenant ID</code>. You are solely responsible for maintaining the confidentiality of your administrative credentials, including your 5-digit Owner PIN passcode and any employee 4-digit PINs.
                 </p>
               </section>
 
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">3. User Responsibilities & Operational Use</h3>
                 <p>
-                  You agree to use VeggiePOS only for lawful commercial restaurant operations. You will not:
+                  You agree to use Aatmyam POS only for lawful commercial restaurant operations. You will not:
                 </p>
                 <ul className="list-disc pl-5 space-y-1 text-slate-600">
                   <li>Incorporate false transaction histories, fake inventory records, or fake staff hours;</li>
@@ -98,7 +98,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">4. GDPR & Data Portability Compliance</h3>
                 <p>
-                  We are committed to data autonomy and standard user privacy safeguards (such as GDPR). In alignment with these principles, VeggiePOS provides direct self-service tools inside the <b>Rules Settings Panel</b>:
+                  We are committed to data autonomy and standard user privacy safeguards (such as GDPR). In alignment with these principles, Aatmyam POS provides direct self-service tools inside the <b>Rules Settings Panel</b>:
                 </p>
                 <div className="bg-slate-50 border border-slate-150 p-4 rounded-xl flex items-start gap-3">
                   <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -114,7 +114,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
                   <div>
                     <h4 className="font-bold text-slate-800 text-xs">Self-Service Deletion ("Right to Be Forgotten"):</h4>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      You can use the <b>"Delete My Account"</b> button to permanently and irreversibly erase all data assets associated with your Tenant ID from the VeggiePOS live system memory and local storage arrays.
+                      You can use the <b>"Delete My Account"</b> button to permanently and irreversibly erase all data assets associated with your Tenant ID from the Aatmyam POS live system memory and local storage arrays.
                     </p>
                   </div>
                 </div>
@@ -123,7 +123,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">5. Limitation of Liability</h3>
                 <p>
-                  VeggiePOS is provided on an "as-is" and "as-available" basis. We do not warrant that the Service will be completely uninterrupted or free of brief maintenance updates. Under no circumstances shall VeggiePOS be liable for indirect, incidental, or consequential damages resulting from restaurant down-times or ingredient stock discrepancies.
+                  Aatmyam POS is provided on an "as-is" and "as-available" basis. We do not warrant that the Service will be completely uninterrupted or free of brief maintenance updates. Under no circumstances shall Aatmyam POS be liable for indirect, incidental, or consequential damages resulting from restaurant down-times or ingredient stock discrepancies.
                 </p>
               </section>
             </div>
@@ -134,7 +134,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">1. Scope of Privacy Policy</h3>
                 <p>
-                  This Privacy Policy details how VeggiePOS collects, utilizes, and secures data related to your restaurant operations. Your privacy is paramount, and we deploy multi-tenant segmentation to ensure that other business establishments cannot view or query your operational data.
+                  This Privacy Policy details how Aatmyam POS collects, utilizes, and secures data related to your restaurant operations. Your privacy is paramount, and we deploy multi-tenant segmentation to ensure that other business establishments cannot view or query your operational data.
                 </p>
               </section>
 
@@ -194,14 +194,14 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">1. SaaS Subscription Cycle</h3>
                 <p>
-                  VeggiePOS is offered as a flexible SaaS subscription product billed either monthly or annually. Your subscription commences immediately upon registration and credentials generation.
+                  Aatmyam POS is offered as a flexible SaaS subscription product billed either monthly or annually. Your subscription commences immediately upon registration and credentials generation.
                 </p>
               </section>
 
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">2. Refund Terms & 7-Day Guarantee</h3>
                 <p>
-                  We strive for exceptional quality. If you find VeggiePOS does not meet your restaurant's billing workflows or you experience technical issues, you may request a refund under the following conditions:
+                  We strive for exceptional quality. If you find Aatmyam POS does not meet your restaurant's billing workflows or you experience technical issues, you may request a refund under the following conditions:
                 </p>
                 <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
                   <li><b>Guarantee Window:</b> Refund requests must be initiated via email within <b>7 calendar days</b> of your initial premium registration.</li>
@@ -213,7 +213,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">3. Subscription Cancellation</h3>
                 <p>
-                  You can cancel your active VeggiePOS account subscription directly from your administrative dashboard or billing section. Once cancelled:
+                  You can cancel your active Aatmyam POS account subscription directly from your administrative dashboard or billing section. Once cancelled:
                 </p>
                 <ul className="list-disc pl-5 space-y-1 text-slate-600">
                   <li>You will not be billed for subsequent billing cycles;</li>
@@ -234,7 +234,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
 
         {/* Footer */}
         <div className="bg-slate-50 px-8 py-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
-          <span>© 2026 VeggiePOS. All Rights Reserved.</span>
+          <span>© 2026 Aatmyam POS. All Rights Reserved.</span>
           <button
             onClick={onBack}
             className="text-pink-600 hover:text-pink-700 font-bold hover:underline transition cursor-pointer"

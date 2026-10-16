@@ -150,7 +150,7 @@ function ErrorFallbackView({
             <AlertTriangle className="w-8 h-8" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-white mb-2">
-            VeggiePOS Encountered a Crash
+            Aatmyam POS Encountered a Crash
           </h1>
           <p className="text-slate-400 text-sm max-w-md">
             एप्लीकेशन में कोई तकनीकी समस्या आई है। हमने इस क्रैश को Sentry मॉनिटरिंग सर्वर पर रिपोर्ट कर दिया है।
@@ -250,7 +250,7 @@ function ErrorFallbackView({
 
         {/* Help text */}
         <p className="text-center text-[10px] text-slate-500 mt-6 font-mono">
-          VeggiePOS Cloud Core Agent Sentry Client v1.2.0 • Session Diagnostics ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}
+          Aatmyam POS Cloud Core Agent Sentry Client v1.2.0 • Session Diagnostics ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}
         </p>
 
       </div>

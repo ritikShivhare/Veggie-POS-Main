@@ -131,7 +131,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
             <CreditCard className="w-5 h-5 text-blue-600" />
             Subscription & Stripe Billing
           </h2>
-          <p className="text-xs text-slate-500 mt-1">Manage VeggiePOS SaaS plans, limits, and real-time operational usage.</p>
+          <p className="text-xs text-slate-500 mt-1">Manage Aatmyam POS SaaS plans, limits, and real-time operational usage.</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-400 font-medium font-mono">Status:</span>
@@ -248,7 +248,7 @@ export function BillingSettings({ tenantId }: BillingSettingsProps) {
         {/* Column 3: Quick billing gateway card */}
         <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-xl p-5 flex flex-col justify-between">
           <div>
-            <span className="text-[9px] uppercase font-mono tracking-widest text-slate-400">VeggiePOS SaaS Gateway</span>
+            <span className="text-[9px] uppercase font-mono tracking-widest text-slate-400">Aatmyam POS SaaS Gateway</span>
             <h4 className="text-sm font-bold capitalize text-white flex items-center gap-1.5 mt-1">
               {plan === "free" ? <Zap className="w-4 h-4 text-amber-400" /> : plan === "pro" ? <Shield className="w-4 h-4 text-blue-400" /> : <Crown className="w-4 h-4 text-purple-400" />}
               {plan} Tier Subscription

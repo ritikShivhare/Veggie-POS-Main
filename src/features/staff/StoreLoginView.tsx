@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import BrandLogo from "../shared/components/BrandLogo";
 import { RestaurantTenant } from "../shared/types";
 import {
   Store,
@@ -69,7 +70,7 @@ export default function StoreLoginView({
             id="store-login-back-to-site-btn"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to Veggie POS Website</span>
+            <span>Back to Aatmyam POS Website</span>
           </button>
 
           <div className="flex items-center gap-2">
@@ -86,9 +87,7 @@ export default function StoreLoginView({
         <div className="w-full max-w-md bg-[#F4F0E8] border border-[#EAE5DA] rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
           
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-[#181A18] text-[#FBF9F5] flex items-center justify-center font-serif text-2xl font-bold mx-auto border border-[#2E332D] shadow-sm">
-              V
-            </div>
+            <BrandLogo />
             <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#181A18]">
               Connect Store Terminal
             </h1>
@@ -211,7 +210,7 @@ export default function StoreLoginView({
 
       {/* Footer */}
       <footer className="border-t border-[#EAE5DA] py-4 text-center text-xs text-[#787F74]">
-        <p>Veggie POS • Encrypted Multi-Tenant Terminal Gateway</p>
+        <p>Aatmyam POS • Encrypted Multi-Tenant Terminal Gateway</p>
       </footer>
 
       {/* QR Scanner Modal */}

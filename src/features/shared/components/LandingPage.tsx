@@ -178,7 +178,7 @@ export default function LandingPage({
           </div>
           <div className="flex flex-col">
             <h1 className="text-base font-extrabold text-slate-800 tracking-tight leading-none">
-              VEGGIE<span className="text-pink-600 font-extrabold">POS</span>
+              AATMYAM<span className="text-pink-600 font-extrabold"> POS</span>
             </h1>
             <p className="text-[8px] uppercase tracking-wider text-slate-400 mt-0.5 font-mono font-bold">
               EASY BILLING & STAFF APP
@@ -224,7 +224,7 @@ export default function LandingPage({
           </h1>
 
           <p className="text-slate-500 text-sm md:text-base leading-relaxed max-w-2xl">
-            Designed for all types of restaurants, cafes, and kitchens. VeggiePOS makes billing fast, tracks food items automatically, counts staff hours, and helps you save money.
+            Designed for all types of restaurants, cafes, and kitchens. Aatmyam POS makes billing fast, tracks food items automatically, counts staff hours, and helps you save money.
           </p>
 
           {/* Quick Features Checklist */}
@@ -704,7 +704,7 @@ export default function LandingPage({
             </h2>
 
             <p className="text-slate-500 text-xs md:text-sm leading-relaxed">
-              Losing track of food items is the biggest reason why restaurants lose money. VeggiePOS helps you save money by tracking your kitchen stock continuously:
+              Losing track of food items is the biggest reason why restaurants lose money. Aatmyam POS helps you save money by tracking your kitchen stock continuously:
             </p>
 
             <div className="space-y-4 pt-2">
@@ -840,7 +840,7 @@ export default function LandingPage({
             </h2>
 
             <p className="text-slate-500 text-xs md:text-sm leading-relaxed">
-              You don't need diaries or chat groups to track your staff. VeggiePOS helps you manage employee hours and permissions directly inside the app:
+              You don't need diaries or chat groups to track your staff. Aatmyam POS helps you manage employee hours and permissions directly inside the app:
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
@@ -934,7 +934,7 @@ export default function LandingPage({
             <div className="w-7 h-7 rounded bg-gradient-to-tr from-pink-500 to-rose-500 flex items-center justify-center text-white text-xs font-bold font-mono">
               V
             </div>
-            <p className="text-xs font-bold text-slate-400">VeggiePOS App</p>
+            <p className="text-xs font-bold text-slate-400">Aatmyam POS App</p>
           </div>
           <div className="flex flex-wrap items-center gap-4 md:gap-6 font-medium text-slate-500">
             <button

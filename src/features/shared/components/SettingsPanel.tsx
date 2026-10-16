@@ -92,7 +92,7 @@ export default function SettingsPanel({
   useEffect(() => {
     const rawVpa = (upiInputVpa || activeTenant.vpa || "").trim();
     const vpa = rawVpa || "veggiepos@upi";
-    const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Veggie POS").trim());
+    const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam POS").trim());
     const amt = parseFloat(testAmount) > 0 ? parseFloat(testAmount).toFixed(2) : "1.00";
     const note = encodeURIComponent(`Test QR - ${activeTenant.name}`);
     const uri = `upi://pay?pa=${vpa}&pn=${name}&am=${amt}&cu=INR&tn=${note}`;
@@ -232,7 +232,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Production Monitoring & Alerting",
       gdprPrivacy: "GDPR Privacy & Data Portability",
       staffCredentials: "Staff Credentials & Permissions Control",
-      settingsTitle: "VeggiePOS Administration Settings",
+      settingsTitle: "Aatmyam POS Administration Settings",
       generalTab: "General Settings",
       passwordTab: "Change PIN / Password",
       languageTab: "Language Change",
@@ -266,7 +266,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Monitoreo de Producción y Alertas",
       gdprPrivacy: "Privacidad GDPR y Portabilidad de Datos",
       staffCredentials: "Credenciales de Personal y Control de Permisos",
-      settingsTitle: "Configuración Administrativa de VeggiePOS",
+      settingsTitle: "Configuración Administrativa de Aatmyam POS",
       generalTab: "Configuración General",
       passwordTab: "Cambiar PIN / Contraseña",
       languageTab: "Cambiar Idioma",
@@ -283,7 +283,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Surveillance de Production et Alertes",
       gdprPrivacy: "Confidentialité GDPR et Portabilité des Données",
       staffCredentials: "Identifiants du Personnel et Contrôle des Permissions",
-      settingsTitle: "Paramètres d'Administration VeggiePOS",
+      settingsTitle: "Paramètres d'Administration Aatmyam POS",
       generalTab: "Paramètres Généraux",
       passwordTab: "Modifier le PIN / Mot de passe",
       languageTab: "Changer de Langue",
@@ -747,7 +747,7 @@ export default function SettingsPanel({
                     type="button"
                     onClick={() => {
                       const vpa = (upiInputVpa || activeTenant.vpa || "veggiepos@upi").trim();
-                      const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Veggie POS").trim());
+                      const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam POS").trim());
                       const amt = parseFloat(testAmount) > 0 ? parseFloat(testAmount).toFixed(2) : "1.00";
                       const uri = `upi://pay?pa=${vpa}&pn=${name}&am=${amt}&cu=INR&tn=TestQR`;
                       navigator.clipboard?.writeText(uri);
@@ -912,7 +912,7 @@ export default function SettingsPanel({
                 {t("monitoringAlerting")}
               </h2>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                Configure direct integrations to forward VeggiePOS application crashes and database errors to Slack channels, Sentry telemetry, or your operations email address.
+                Configure direct integrations to forward Aatmyam POS application crashes and database errors to Slack channels, Sentry telemetry, or your operations email address.
               </p>
             </div>
 
@@ -1027,7 +1027,7 @@ export default function SettingsPanel({
                 {t("gdprPrivacy")}
               </h2>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                In accordance with the General Data Protection Regulation (GDPR), VeggiePOS empowers you with direct control over your business data assets.
+                In accordance with the General Data Protection Regulation (GDPR), Aatmyam POS empowers you with direct control over your business data assets.
               </p>
             </div>
 
@@ -1095,7 +1095,7 @@ export default function SettingsPanel({
                   <div>
                     <h4 className="font-bold text-rose-800 text-xs">Right to Erasure (Delete Account)</h4>
                     <p className="text-[10px] text-rose-600/80 mt-0.5 leading-relaxed">
-                      Permanently and irreversibly delete your restaurant profile and purge all inventory logs, transaction tables, and shift rosters from VeggiePOS system storage.
+                      Permanently and irreversibly delete your restaurant profile and purge all inventory logs, transaction tables, and shift rosters from Aatmyam POS system storage.
                     </p>
                   </div>
                 </div>

@@ -355,7 +355,7 @@ export default function Sidebar({
                 <span>Lock Terminal</span>
               </button>
               <p className="text-center text-[9px] text-slate-400 mt-3 font-mono">
-                VeggiePOS 1.20
+                Aatmyam POS 1.20
               </p>
             </>
           )}

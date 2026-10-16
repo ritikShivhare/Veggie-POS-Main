@@ -455,7 +455,7 @@ export default function POSBilling({
     const configuredVpa = (settings.upiVpa || activeTenant?.vpa || "").trim();
     const isDemoVpa = !configuredVpa || configuredVpa === "veggiepos@upi";
     const vpa = !isDemoVpa ? configuredVpa : "veggiepos@upi";
-    const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Veggie POS").trim();
+    const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Aatmyam POS").trim();
     const brandName = encodeURIComponent(merchantName);
     const note = encodeURIComponent(`Order ${billingOrder?.orderNumber || "Bill"}`);
     const upiUri = `upi://pay?pa=${vpa}&pn=${brandName}&am=${currentAmount.toFixed(2)}&cu=INR&tn=${note}`;
@@ -1544,7 +1544,7 @@ export default function POSBilling({
                 const configuredVpa = (settings.upiVpa || activeTenant?.vpa || "").trim();
                 const isUnconfigured = !configuredVpa || configuredVpa === "veggiepos@upi";
                 const activeVpa = !isUnconfigured ? configuredVpa : "veggiepos@upi";
-                const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Veggie POS").trim();
+                const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Aatmyam POS").trim();
 
                 return (
                   <div className="border-t border-slate-200/60 pt-3 flex flex-col items-center text-center space-y-2.5">

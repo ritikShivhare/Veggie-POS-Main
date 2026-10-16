@@ -1338,7 +1338,7 @@ export default function Dashboard({
             <div className="flex-1 overflow-y-auto p-6 space-y-4 font-mono text-xs text-slate-800 bg-white">
               <div className="text-center border-b border-dashed border-slate-300 pb-4">
                 <h2 className="text-lg font-black text-slate-900 uppercase font-sans">
-                  {activeTenant?.name || "VeggiePOS Restaurant"}
+                  {activeTenant?.name || "Aatmyam POS Restaurant"}
                 </h2>
                 <p className="text-[11px] text-slate-500 mt-0.5">Authentic Dining & Quick Billing Hub</p>
                 <p className="text-[10px] text-slate-400 mt-1">

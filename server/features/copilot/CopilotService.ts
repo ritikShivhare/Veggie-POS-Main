@@ -45,8 +45,8 @@ export class CopilotService {
         .map((h: any) => `${h.sender === "user" ? "User" : "Assistant"}: ${h.text}`)
         .join("\n");
 
-      const systemInstruction = `You are the Veggie POS AI Assistant & Product Advisor, embedded directly on the Veggie POS platform.
-You have comprehensive, authoritative knowledge about both the Veggie POS restaurant management software application and the entire marketing platform.
+      const systemInstruction = `You are the Aatmyam POS AI Assistant & Product Advisor, embedded directly on the Aatmyam POS platform.
+You have comprehensive, authoritative knowledge about both the Aatmyam POS restaurant management software application and the entire marketing platform.
 
 KEY PRODUCT KNOWLEDGE:
 1. Core Modules:
@@ -151,10 +151,10 @@ User Prompt: ${prompt}`,
       return `Aatmyam POS monthly plans:\n${pricingSummary}\nDeployment timing and device compatibility need to be checked for your setup.`;
     }
     if (lowercasePrompt.includes("kot") || lowercasePrompt.includes("kds") || lowercasePrompt.includes("kitchen")) {
-      return `VeggiePOS Kitchen Order Tickets (KOT) feature visual station color-coding (Starters, Mains, Desserts), multi-course holding/firing, kitchen latency timers, and direct thermal printing via USB, Bluetooth, or LAN.`;
+      return `Aatmyam POS Kitchen Order Tickets (KOT) feature visual station color-coding (Starters, Mains, Desserts), multi-course holding/firing, kitchen latency timers, and direct thermal printing via USB, Bluetooth, or LAN.`;
     }
     if (lowercasePrompt.includes("recipe") || lowercasePrompt.includes("ingredient") || lowercasePrompt.includes("stock") || lowercasePrompt.includes("inventory")) {
-      return `In VeggiePOS, you map recipe weights in the 'Inventory & Recipes' tab. When an order is processed, ingredients are automatically deducted down to grams/milliliters based on your Recipe Bill of Materials (BOM). Store managers can log vendor supplies, while the Owner has full master editing rights.`;
+      return `In Aatmyam POS, you map recipe weights in the 'Inventory & Recipes' tab. When an order is processed, ingredients are automatically deducted down to grams/milliliters based on your Recipe Bill of Materials (BOM). Store managers can log vendor supplies, while the Owner has full master editing rights.`;
     }
     if (lowercasePrompt.includes("table") || lowercasePrompt.includes("floor") || lowercasePrompt.includes("dine")) {
       return `Our Table Floor Plan features live color-coded table states (Vacant, Occupied, Dining, Billing) across customizable zones (Indoor, Patio, Terrace, Bar) with quick multi-server ordering.`;
@@ -163,7 +163,7 @@ User Prompt: ${prompt}`,
       return `The Online Order Aggregator provides a unified inbox for Swiggy, Zomato, and Direct Orders with one-click acceptance and automatic KOT dispatch to the kitchen.`;
     }
     if (lowercasePrompt.includes("hardware") || lowercasePrompt.includes("printer") || lowercasePrompt.includes("device")) {
-      return `VeggiePOS is 100% browser-based (PWA) and runs on iPads, Android tablets, Windows/Mac laptops, and mobile phones. It connects to standard ESC/POS 58mm/80mm thermal receipt printers without proprietary hardware lock-ins.`;
+      return `Aatmyam POS is 100% browser-based (PWA) and runs on iPads, Android tablets, Windows/Mac laptops, and mobile phones. It connects to standard ESC/POS 58mm/80mm thermal receipt printers without proprietary hardware lock-ins.`;
     }
     if (isImportant) {
       return `This concern involves technical configurations or operations parameters. I have flagged this as an "Administrative Issue" for log archiving. You can click "Log & Dispatch Transcript to Admin" below to instantly log this conversation.`;

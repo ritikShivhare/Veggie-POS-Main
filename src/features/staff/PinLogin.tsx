@@ -543,7 +543,7 @@ export default function PinLogin({
             className="mt-4 w-full py-2.5 border border-[#EAE5DA] hover:border-[#D5D0C5] text-[#5A6056] hover:text-[#181A18] font-bold text-xs rounded-xl transition bg-white cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
             id="pin-login-back-to-landing-btn"
           >
-            ← Back to Veggie POS Website
+            ← Back to Aatmyam POS Website
           </button>
         )}
       </div>

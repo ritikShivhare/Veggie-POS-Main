@@ -190,7 +190,7 @@ export default function StaffQrModal({
         </head>
         <body>
           <div class="card">
-            <div class="badge">VeggiePOS • Staff Terminal</div>
+            <div class="badge">Aatmyam POS • Staff Terminal</div>
             <h1>${tenant.name}</h1>
             <p class="sub">कर्मचारी लॉगिन क्यूआर कोड (Staff Quick Login)</p>
             
@@ -213,7 +213,7 @@ export default function StaffQrModal({
             </div>
 
             <div class="footer">
-              सुरक्षित प्रमाणीकरण • Powered by VeggiePOS Cloud Suite
+              सुरक्षित प्रमाणीकरण • Powered by Aatmyam POS Cloud Suite
             </div>
           </div>
           <script>

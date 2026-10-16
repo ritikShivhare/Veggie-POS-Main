@@ -635,7 +635,7 @@ export default function ApplicationMonitoringDashboard() {
         <div className="bg-indigo-50/40 p-3.5 rounded-xl border border-indigo-100/50 text-xs text-indigo-950 space-y-2">
           <p className="font-bold text-[11px] flex items-center gap-1">
             <Layers className="w-3.5 h-3.5 text-indigo-600" />
-            🎯 Active Cache Targets in VeggiePOS Routing:
+            🎯 Active Cache Targets in Aatmyam POS Routing:
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[11px]">
             <div className="bg-white p-2 rounded-lg border border-indigo-100/60 flex items-center justify-between">
@@ -805,7 +805,7 @@ export default function ApplicationMonitoringDashboard() {
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-rose-500 animate-pulse" />
                 <div>
-                  <h3 className="text-sm font-bold tracking-tight">VeggiePOS Disaster Recovery Runbook</h3>
+                  <h3 className="text-sm font-bold tracking-tight">Aatmyam POS Disaster Recovery Runbook</h3>
                   <p className="text-[10px] text-slate-400 font-mono">SUPABASE PITR & RECOVERY OPERATIONS</p>
                 </div>
               </div>

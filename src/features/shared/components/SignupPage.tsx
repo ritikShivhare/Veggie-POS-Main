@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import BrandLogo from "./BrandLogo";
 import {
   Building,
   Users,
@@ -284,10 +285,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
 
       {/* Top logo header */}
       <header className="w-full max-w-md mx-auto text-center flex flex-col items-center">
-        <h1 className="text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
-          <span>Veggie</span>
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-rose-400 to-amber-400">POS</span>
-        </h1>
+        <h1><BrandLogo dark /></h1>
         <p className="text-xs text-slate-400 mt-2">Next-Gen Multi-Tenant Smart Restaurant POS Hub</p>
       </header>
 
@@ -620,7 +618,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
       {/* Footer details */}
       <footer className="w-full max-w-md mx-auto text-center text-[10px] text-slate-500 font-mono">
         <p>Tenant Space: AWS Mumbai S3 Sandbox Node</p>
-        <p className="mt-1">© 2026 VeggiePOS SaaS Ltd. All rights reserved.</p>
+        <p className="mt-1">© 2026 Aatmyam POS SaaS Ltd. All rights reserved.</p>
       </footer>
     </div>
   );

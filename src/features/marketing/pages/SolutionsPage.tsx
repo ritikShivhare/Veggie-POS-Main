@@ -207,7 +207,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
                         <div className="p-4 bg-[#EBF2E4] rounded-2xl border border-[#D5E3C8] space-y-1.5">
                           <p className="text-xs font-mono font-bold text-[#567234] flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            THE VEGGIE POS RESOLUTION:
+                            THE AATMYAM POS RESOLUTION:
                           </p>
                           <p className="text-xs text-[#2E4A1C] leading-relaxed">
                             {item.solution}

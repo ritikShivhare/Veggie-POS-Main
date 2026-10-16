@@ -1,5 +1,6 @@
 import React from "react";
 import { MarketingRoute } from "../types";
+import BrandLogo from "../../shared/components/BrandLogo";
 import {
   ShieldCheck,
   Terminal,
@@ -63,14 +64,7 @@ export default function MarketingFooter({
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8 lg:gap-12 mb-14">
           {/* Brand & Manifesto Column */}
           <div className="col-span-2 space-y-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-[#6E8F45] text-[#FBF9F5] flex items-center justify-center font-serif text-base font-bold">
-                V
-              </div>
-              <span className="font-serif text-lg font-bold tracking-tight text-[#FBF9F5]">
-                Veggie POS
-              </span>
-            </div>
+            <BrandLogo dark />
             <p className="text-xs text-[#A6AEA0] leading-relaxed max-w-sm">
               Software for independent restaurants, currently in early access.
               Explore order, billing, kitchen, and inventory workflows in a walkthrough.
@@ -245,7 +239,7 @@ export default function MarketingFooter({
 
         {/* Bottom Strip */}
         <div className="pt-8 border-t border-[#2E332D] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#787F74]">
-          <p>© {new Date().getFullYear()} Veggie POS Technologies. Designed for hospitality craft & operational calm.</p>
+          <p>© {new Date().getFullYear()} Aatmyam POS Technologies. Designed for hospitality craft & operational calm.</p>
           <div className="flex items-center gap-6">
             <span className="font-mono text-[11px] text-[#A6AEA0]">Version 4.8.2-Enterprise</span>
             <button

@@ -154,7 +154,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
               <span className="text-[#6E8F45] italic">live walkthrough.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              Speak directly with a hospitality systems engineer. We’ll show you how Veggie POS runs your menu, kitchen tickets, and recipe stock without high-pressure sales tactics.
+              Speak directly with a hospitality systems engineer. We’ll show you how Aatmyam POS runs your menu, kitchen tickets, and recipe stock without high-pressure sales tactics.
             </p>
           </div>
         </div>

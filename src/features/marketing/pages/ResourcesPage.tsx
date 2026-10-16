@@ -251,7 +251,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
                   OPERATIONAL IMPLEMENTATION SUMMARY:
                 </p>
                 <p className="text-xs text-[#2E4A1C] leading-relaxed">
-                  {activeArticleModal.keyTakeaway} All principles outlined in this guide come pre-configured inside the Veggie POS module workflows.
+                  {activeArticleModal.keyTakeaway} All principles outlined in this guide come pre-configured inside the Aatmyam POS module workflows.
                 </p>
               </div>
             </div>
