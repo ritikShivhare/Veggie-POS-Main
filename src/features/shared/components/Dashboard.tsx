@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import ReceiptTotals from "./ReceiptTotals";
 import { 
   TrendingUp, 
   Activity, 
@@ -1405,20 +1406,7 @@ export default function Dashboard({
               </div>
 
               {/* Bill Financial Totals */}
-              <div className="border-t border-dashed border-slate-300 pt-3 space-y-1 text-[11px]">
-                <div className="flex justify-between text-slate-600">
-                  <span>Subtotal</span>
-                  <span className="font-bold font-mono">₹{selectedOrderReceipt.subtotal || (selectedOrderReceipt.total - (selectedOrderReceipt.tax || 0))}</span>
-                </div>
-                <div className="flex justify-between text-slate-600">
-                  <span>GST (5%)</span>
-                  <span className="font-bold font-mono">₹{selectedOrderReceipt.tax || Math.round((selectedOrderReceipt.total || 0) * 0.05)}</span>
-                </div>
-                <div className="flex justify-between text-sm font-black text-slate-900 border-t border-slate-200 pt-1.5 mt-1.5">
-                  <span>Grand Total</span>
-                  <span className="font-mono text-indigo-700">₹{selectedOrderReceipt.total}</span>
-                </div>
-              </div>
+              <ReceiptTotals order={selectedOrderReceipt} />
 
               {/* Payment Method Details */}
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-[11px]">
