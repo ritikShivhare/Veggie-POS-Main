@@ -34,11 +34,11 @@ describe('lifecycle command boundaries',()=>{
   await saveGlobalTenantsList([{id:tenant,tenantId:tenant,ownerPhone:'9876543210'},{id:other,tenantId:other,ownerPhone:'9876543210'}] as any);
   const second=await startTrial(other);expect(second.plan).toBe('free');expect(second.trialUsed).toBe(true);expect(second.trialEndsAt).toBeUndefined();
  });
- it('stops an expired trial staff session before authorizing a mutation',async()=>{
+ it('stops an excess staff session after trial expiry before authorizing a mutation',async()=>{
   await saveSubscription(tenant,{plan:'pro',status:'active',isReadOnly:false,inventoryFrozen:false,trialEndsAt:new Date(Date.now()-1000).toISOString()});
   await db.saveSlice(tenant,'staff',[{id:'owner',name:'Owner',role:'Owner',status:'active',permissions:[]},...Array.from({length:4},(_,i)=>({id:'s'+i,name:'Staff',role:'Cashier',status:'active',permissions:['billing']}))]);
   // Minting a session does not itself process expiry; validation must process it first.
-  token=(await sessionService.createSession(tenant,'s0','Staff','Cashier','','',['billing'])).sessionId;
+  token=(await sessionService.createSession(tenant,'s3','Staff','Cashier','','',['billing'])).sessionId;
   const r=await request('/orders',{id:'late',items:[{menuItemId:'meal',quantity:1}]},'expired-trial-order');expect([401,403]).toContain(r.status);expect(await db.getSlice(tenant,'orders')).toEqual([]);
  });
  it('caps concurrent AI generations without charging failed or simulated reports',async()=>{

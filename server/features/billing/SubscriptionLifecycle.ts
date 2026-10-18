@@ -1,3 +1,4 @@
+import {isDeepStrictEqual} from 'node:util';
 import crypto from 'node:crypto';
 import {Database} from '../shared/database';
 import type {TenantSubscription} from '../shared/subscription';
@@ -22,7 +23,13 @@ export async function freezeToFree(tenantId:string,sub:TenantSubscription,deadli
   }
   const staff=await db().getSlice<any>(tenantId,'staff') || [];
   const excess=staff.filter(s=>s.role!=='Owner' && isActiveStaff(s)).length>3;
-  if(excess) await db().saveSlice(tenantId,'staff',staff.map(s=>s.role!=='Owner' && isActiveStaff(s)?{...s,status:'inactive',version:(s.version || 1)+1}:s));
+  if(excess) {
+    // Stable priority: keep Cashiers, then Managers, then the earliest remaining active staff.
+    const priority=(role:string)=>role==='Cashier'?0:role==='Manager'?1:2;
+    const retained=new Set(staff.map((s,index)=>({s,index})).filter(({s})=>s.role!=='Owner' && isActiveStaff(s))
+      .sort((a,b)=>priority(a.s.role)-priority(b.s.role) || a.index-b.index).slice(0,3).map(({s})=>s.id));
+    await db().saveSlice(tenantId,'staff',staff.map(s=>s.role!=='Owner' && isActiveStaff(s) && !retained.has(s.id)?{...s,status:'inactive',version:(s.version || 1)+1}:s));
+  }
   if(!sub.inventoryFrozen) await db().saveObject(tenantId,'frozen_inventory_snapshot',{
     frozenAt:iso(deadline),ingredients:await db().getSlice(tenantId,'ingredients'),recipes:await db().getSlice(tenantId,'recipes')
   });
@@ -65,7 +72,21 @@ export async function assertOrderCreation(tenantId:string,raw:any) {
 }
 export async function assertSettlement(tenantId:string,orderId:string) {
  const sub=await getSubscription(tenantId),frozen=sub.frozenKots?.[orderId];
- if(frozen && Date.now()>=Date.parse(frozen.settleUntil)) throw entitlementError('FROZEN_KOT_EXPIRED','The 12-hour settlement window for this trial KOT has ended. Contact support.');
+ if(frozen && Date.now()>=Date.parse(frozen.settleUntil)) throw entitlementError('FROZEN_KOT_EXPIRED','The 12-hour settlement window has ended. Ask the restaurant Owner to resolve this bill in Billing.');
+}
+/** Owner recovery never changes the original frozen bill, prices or inventory. */
+export async function assertOwnerFrozenKotRecovery(tenantId:string,orderId:string,ownerId:string,reason:string) {
+ if(typeof reason!=='string' || reason.trim().length<10 || reason.length>1000) throw Object.assign(new Error('Enter an audit reason of 10–1000 characters.'),{status:400});
+ const staff=await db().getSlice<any>(tenantId,'staff') || [];
+ const owner=staff.find(s=>s.id===ownerId && s.role==='Owner' && isActiveStaff(s));
+ if(!owner) throw entitlementError('OWNER_RECOVERY_REQUIRED','Only the active restaurant Owner can recover expired trial bills.');
+ const sub=await getSubscription(tenantId),snapshot=sub.frozenKots?.[orderId];
+ const order=(await db().getSlice<any>(tenantId,'orders') || []).find(o=>o.id===orderId);
+ if(!snapshot || !order) throw Object.assign(new Error('Frozen trial bill not found.'),{status:404});
+ if(Date.now()<Date.parse(snapshot.settleUntil)) throw Object.assign(new Error('This bill is still in its normal settlement window.'),{status:400});
+ if(order.paidAt || ['Completed','Cancelled'].includes(order.status)) throw Object.assign(new Error('This bill has already been resolved.'),{status:409});
+ if(order.total!==snapshot.total || !isDeepStrictEqual(order.items,snapshot.items)) throw Object.assign(new Error('The bill differs from its frozen snapshot. Review the original ledger before resolving it.'),{status:409,code:'FROZEN_KOT_MISMATCH'});
+ return {order,snapshot,owner};
 }
 export async function assertKotMutable(tenantId:string,orderId:string) {
  if((await getSubscription(tenantId)).frozenKots?.[orderId]) throw entitlementError('FROZEN_KOT','Trial KOT items and totals are frozen. Only settlement is available during its 12-hour window.');
@@ -101,7 +122,7 @@ export async function selectFreeStaff(tenantId:string,ids:string[]) {
   const sub=await getSubscription(tenantId);if(sub.plan!=='free') throw Object.assign(new Error('Staff selection is only needed on Free Starter.'),{status:400});
   const staff=await db().getSlice<any>(tenantId,'staff') || [];
   if(ids.some(id=>!staff.some(s=>s.id===id && s.role!=='Owner'))) throw Object.assign(new Error('Invalid staff selection.'),{status:400});
-  await db().saveSlice(tenantId,'staff',staff.map(s=>s.role==='Owner'?s:{...s,status:ids.includes(s.id)?'active':'inactive',version:(s.version || 1)+1}));
+  await db().saveSlice(tenantId,'staff',staff.map(s=>s.role==='Owner' || ids.includes(s.id)===isActiveStaff(s)?s:{...s,status:ids.includes(s.id)?'active':'inactive',version:(s.version || 1)+1}));
   await saveSubscription(tenantId,{...sub,staffSelectionRequired:false});
  });
 }

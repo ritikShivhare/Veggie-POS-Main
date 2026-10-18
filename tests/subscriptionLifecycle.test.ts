@@ -31,7 +31,7 @@ describe('subscription lifecycle',()=>{
   await db.saveSlice(tenant,'orders',[{id:'open',date:'2026-01-19',status:'Pending',items:[{quantity:1}],total:99}]);
   await db.saveSlice(tenant,'staff',Array.from({length:6},(_,i)=>({id:String(i),role:i===0?'Owner':'Cashier',status:'active',pin:'keep-hash'})));
   const sub=await getSubscription(tenant);expect(sub.plan).toBe('free');expect(sub.inventoryFrozen).toBe(true);expect(sub.frozenKots.open.total).toBe(99);
-  const staff=await db.getSlice<any>(tenant,'staff');expect(staff.find(s=>s.role==='Owner').status).toBe('active');expect(staff.filter(s=>s.role!=='Owner' && s.status==='active')).toHaveLength(0);expect(staff.every(s=>s.pin==='keep-hash')).toBe(true);
+  const staff=await db.getSlice<any>(tenant,'staff');expect(staff.find(s=>s.role==='Owner').status).toBe('active');expect(staff.filter(s=>s.role!=='Owner' && s.status==='active')).toHaveLength(3);expect(staff.every(s=>s.pin==='keep-hash')).toBe(true);
   await expect(lifecycle.assertSettlement(tenant,'open')).resolves.toBeUndefined();vi.setSystemTime(new Date('2026-01-20T22:00:00Z'));
   await expect(lifecycle.assertSettlement(tenant,'open')).rejects.toMatchObject({code:'FROZEN_KOT_EXPIRED'});
  });

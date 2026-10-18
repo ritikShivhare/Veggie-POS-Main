@@ -1,4 +1,4 @@
-import {assertOrderCreation,assertSettlement,assertKotMutable,getSubscription} from '../billing/SubscriptionLifecycle';
+import {assertOrderCreation,assertSettlement,assertKotMutable,assertOwnerFrozenKotRecovery,getSubscription} from '../billing/SubscriptionLifecycle';
 import {operationalAlerts} from '../notifications/OperationalAlerts';
 import { Database, NotFoundError, CrossTenantViolationError, DatabaseUnavailableError, OptimisticLockConflictError } from "../shared/database";
 import { posPricingEngine, FinancialValidationError } from "./POSPricingEngine";
@@ -237,6 +237,29 @@ export class FinancialTransactionService {
     });
   }
 
+  /** Explicit Owner-only recovery, atomic with the normal payment ledger and audit. */
+  public async recoverExpiredTrialKot(tenantId:string,orderId:string,action:'settle'|'close',reason:string,ownerId:string,paymentMethod?:'Cash'|'UPI') {
+    return Database.getInstance().runTransaction(tenantId,async trx=>{
+      if(!['settle','close'].includes(action)) throw Object.assign(new Error('Choose settle or close.'),{status:400});
+      const {order,snapshot,owner}=await assertOwnerFrozenKotRecovery(tenantId,orderId,ownerId,reason);
+      let result:any;
+      if(action==='settle') {
+        result=await this.executeOrderPayment(tenantId,orderId,{amount:snapshot.total,paymentMethod:paymentMethod || '',cashierId:owner.id,cashierName:owner.name,frozenRecovery:{ownerId,reason}});
+      } else {
+        // Operational write-off: no fabricated payment/refund and no stock restoration.
+        const payments=(await this.paymentRepo.getAll(tenantId)) || [];
+        if(payments.some(p=>p.orderId===orderId)) throw Object.assign(new Error('A payment ledger already exists; review it before closing this bill.'),{status:409});
+        const updated=await orderRepo.update(tenantId,{...order,status:'Cancelled'},order.version,trx);
+        result={order:updated};
+      }
+      await auditLogService.log(tenantId,'FROZEN_KOT_RECOVERED',owner.name,
+        `Owner ${action==='settle'?'settled':'closed unpaid'} expired trial KOT ${order.orderNumber}: ${reason.trim()}`,
+        {orderId,orderNumber:order.orderNumber,ownerId,action,reason:reason.trim(),originalTotal:snapshot.total,originalSettleUntil:snapshot.settleUntil,stockAdjusted:false},trx);
+      Database.getInstance().afterCommit(()=>realtimeService.broadcastSyncUpdate(tenantId,'orders'));
+      return result;
+    });
+  }
+
   /**
    * Executes payment settlement for an existing order within an atomic transaction.
    * Validates tenant isolation, verifies order is not already paid, validates payment amount,
@@ -251,6 +274,7 @@ export class FinancialTransactionService {
       transactionReference?: string;
       cashierId?: string;
       cashierName?: string;
+      frozenRecovery?: {ownerId:string;reason:string};
     }
   ): Promise<{ order: Order; payment: Payment }> {
     if (!tenantId) {
@@ -258,7 +282,8 @@ export class FinancialTransactionService {
     }
 
     return Database.getInstance().runTransaction(tenantId, async (trx) => {
-    await assertSettlement(tenantId,orderId);
+    if(paymentDetails.frozenRecovery) await assertOwnerFrozenKotRecovery(tenantId,orderId,paymentDetails.frozenRecovery.ownerId,paymentDetails.frozenRecovery.reason);
+    else await assertSettlement(tenantId,orderId);
     const order = await orderRepo.getById(tenantId, orderId);
     if (!order) {
       throw new NotFoundError(`Order '${orderId}' not found for tenant '${tenantId}'.`);

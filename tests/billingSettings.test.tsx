@@ -26,3 +26,17 @@ it('hides purchase buttons during Financial Review while retaining status reconc
  network.mockResolvedValue(reply({...data,subscription:{...data.subscription,financialReview:true}}));await act(async()=>root.render(<BillingSettings tenantId="restaurant"/>));
  expect(host.textContent).toContain('Financial Review');expect(host.textContent).not.toContain('Pay with Cashfree');expect(host.textContent).toContain('Check Payment Status');
 });
+it('places the no-proration Elite note beside the upgrade button',async()=>{
+ network.mockResolvedValue(reply({...data,subscription:{...data.subscription,plan:'pro'}}));await act(async()=>root.render(<BillingSettings tenantId="restaurant"/>));
+ const eliteHeading=Array.from(host.querySelectorAll('h3')).find(h=>h.textContent==='Enterprise Elite')!;
+ expect(eliteHeading.parentElement?.textContent).toMatch(/fresh 30.day cycle.*no proration/i);
+});
+it('shows the Owner expired KOT recovery controls and sends the audit reason',async()=>{
+ network.mockResolvedValue(reply({...data,expiredFrozenKots:[{id:'old-kot',orderNumber:'#OLD',total:125,settleUntil:'2026-01-01'}]}));await act(async()=>root.render(<BillingSettings tenantId="restaurant"/>));
+ expect(host.textContent).toContain('Resolve expired trial KOTs');
+ const reason=host.querySelector('input[aria-label="Recovery reason for #OLD"]') as HTMLInputElement;
+ expect(reason).toBeTruthy();
+ await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(reason,'Customer left without payment');reason.dispatchEvent(new Event('input',{bubbles:true}));});
+ const close=Array.from(host.querySelectorAll('button')).find(b=>b.textContent==='Close unpaid')!;await act(async()=>close.click());
+ expect(network).toHaveBeenCalledWith('/api/billing/frozen-kots/old-kot/recover',expect.objectContaining({method:'POST',body:JSON.stringify({action:'close',reason:'Customer left without payment'})}));
+});

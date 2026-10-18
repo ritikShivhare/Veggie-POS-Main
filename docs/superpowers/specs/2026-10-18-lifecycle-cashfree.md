@@ -13,3 +13,10 @@ Continues the user's approved Phase 4 v1.0 frozen design and direct instruction 
 - No payment simulator in production. Keep payment ledger separate from restaurant Cash/manual-UPI receipts.
 
 Operational checks: user-run cleanup verified schema 9, staff/orders/idempotency zero. One Auth user has server-controlled SUPER_ADMIN role; zero verified MFA factors, so first login enrollment remains required. Runtime job/telemetry objects may reappear after cleanup.
+
+
+## User operational refinements (18 October)
+
+- After the 12-hour trial KOT window, an active restaurant Owner may settle the immutable snapshot total in Cash/UPI or close unpaid with a required audit reason, on Free or paid plans. No fabricated revenue/payment or automatic stock correction on unpaid close. Recovery is tenant-scoped, transactional and audited.
+- Downgrade retains the first three previously active staff by stable priority Cashier → Manager → other roles. Owner stays active; existing inactive staff are never silently reactivated. Owner can revise the three choices later.
+- The Pro → Elite button must have an adjacent explicit fresh-30-day/no-proration/unused-Pro-credit note.

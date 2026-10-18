@@ -4,13 +4,14 @@ import {PLAN_LIMITS} from '../../../../shared/planCatalog';
 interface BillingSettingsProps {tenantId:string}
 export function BillingSettings({tenantId}:BillingSettingsProps){
  const [data,setData]=useState<any>(null),[error,setError]=useState(''),[busy,setBusy]=useState('');
+ const [reasons,setReasons]=useState<Record<string,string>>({});
  const [customer,setCustomer]=useState({name:'',email:'',phone:''}),[selected,setSelected]=useState<string[]>([]);
  const headers=()=>({'Content-Type':'application/json','x-session-id':ApiClient.getSessionId() || ''});
  async function api(path:string,body?:any,key?:string){
   const response=await fetch('/api/billing/'+path+(body===undefined?'?tenantId='+encodeURIComponent(tenantId):''),{method:body===undefined?'GET':'POST',credentials:'include',headers:{...headers(),...(key?{'Idempotency-Key':key}:{})},body:body===undefined?undefined:JSON.stringify(body)});
   const json=await response.json();if(!response.ok || !json.success) throw new Error(json.message || json.error || 'Request failed. Please retry.');return json;
  }
- async function refresh(){try{setData(await api('subscription'));}catch(e:any){setError(e.message);}}
+ async function refresh(){try{const json=await api('subscription');setData(json);setSelected((json.staffOptions || []).filter((s:any)=>s.status==null || String(s.status).toLowerCase()==='active').map((s:any)=>s.id));}catch(e:any){setError(e.message);}}
  useEffect(()=>{setData(null);setError('');void refresh();},[tenantId]);
  async function action(name:string,work:()=>Promise<void>){setBusy(name);setError('');try{await work();await refresh();}catch(e:any){setError(e.message);await refresh();}finally{setBusy('');}}
  const sub=data?.subscription,usage=data?.usage,limits=data?.limits;
@@ -39,9 +40,18 @@ export function BillingSettings({tenantId}:BillingSettingsProps){
     {Object.keys(sub.frozenKots || {}).length>0 && <p>Trial KOT items/totals are frozen. Each bill has a 12-hour settlement window from trial expiry.</p>}
    </div>
    {!sub.trialUsed && sub.plan==='free' && <button disabled={!!busy} onClick={()=>action('trial',async()=>{await api('start-trial',{});})} className="border rounded px-4 py-2">Start eligible 14-day trial</button>}
-   {sub.staffSelectionRequired && <fieldset className="border rounded p-3"><legend>Choose up to 3 active staff · Owner remains active</legend>
+   {sub.plan==='free' && data.staffOptions?.length>0 && <fieldset className="border rounded p-3"><legend>Choose up to 3 active staff · Owner remains active</legend>
     {data.staffOptions.map((s:any)=><label key={s.id} className="block"><input type="checkbox" checked={selected.includes(s.id)} onChange={e=>setSelected(e.target.checked?[...selected,s.id]:selected.filter(id=>id!==s.id))} disabled={!selected.includes(s.id) && selected.length>=3}/> {s.name}</label>)}
+    <p className="text-sm text-slate-600">Cashier/Manager priority keeps up to 3 active staff running after expiry. You can change these selections at any time.</p>
     <button disabled={!!busy} onClick={()=>action('staff',async()=>{await api('select-staff',{staffIds:selected});})}>Save staff selection</button>
+   </fieldset>}
+   {!!data.expiredFrozenKots?.length && <fieldset className="border rounded p-3 space-y-3"><legend className="font-semibold">Resolve expired trial KOTs · Owner only</legend>
+    <p className="text-sm text-slate-600">Settle the original frozen amount after receiving Cash/UPI, or close an unpaid bill with an audit reason. Closing records no payment and makes no stock adjustment.</p>
+    {data.expiredFrozenKots.map((kot:any)=><div key={kot.id} className="border rounded p-3 space-y-2">
+     <p>{kot.orderNumber} · ₹{kot.total}</p>
+     <label className="block text-sm">Audit reason<input aria-label={`Recovery reason for ${kot.orderNumber}`} className="block border rounded p-2 w-full" value={reasons[kot.id] || ''} onChange={e=>setReasons({...reasons,[kot.id]:e.target.value})} minLength={10} maxLength={1000}/></label>
+     <div className="flex flex-wrap gap-3">{(['Cash','UPI','close'] as const).map(method=><button key={method} disabled={!!busy || (reasons[kot.id] || '').trim().length<10} className="border rounded px-3 py-2 disabled:opacity-50" onClick={()=>action('kot',async()=>{await api(`frozen-kots/${encodeURIComponent(kot.id)}/recover`,{action:method==='close'?'close':'settle',reason:reasons[kot.id],...(method==='close'?{}:{paymentMethod:method})},ApiClient.generateIdempotencyKey('kot-recovery'));})}>{method==='close'?'Close unpaid':`Received ${method} · settle ₹${kot.total}`}</button>)}</div>
+    </div>)}
    </fieldset>}
    {!sub.financialReview && <>
     <fieldset className="space-y-2"><legend className="font-semibold">Payment contact</legend>
@@ -50,7 +60,8 @@ export function BillingSettings({tenantId}:BillingSettingsProps){
     <div className="grid sm:grid-cols-3 gap-3">{Object.entries(PLAN_LIMITS).map(([id,plan])=><div className="border rounded p-4 space-y-2" key={id}>
      <h3 className="font-bold">{plan.label}</h3><p className="text-xl">₹{plan.price}{plan.price>0?' / 30 days':''}</p>
      <p>Owner + {plan.staffCount} staff</p><p>{plan.monthlyOrders<0?'Unlimited orders (fair use)':`${plan.monthlyOrders} orders per 30-day cycle`}</p>
-     {id!=='free' && <button className="bg-emerald-700 text-white rounded px-3 py-2 disabled:opacity-50" disabled={!!busy || (pending?.status==='CREATING' && pending.plan!==id)} onClick={()=>startCheckout(id)}>{busy===id?'Creating…':pending?.status==='CREATING'?'Recover checkout':'Pay with Cashfree'}</button>}
+     {id==='enterprise' && sub.plan==='pro' && <p id="elite-upgrade-note" className="text-sm font-medium text-amber-800">Elite upgrade: verified payment starts a fresh 30-day cycle immediately. No proration or credit for unused Pro days.</p>}
+     {id!=='free' && <button aria-describedby={id==='enterprise' && sub.plan==='pro'?'elite-upgrade-note':undefined} className="bg-emerald-700 text-white rounded px-3 py-2 disabled:opacity-50" disabled={!!busy || (pending?.status==='CREATING' && pending.plan!==id)} onClick={()=>startCheckout(id)}>{busy===id?'Creating…':pending?.status==='CREATING'?'Recover checkout':'Pay with Cashfree'}</button>}
     </div>)}</div>
     <p className="text-xs text-slate-600">Payment links expire in 60 minutes. A new link cancels the previous pending one. Elite upgrades start a fresh 30-day cycle without proration. Paid renewals within 24 hours of expiry retain the original renewal date.</p>
    </>}
