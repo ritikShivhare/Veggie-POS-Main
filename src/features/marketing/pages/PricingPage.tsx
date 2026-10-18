@@ -23,12 +23,12 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
   ].map((display) => {
     const plan = PLAN_LIMITS[display.id as keyof typeof PLAN_LIMITS];
     const features = [
-      `${plan.staffCount >= 100000 ? "Unlimited" : plan.staffCount} staff members`,
-      `${plan.monthlyOrders >= 100000 ? "Unlimited" : plan.monthlyOrders} orders per month`,
+      `Owner + ${plan.staffCount} active staff`,
+      `${plan.monthlyOrders < 0 ? "Unlimited (fair use)" : plan.monthlyOrders} orders per 30-day cycle`,
       ...(plan.features.posTerminal ? ["POS terminal"] : []),
       ...(plan.features.basicReports ? ["Basic sales reports"] : []),
       ...(plan.features.advancedInventory ? ["Advanced inventory"] : []),
-      ...(plan.features.aiCopilot ? ["AI Copilot (provider setup required)"] : []),
+      ...(plan.features.aiCopilot ? ["AI reports: 5 successful reports/day (IST; provider setup required)"] : []),
       ...(plan.features.dedicatedSupport ? ["Dedicated support"] : []),
       "One outlet per restaurant"
     ];
@@ -38,7 +38,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
   const faqs = [
     {
       q: "How is the listed price billed?",
-      a: "The prices shown are monthly subscription amounts. Contact us to discuss account setup and any payment-processing charges that may apply to your chosen payment provider."
+      a: "Pro ₹999 and Elite ₹1,999 are all-inclusive prices for a 30-day subscription. Eligible restaurants can start a one-time 14-day trial with Owner + 10 staff, 250 orders, full inventory and 5 successful AI reports/day."
     },
     {
       q: "Do I need to buy expensive proprietary hardware from you?",
@@ -50,7 +50,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     },
     {
       q: "How can I change plans?",
-      a: "Contact us to discuss a plan change and the billing steps for your account."
+      a: "Choose a plan in Billing and pay through Cashfree. Access updates after backend payment verification. Mid-cycle Elite upgrades start a fresh 30-day cycle without proration."
     },
     {
       q: "What happens if our restaurant internet disconnects during service?",
@@ -74,11 +74,11 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
               <span className="text-[#6E8F45] italic">No hidden percentages.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              Aatmyam POS is in early access. These monthly plans use the same prices and limits as the app.
+              Aatmyam POS is in early access. These 30-day plans use the same prices and limits as the app.
             </p>
 
             <div className="pt-4 text-xs font-mono text-[#787F74]">
-              Monthly billing • One outlet per restaurant
+              30-day billing • One outlet per restaurant
             </div>
 
           </div>
@@ -130,7 +130,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                             plan.popular ? "text-[#A6AEA0]" : "text-[#787F74]"
                           }`}
                         >
-                          / outlet / month
+                          / outlet / 30 days
                         </span>
                       </div>
                       <p
@@ -138,7 +138,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                           plan.popular ? "text-[#84A955]" : "text-[#567234]"
                         }`}
                       >
-                        Billed monthly
+                        All-inclusive • 30-day cycle
                       </p>
                     </div>
 

@@ -1,3 +1,4 @@
+import {getSubscription} from '../billing/SubscriptionLifecycle';
 import { MenuRepository } from "./MenuRepository";
 import { CustomerRepository } from "../crm/CustomerRepository";
 import { SettingsRepository } from "../shared/SettingsRepository";
@@ -400,8 +401,9 @@ export class POSPricingEngine {
     }
 
     // 6. Server-Authoritative Inventory Requirements & Deduction Check
-    const recipes = (await recipeRepo.getAll(tenantId)) || [];
-    const ingredients = (await ingredientRepo.getAll(tenantId)) || [];
+    const inventoryEnabled = !(await getSubscription(tenantId)).inventoryFrozen;
+    const recipes = inventoryEnabled ? (await recipeRepo.getAll(tenantId)) || [] : [];
+    const ingredients = inventoryEnabled ? (await ingredientRepo.getAll(tenantId)) || [] : [];
     const ingredientMap = new Map<string, Ingredient>();
     for (const ing of ingredients) {
       ingredientMap.set(ing.id, { ...ing });
@@ -455,7 +457,7 @@ export class POSPricingEngine {
 
     // Prepare atomic inventory deductions if autoDeductStock is enabled (defaults to true)
     const inventoryDeductions: AuthoritativeOrderCalculation["inventoryDeductions"] = [];
-    if (settings.autoDeductStock !== false) {
+    if (settings.autoDeductStock !== false && inventoryEnabled) {
       for (const [ingId, req] of requiredIngredientQuantities.entries()) {
         const ing = ingredientMap.get(ingId);
         if (ing) {

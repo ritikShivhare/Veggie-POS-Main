@@ -287,6 +287,12 @@ export default function SaasAdminDashboard({
     }, 1500);
   };
 
+  const handleResolveReview=async(tenantId:string,kind:'trial'|'financial')=>{
+    const reason=window.prompt(kind==='trial'?'Reason for approving trial eligibility (minimum 10 characters):':'Reason for closing Financial Review (access remains Free; minimum 10 characters):');
+    if(!reason || reason.trim().length<10)return;
+    try{const response=await fetch('/api/admin/subscription/resolve-review',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','x-session-id':currentSessionId || ''},body:JSON.stringify({tenantId,kind,reason})});const result=await response.json();if(!response.ok || !result.success)throw new Error(result.error || 'Review failed');await fetchTenants();}catch(error:any){alert(error.message);}
+  };
+
   const handleSuspendTenant = async (tenantId: string) => {
     if (!currentSessionId) {
       alert("Session required to manage tenants.");
@@ -937,20 +943,22 @@ export default function SaasAdminDashboard({
                           <div className="flex items-center gap-1.5">
                             <span className={`w-2 h-2 rounded-full ${isSuspended ? "bg-red-500" : "bg-emerald-500"}`} />
                             <span className="font-bold capitalize text-slate-700">
-                              {t.plan || "pro"} Plan
+                              {(t as any).subscription?.trialEndsAt ? "Trial" : t.plan || "free"} Plan
                             </span>
                           </div>
                           <p className="text-[9px] text-slate-400 font-mono">
                             Status: <span className={isSuspended ? "text-red-600 font-bold" : "text-emerald-600 font-bold"}>{isSuspended ? "Suspended" : "Active"}</span>
                           </p>
+                          {(t as any).subscription?.financialReview && <div className="text-rose-700 text-xs">Financial Review <button className="underline" onClick={()=>handleResolveReview(t.tenantId,'financial')}>Resolve</button></div>}
+                          {(t as any).subscription?.reviewRequired && <div className="text-amber-700 text-xs">Trial Review Required <button className="underline" onClick={()=>handleResolveReview(t.tenantId,'trial')}>Approve trial</button></div>}
                         </div>
                       </td>
 
                       {/* Usage Stats */}
                       <td className="p-4">
                         <div className="text-[11px] text-slate-600 space-y-0.5">
-                          <div>Staff: <span className="font-mono font-bold text-slate-800">{t.usage?.staffCount ?? 1}</span></div>
-                          <div>Monthly Orders: <span className="font-mono font-bold text-slate-800">{t.usage?.monthlyOrders ?? 0}</span></div>
+                          <div>Staff (Owner extra): <span className="font-mono font-bold text-slate-800">{t.usage?.staffCount ?? 1}</span></div>
+                          <div>Cycle Orders: <span className="font-mono font-bold text-slate-800">{t.usage?.monthlyOrders ?? 0}</span></div>
                         </div>
                       </td>
 

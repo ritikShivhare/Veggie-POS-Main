@@ -52,3 +52,8 @@ before deploying. Confirm schema/commit health, real OTP delivery, two restauran
 and devices, cash/manual UPI billing and offline replay. Hardware, external providers,
 high-load and multi-instance operation require separate real-world validation.
 Automated checks do not certify that every hosted integration or device works.
+
+
+## Subscription lifecycle and Cashfree (Step 3–4)
+
+Run `npm test`, `npm run lint`, and `npm run build`. Lifecycle and provider-boundary regressions cover fixed cycles, Owner-excluded staff caps, offline command quotas, trial expiry, frozen inventory/KOTs, payment signature checks, replay, refunds and chargebacks. See `ops/LIFECYCLE_CASHFREE_SETUP.md` for separate live provider/MFA verification. Unit tests use provider fakes and do not certify live Cashfree configuration.

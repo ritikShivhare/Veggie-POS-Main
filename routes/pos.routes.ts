@@ -1,3 +1,4 @@
+import {assertKotMutable} from '../server/features/billing/SubscriptionLifecycle';
 import {operationalAlerts} from '../server/features/notifications/OperationalAlerts';
 import express from "express";
 import { isActiveStaff } from "../src/features/shared/staffStatus";
@@ -160,20 +161,6 @@ router.post("/orders", authMiddleware, requirePermission("billing", "orders"), i
   }
 
   try {
-    const now = new Date();
-    const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const orders = await orderRepo.getAll(tenantId);
-    const monthlyCount = orders.filter(o => o.date && o.date.startsWith(currentYearMonth)).length;
-
-    const limit = PLAN_LIMITS[sub.plan]?.monthlyOrders ?? 30;
-    if (monthlyCount >= limit) {
-      return res.status(403).json({
-        success: false,
-        error: "PLAN_LIMIT_EXCEEDED",
-        message: `Your current subscription plan (${sub.plan.toUpperCase()}) only supports up to ${limit} orders per month. You have placed ${monthlyCount} orders this month. Please upgrade your plan in settings to continue placing orders.`
-      });
-    }
-
     const userContext = {
       role: session?.role || user?.role,
       permissions: user?.permissions,
@@ -676,6 +663,7 @@ router.post("/orders/audit-discount", authMiddleware, idempotencyMiddleware, asy
     if (orderId && orderId !== "cart" && !String(orderId).startsWith("temp")) {
       targetOrder = await orderRepo.get(tenantId, orderId);
       if (targetOrder) {
+        await assertKotMutable(tenantId,targetOrder.id);
         if (targetOrder.status === "Cancelled") {
           return res.status(400).json({
             success: false,

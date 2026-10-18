@@ -32,9 +32,13 @@ services:
         sync: false
       - key: VITE_SUPABASE_ANON_KEY
         sync: false
-      - key: STRIPE_SECRET_KEY
+      - key: CASHFREE_ENV
+        value: sandbox
+      - key: APP_URL
         sync: false
-      - key: STRIPE_WEBHOOK_SECRET
+      - key: CASHFREE_APP_ID
+        sync: false
+      - key: CASHFREE_SECRET_KEY
         sync: false
       - key: ALLOWED_ORIGINS
         sync: false

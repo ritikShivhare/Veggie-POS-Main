@@ -1,3 +1,4 @@
+import {Database} from '../server/features/shared/database';
 import { describe, it, expect, beforeAll } from "vitest";
 import { ingredientRepo, purchaseRepo } from "../server/context";
 
@@ -5,6 +6,7 @@ describe("Weighted Average Cost (WAC) Inventory Calculation Tests", () => {
   const tenantId = "test-tenant-wac";
 
   beforeAll(async () => {
+    await Database.getInstance().saveObject(tenantId,"subscription_v1",{plan:"pro",status:"active",isReadOnly:false,inventoryFrozen:false});
     // Clean and initialize tenant test state
     await ingredientRepo.saveAll(tenantId, []);
     await purchaseRepo.saveAll(tenantId, []);

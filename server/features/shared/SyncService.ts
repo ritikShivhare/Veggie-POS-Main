@@ -1,3 +1,4 @@
+import {assertInventoryWritable} from '../billing/SubscriptionLifecycle';
 import crypto from "node:crypto";
 import {InventoryMovementRepository} from "../inventory/InventoryMovementRepository";
 import {verifyPin} from "../auth/PinSecurityService";
@@ -27,6 +28,7 @@ export class SyncService {
     if(['orders','purchases','shifts'].some(k=>payload[k]!==undefined)) throw Object.assign(new Error('Use business command endpoints for orders, purchases and shifts.'),{status:400,code:'BUSINESS_COMMAND_REQUIRED'});
     const repos:any={menuItems:this.menuRepo,ingredients:this.ingredientRepo,recipes:this.recipeRepo,staffList:this.staffRepo,customers:this.customerRepo};
     await this.db.runTransaction(tenantId,async trx=>{
+      if(["ingredients","recipes"].some(k=>payload[k]!==undefined || payload.deletions?.[k])) await assertInventoryWritable(tenantId);
       for(const [key,repo] of Object.entries(repos) as any[]) {
         if(payload[key]===undefined && !payload.deletions?.[key]) continue;
         if(payload[key]!==undefined && !Array.isArray(payload[key])) throw Object.assign(new Error('Invalid sync array.'),{status:400});

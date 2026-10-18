@@ -122,6 +122,7 @@ describe("Phase 4: Idempotency, Optimistic Concurrency & Data-Loss Protection", 
     db = Database.getInstance();
     (db as any).tablesByTenant[TENANT_A] = {};
     (db as any).tablesByTenant[TENANT_B] = {};
+    for(const tid of [TENANT_A,TENANT_B]) await db.saveObject(tid,"subscription_v1",{plan:"pro",status:"active",isReadOnly:false,inventoryFrozen:false});
 
     menuRepo = new MenuRepository();
     idempotencyService = IdempotencyService.getInstance();

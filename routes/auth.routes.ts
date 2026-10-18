@@ -1,3 +1,4 @@
+import {startTrial} from '../server/features/billing/SubscriptionLifecycle';
 import { isActiveStaff } from "../src/features/shared/staffStatus";
 import express from "express";
 import crypto from "node:crypto";
@@ -455,6 +456,7 @@ router.post("/auth/verify",async(req,res)=>{
     const tenantId=`aatm-${crypto.randomUUID()}`;
     const result=await Database.getInstance().registerRestaurant(pendingToken,digest(String(verificationCode)),tenantId,crypto.randomUUID());
     if(!result.success) return res.status(result.status || 400).json(result);
+    await startTrial(result.tenant.tenantId);
     const owner=await staffRepo.getById(result.tenant.tenantId,result.ownerId);
     const session=await sessionService.createSession(result.tenant.tenantId,owner.id,owner.name,owner.role,req.ip || "unknown",req.headers["user-agent"] || "Unknown",owner.permissions);
     res.cookie(SESSION_COOKIE_NAME,session.sessionId,getSessionCookieOptions(req));

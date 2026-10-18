@@ -1,3 +1,4 @@
+import {runAiReport} from '../server/features/billing/SubscriptionLifecycle';
 import {operationalAlerts} from '../server/features/notifications/OperationalAlerts';
 import express from "express";
 import { validateSettings } from "../server/features/shared/validation";
@@ -148,14 +149,14 @@ router.get("/reports", authMiddleware, requirePermission("reports"), async (req,
 router.post("/reports/generate", authMiddleware, requirePermission("reports"), async (req, res) => {
   const { salesData, inventoryData, shiftsData, language } = req.body;
   try {
-    const result = await reportService.generateReport(salesData, inventoryData, shiftsData, language || "hindi");
+    const result = await runAiReport((req as any).tenantId,()=>reportService.generateReport(salesData, inventoryData, shiftsData, language || "hindi"));
     res.json({
       success: true,
       ...result
     });
   } catch (error: any) {
     console.error("Report generation endpoint error:", error);
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res,error);
   }
 });
 
@@ -181,7 +182,7 @@ router.post("/copilot-chat", async (req, res) => {
     });
   } catch (error: any) {
     console.error("Copilot chat endpoint error:", error);
-    res.status(500).json({ success: false, error: error.message });
+    handleApiError(res,error);
   }
 });
 

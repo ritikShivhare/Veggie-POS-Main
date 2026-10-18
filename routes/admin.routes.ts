@@ -1,3 +1,4 @@
+import {subscriptionUsage,resolveSubscriptionReview,getPlanLimits} from '../server/features/billing/SubscriptionLifecycle';
 import rateLimit from "express-rate-limit";
 import express from "express";
 import crypto from "crypto";
@@ -63,12 +64,6 @@ router.get("/admin/tenants", adminAuthMiddleware, async (req, res) => {
         // Count staff
         const staffList = (await staffRepo.getAll(t.tenantId)) || [];
 
-        // Count monthly orders
-        const orders = (await orderRepo.getAll(t.tenantId)) || [];
-        const now = new Date();
-        const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-        const monthlyCount = orders.filter(o => o.date && o.date.startsWith(currentYearMonth)).length;
-
         // Mask Owner PIN passcode completely
         const ownerMember = staffList.find(s => s.role === "Owner");
         const ownerPin = ownerMember ? "•••••" : "";
@@ -77,11 +72,9 @@ router.get("/admin/tenants", adminAuthMiddleware, async (req, res) => {
           ...t,
           plan: sub.plan || "free",
           planStatus: sub.status || "active",
+          subscription:sub,limits:getPlanLimits(sub),
           ownerPin,
-          usage: {
-            staffCount: staffList.length,
-            monthlyOrders: monthlyCount
-          }
+          usage: await subscriptionUsage(t.tenantId,sub)
         };
       } catch (err) {
         return {
@@ -97,6 +90,13 @@ router.get("/admin/tenants", adminAuthMiddleware, async (req, res) => {
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+router.post('/admin/subscription/resolve-review',adminAuthMiddleware,async(req,res)=>{
+ try{const {tenantId,kind,reason}=req.body;
+  if(!(await getGlobalTenantsList()).some(t=>t.tenantId===tenantId)) return res.status(404).json({success:false,error:'TENANT_NOT_FOUND'});
+  await resolveSubscriptionReview(tenantId,kind,reason,(req as any).session.userId);res.json({success:true});
+ }catch(error){const status=(error as any).status || 500;res.status(status).json({success:false,error:(error as any).message});}
 });
 
 router.post("/admin/tenants/suspend", adminAuthMiddleware, async (req, res) => {

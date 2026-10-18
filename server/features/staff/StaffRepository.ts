@@ -1,7 +1,8 @@
+import {getPlanLimits} from '../billing/SubscriptionLifecycle';
 import { BaseRepository, DatabaseTransaction } from "../shared/BaseRepository";
 import { StaffMember } from "../../../src/features/shared/types";
-import { countActiveStaff } from "../../../src/features/shared/staffStatus";
-import { getSubscription, PLAN_LIMITS } from "../shared/subscription";
+import { countActiveStaff, isActiveStaff } from "../../../src/features/shared/staffStatus";
+import { getSubscription } from "../shared/subscription";
 import { hashPin } from "../auth/PinSecurityService";
 
 export class StaffRepository extends BaseRepository<StaffMember> {
@@ -10,10 +11,13 @@ export class StaffRepository extends BaseRepository<StaffMember> {
   /** Called inside the tenant transaction by both command and sync writes. */
   async assertActiveCapacity(tenantId: string, next: StaffMember[]): Promise<void> {
     const current = (await this.getAll(tenantId)) || [];
-    const nextCount = countActiveStaff(next);
-    if (nextCount <= countActiveStaff(current)) return;
+    const nonowners=(list:StaffMember[])=>list.filter(s=>s.role!=='Owner' && isActiveStaff(s)).length;
+    const activeOwners=(list:StaffMember[])=>list.filter(s=>s.role==='Owner' && isActiveStaff(s)).length;
+    if(activeOwners(next)>Math.max(1,activeOwners(current))) throw Object.assign(new Error('Only one active Owner is allowed per restaurant.'),{status:403,code:'OWNER_LIMIT_EXCEEDED'});
+    const nextCount = nonowners(next);
+    if (nextCount <= nonowners(current)) return;
     const sub = await getSubscription(tenantId);
-    const limit = (PLAN_LIMITS[sub.plan] || PLAN_LIMITS.free).staffCount;
+    const limit = getPlanLimits(sub).staffCount;
     if (nextCount > limit) throw Object.assign(new Error(`Your plan supports up to ${limit} active staff members.`), {
       status: 403, code: 'PLAN_LIMIT_EXCEEDED'
     });

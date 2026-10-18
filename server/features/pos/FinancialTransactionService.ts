@@ -1,3 +1,4 @@
+import {assertOrderCreation,assertSettlement,assertKotMutable,getSubscription} from '../billing/SubscriptionLifecycle';
 import {operationalAlerts} from '../notifications/OperationalAlerts';
 import { Database, NotFoundError, CrossTenantViolationError, DatabaseUnavailableError, OptimisticLockConflictError } from "../shared/database";
 import { posPricingEngine, FinancialValidationError } from "./POSPricingEngine";
@@ -94,6 +95,7 @@ export class FinancialTransactionService {
     return Database.getInstance().runTransaction(tenantId, async (trx) => {
     const existing = rawOrder.id ? await orderRepo.getById(tenantId, rawOrder.id) : null;
     if (existing) return {order:existing,items:await (await this.orderItemRepo.getAll(tenantId) || []).filter(i=>i.orderId===existing.id),payment:(await this.paymentRepo.getAll(tenantId))?.find(p=>p.orderId===existing.id)};
+    await assertOrderCreation(tenantId,rawOrder);
     if (rawOrder.paymentMethod && !["Cash","UPI"].includes(rawOrder.paymentMethod)) throw new FinancialValidationError("INVALID_PAYMENT_METHOD","Choose Cash or UPI.");
     if (rawOrder.status && !["Pending","Preparing","Completed"].includes(rawOrder.status)) throw new FinancialValidationError("INVALID_ORDER_STATUS","Invalid initial order status.");
     // Pricing and stock reads happen inside the transaction, including on retry.
@@ -256,6 +258,7 @@ export class FinancialTransactionService {
     }
 
     return Database.getInstance().runTransaction(tenantId, async (trx) => {
+    await assertSettlement(tenantId,orderId);
     const order = await orderRepo.getById(tenantId, orderId);
     if (!order) {
       throw new NotFoundError(`Order '${orderId}' not found for tenant '${tenantId}'.`);
@@ -360,6 +363,7 @@ export class FinancialTransactionService {
     }
 
     return Database.getInstance().runTransaction(tenantId, async (trx) => {
+    await assertKotMutable(tenantId,orderId);
     const order = await orderRepo.getById(tenantId, orderId);
     if (!order) {
       throw new NotFoundError(`Order '${orderId}' not found for tenant '${tenantId}'.`);
@@ -402,6 +406,7 @@ export class FinancialTransactionService {
     const previousMovements = (await this.inventoryMovementRepo.getAll(tenantId)) || [];
     const returnMovements: InventoryMovement[] = [];
     // Reverse exactly the original committed stock movements, not today's recipe.
+    if((await getSubscription(tenantId)).inventoryFrozen && previousMovements.some(m=>m.referenceId===orderId && m.movementType==="SALE_DEDUCTION")) throw new FinancialValidationError("INVENTORY_FROZEN","Inventory is frozen; upgrade before reversing stock movements.",403);
     for (const sale of previousMovements.filter(m=>m.referenceId===orderId && m.movementType==="SALE_DEDUCTION")) {
       if (previousMovements.some(m=>m.id===`return-${sale.id}`)) continue;
       const ing = ingredientMap.get(sale.ingredientId);

@@ -1,5 +1,5 @@
 import { isActiveStaff } from "../shared/staffStatus";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Shift, StaffMember, StaffRole, RestaurantTenant } from "../shared/types";
 import { Clock, Play, LogOut, CheckCircle2, UserCheck, Eye, UserPlus, AlertCircle, ShieldAlert, Trash2, UserMinus, Zap, QrCode, Smartphone, Share2 } from "lucide-react";
 import { ApiClient } from "../shared/services/api";
@@ -27,9 +27,11 @@ export default function StaffShifts({
   setActiveTab
 }: StaffShiftsProps) {
   const isManagerOrOwner = currentStaff.role === "Owner" || currentStaff.role === "Manager";
-  const planName = activeTenant?.plan || "free";
-  const planCapacity = planName === "pro" ? 10 : planName === "enterprise" ? 100000 : 3;
-  const activeStaff = staffList.filter(isActiveStaff);
+  const [billingPlan,setBillingPlan]=useState<any>(null);
+  useEffect(()=>{if(!activeTenant?.tenantId)return;let active=true;fetch(`/api/billing/subscription?tenantId=${encodeURIComponent(activeTenant?.tenantId || "")}`,{credentials:"include",headers:{"x-session-id":ApiClient.getSessionId() || ""}}).then(r=>r.json()).then(data=>{if(active && data.success)setBillingPlan(data);}).catch(()=>{});return ()=>{active=false;};},[activeTenant?.tenantId]);
+  const planName = billingPlan?.subscription?.plan || activeTenant?.plan || "free";
+  const planCapacity = billingPlan?.limits?.staffCount ?? (planName === "pro" ? 10 : planName === "enterprise" ? 25 : 3);
+  const activeStaff = staffList.filter(s=>s.role!=="Owner" && isActiveStaff(s));
   const hasReachedLimit = activeStaff.length >= planCapacity;
   const [activeSubTab, setActiveSubTab] = useState<"duty" | "logs">("duty");
   const [localDeleteId, setLocalDeleteId] = useState<string | null>(null);
@@ -163,8 +165,8 @@ export default function StaffShifts({
     setFormError("");
     setFormSuccess("");
 
-    const activePlan = activeTenant?.plan || "free";
-    const capacity = activePlan === "pro" ? 10 : activePlan === "enterprise" ? 100000 : 3;
+    const activePlan = planName;
+    const capacity = planCapacity;
     if (activeStaff.length >= capacity) {
       setFormError(`Plan Limit Reached: Your current ${activePlan.toUpperCase()} Plan only supports up to ${capacity} staff members. Please upgrade your plan to add more team members.`);
       return;

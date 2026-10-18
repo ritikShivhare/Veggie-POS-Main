@@ -1,3 +1,5 @@
+import {PLAN_LIMITS as backendPlans} from '../server/features/shared/subscription';
+import {PLAN_LIMITS} from '../shared/planCatalog';
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
@@ -11,7 +13,7 @@ describe("marketing claims and pricing", () => {
 
     expect(pricingPage).toContain("from \"../../../../shared/planCatalog\"");
     expect(pricingPage).toContain("PLAN_LIMITS");
-    expect(subscription).toContain("from \"../../../shared/planCatalog\"");
+    expect(backendPlans).toBe(PLAN_LIMITS);
     expect(catalog).toContain('price: 999');
     expect(catalog).toContain('price: 1999');
     expect(pricingPage).not.toMatch(/annualBilling|annualPrice|Save 20%/);

@@ -89,8 +89,10 @@ describe("Order Delete vs Order Cancel (Direct Delete Endpoint Bug Resolution)",
     db = Database.getInstance();
     (db as any).tablesByTenant[TENANT_A] = {};
     (db as any).objectsByTenant[TENANT_A] = {};
+    await db.saveObject(TENANT_A,"subscription_v1",{plan:"pro",status:"active",isReadOnly:false,inventoryFrozen:false});
     (db as any).tablesByTenant[TENANT_B] = {};
     (db as any).objectsByTenant[TENANT_B] = {};
+    await db.saveObject(TENANT_B,"subscription_v1",{plan:"pro",status:"active",isReadOnly:false,inventoryFrozen:false});
 
     menuRepo = new MenuRepository();
     settingsRepo = new SettingsRepository();

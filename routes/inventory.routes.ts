@@ -1,3 +1,4 @@
+import {assertInventoryWritable} from '../server/features/billing/SubscriptionLifecycle';
 import express from "express";
 import crypto from "node:crypto";
 import {validateEntity} from "../server/features/shared/validation";
@@ -15,6 +16,12 @@ import {
 import { Database, handleApiError } from "../server/features/shared/database";
 
 const router = express.Router();
+
+router.use(async(req,res,next)=>{
+  if(!['POST','PUT','PATCH','DELETE'].includes(req.method) || !/^\/(ingredients|recipes|purchases|inventory-movements)(\/|$)/.test(req.path)) return next();
+  // Authenticate before resolving entitlements; client tenant identifiers are not authority.
+  authMiddleware(req,res,async()=>{try{await assertInventoryWritable((req as any).tenantId);next();}catch(error){handleApiError(res,error);}});
+});
 
 // ============================================================================
 // REST ENDPOINTS: INGREDIENTS

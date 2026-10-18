@@ -103,6 +103,7 @@ describe("Recipe Unit vs Raw Material Unit (Grams vs Kilograms) Mismatch Resolut
       db = Database.getInstance();
       (db as any).tablesByTenant[tenantId] = {};
       (db as any).objectsByTenant[tenantId] = {};
+    await db.saveObject(tenantId,"subscription_v1",{plan:"pro",status:"active",isReadOnly:false,inventoryFrozen:false});
 
       menuRepo = new MenuRepository();
       settingsRepo = new SettingsRepository();

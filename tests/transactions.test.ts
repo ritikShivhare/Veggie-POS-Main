@@ -3,7 +3,7 @@ import {Database,TransactionRollbackError} from '../server/features/shared/datab
 import {syncService,menuRepo,ingredientRepo,settingsRepo} from '../server/context';
 const tenant='test-transaction';
 let db:Database;
-beforeEach(()=>{db=Database.getInstance();(db as any).tablesByTenant[tenant]={};(db as any).objectsByTenant[tenant]={};});
+beforeEach(async()=>{db=Database.getInstance();(db as any).tablesByTenant[tenant]={};(db as any).objectsByTenant[tenant]={};await db.saveObject(tenant,"subscription_v1",{plan:"pro",status:"active",isReadOnly:false,inventoryFrozen:false});});
 describe('Atomic multi-slice transactions',()=>{
   it('commits menu, ingredients and settings together',async()=>{
     const result=await syncService.saveFullState(tenant,{menuItems:[{id:'meal',name:'Meal',price:100}],ingredients:[{id:'rice',name:'Rice',currentStock:10,costPerUnit:40,minStock:1,unit:'kg'}],settings:{autoDeductStock:true}});

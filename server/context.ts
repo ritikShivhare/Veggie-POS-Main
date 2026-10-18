@@ -131,7 +131,7 @@ export const PUBLIC_ROUTES = [
   { method: "GET", path: "/api/auth/tenant-info" },
   { method: "GET", path: "/api/auth/staff-directory" },
   { method: "POST", path: "/api/saas-admin/exchange" },
-  { method: "POST", path: "/api/webhooks/stripe" },
+  { method: "POST", path: "/api/webhooks/cashfree" },
   { method: "POST", path: "/api/copilot-chat" }
 ];
 
@@ -269,7 +269,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
   (req as any).subscription = sub;
 
   const isMutation = ["POST", "PUT", "PATCH", "DELETE"].includes(req.method);
-  if (sub.isReadOnly && isMutation) {
+  if (sub.isReadOnly && isMutation && !/\/billing\//.test(req.path)) {
     return res.status(403).json({
       success: false,
       error: "READ_ONLY_MODE",

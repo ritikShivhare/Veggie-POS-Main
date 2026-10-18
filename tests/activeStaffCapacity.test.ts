@@ -33,22 +33,23 @@ describe('Active staff capacity and lifecycle',()=>{
   expect(sql.status).toBe('inactive');expect(sql).not.toHaveProperty('isActive');
   expect(fromDatabaseRow('staff',sql).status).toBe('inactive');
  });
- it('shows one active staff in usage and permits two replacements while retaining deleted rows',async()=>{
-  expect((await req('/billing/subscription')).data.usage.staffCount).toBe(1);
+ it('keeps Owner outside usage and permits three active staff while retaining deleted rows',async()=>{
+  expect((await req('/billing/subscription')).data.usage.staffCount).toBe(0);
   expect((await req('/staff',member('new-1'))).status).toBe(200);
   expect((await req('/staff',member('new-2'))).status).toBe(200);
-  const blocked=await req('/staff',member('new-3'));expect(blocked.status).toBe(403);expect(blocked.data.error).toBe('PLAN_LIMIT_EXCEEDED');
-  expect((await staffRepo.getAll(tenant))!.length).toBe(5);
-  expect((await req('/staff')).data.data).toHaveLength(3);
+  expect((await req('/staff',member('new-3'))).status).toBe(200);
+  const blocked=await req('/staff',member('new-4'));expect(blocked.status).toBe(403);expect(blocked.data.error).toBe('PLAN_LIMIT_EXCEEDED');
+  expect((await staffRepo.getAll(tenant))!.length).toBe(6);
+  expect((await req('/staff')).data.data).toHaveLength(4);
  });
  it('serializes concurrent creates so only the available active slot is used',async()=>{
-  await staffRepo.add(tenant,member('second'));
+  await staffRepo.add(tenant,member('second'));await staffRepo.add(tenant,member('third'));
   const results=await Promise.all([req('/staff',member('parallel-a')),req('/staff',member('parallel-b'))]);
   expect(results.map(r=>r.status).sort()).toEqual([200,403]);
-  expect(countActiveStaff((await staffRepo.getAll(tenant))!)).toBe(3);
+  expect(countActiveStaff((await staffRepo.getAll(tenant))!)).toBe(4);
  });
  it('enforces capacity on reactivation and the versioned sync path too',async()=>{
-  await staffRepo.add(tenant,member('second'));await staffRepo.add(tenant,member('third'));
+  await staffRepo.add(tenant,member('second'));await staffRepo.add(tenant,member('third'));await staffRepo.add(tenant,member('fourth'));
   const old=(await staffRepo.getById(tenant,'old-1'))!;
   expect((await req('/staff/old-1',{status:'active',version:old.version},'PUT')).status).toBe(403);
   await expect(syncService.saveFullState(tenant,{staffList:[member('sync-bypass')]})).rejects.toMatchObject({code:'PLAN_LIMIT_EXCEEDED'});
@@ -70,7 +71,7 @@ describe('Active staff capacity and lifecycle',()=>{
   expect(response.status).toBe(401);expect(await sessionService.validateAndTouchSession(tenant,session.sessionId)).toBeNull();
  });
  it('updates three staff independently, revoking each target session while preserving Owner access',async()=>{
-  await Database.getInstance().saveObject(tenant,'stripe_subscription',{plan:'pro',status:'active',isReadOnly:false});
+  await Database.getInstance().saveObject(tenant,'subscription_v1',{plan:'pro',status:'active',isReadOnly:false});
   for(const [id,pin] of [['edit-a','32581'],['edit-b','32582'],['edit-c','32583']]) {
    await staffRepo.add(tenant,{...member(id),pin});
    const target=await sessionService.createSession(tenant,id,id,'Cashier','127.0.0.1','Test',['billing']);

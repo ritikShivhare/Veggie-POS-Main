@@ -77,7 +77,7 @@ Admin sessions have a fixed expiry bounded by their verified Supabase token;
 changing the configured approved UID immediately rejects prior admin sessions.
 No legacy SaaS Owner session is accepted by the new backend.
 
-Optional settings are listed in `.env.example`. Redis, AI and Stripe credentials
+Optional settings are listed in `.env.example`. Redis, AI and Cashfree credentials
 are not required for cash/manual UPI billing. Do not use a Gemini API key as a
 Google login client ID. Do not put real secrets in `.env.example`.
 
@@ -118,7 +118,7 @@ Manual cash refunds across shift boundaries need reconciliation by the operator.
 Legacy paid bills without original settlement ledgers require payment-history
 reconciliation before cancellation; the application does not fabricate settlements
 or refunds for imported history.
-Stripe recurring billing and external AI/Google providers need live provider tests.
+Cashfree payment links, signed webhooks, refunds/disputes and external AI providers need live provider tests. See `ops/LIFECYCLE_CASHFREE_SETUP.md` for Step 3–4 sandbox validation and limits.
 Free hosting availability and high-load/multiple-instance operation have not been
 certified by the local automated tests.
 

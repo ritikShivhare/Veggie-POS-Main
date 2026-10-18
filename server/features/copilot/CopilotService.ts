@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { PLAN_LIMITS } from "../../../shared/planCatalog";
 
 const pricingSummary = Object.values(PLAN_LIMITS)
-  .map((plan) => `• ${plan.label}: ₹${plan.price}/month. ${plan.staffCount >= 100000 ? "Unlimited" : plan.staffCount} staff; ${plan.monthlyOrders >= 100000 ? "unlimited" : plan.monthlyOrders} orders/month.`)
+  .map((plan) => `• ${plan.label}: ₹${plan.price}/30 days. Owner + ${plan.staffCount} active staff; ${plan.monthlyOrders < 0 ? "unlimited (fair use)" : plan.monthlyOrders} orders/30-day cycle.`)
   .join("\n");
 
 export class CopilotService {

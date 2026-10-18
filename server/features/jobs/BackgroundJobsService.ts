@@ -1,3 +1,5 @@
+import {getSubscription} from '../billing/SubscriptionLifecycle';
+import {reconcileAllPayments} from '../billing/CashfreeBilling';
 import { Database } from "../shared/database";
 import { Ingredient, Order, Customer } from "../../../src/features/shared/types";
 
@@ -381,30 +383,10 @@ export class BackgroundJobsService {
   }
 
   private async executeSubscriptionReminderCheck(): Promise<{ message: string; details: any }> {
-    const tenantIds = await this.getActiveTenants();
-    const creationDateStr = await this.db.getObject<string>("system-tenant", "tenant_creation_date") || new Date().toISOString();
-    const expiryDate = new Date(new Date(creationDateStr).getTime() + 30 * 24 * 60 * 60 * 1000);
-    const daysLeft = Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-
-    for (const tenantId of tenantIds) {
-      if (daysLeft <= 10) {
-        const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
-        currentNotifications.unshift({
-          id: `notify-${Date.now()}-${tenantId}`,
-          title: "💳 Subscription Expiration Warning",
-          message: `Your VeggiePOS subscription expires in ${daysLeft} days on ${expiryDate.toLocaleDateString()}. Please update details.`,
-          timestamp: new Date().toISOString(),
-          read: false,
-          severity: "info",
-        });
-        await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
-      }
-    }
-
-    return {
-      message: `Subscription audit: ${daysLeft} days remaining for licensing across ${tenantIds.length} active tenants.`,
-      details: { daysRemaining: daysLeft, tenantCount: tenantIds.length }
-    };
+    const tenantIds=await this.getActiveTenants();
+    for(const tenant of tenantIds) await getSubscription(tenant);
+    const invoices=await reconcileAllPayments();
+    return {message:`Subscription lifecycle checked for ${tenantIds.length} tenants; ${invoices} Cashfree invoices reconciled.`,details:{tenantCount:tenantIds.length,invoices}};
   }
 
   private async executeCustomerNotificationCampaign(): Promise<{ message: string; details: any }> {

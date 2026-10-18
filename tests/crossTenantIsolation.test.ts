@@ -1,3 +1,4 @@
+import {Database} from '../server/features/shared/database';
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "http";
 import { app } from "../server";
@@ -74,6 +75,7 @@ describe("Cross-Tenant Isolation and Server-Side RBAC Hardening Suite", () => {
     }
 
     await saveGlobalTenantsList(globalTenants);
+    for(const tid of [TENANT_A,TENANT_B]) await Database.getInstance().saveObject(tid,"subscription_v1",{plan:"pro",status:"active",isReadOnly:false,inventoryFrozen:false});
 
     const defaultSettings = {
       autoDeductStock: true,

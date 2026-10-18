@@ -19,6 +19,7 @@ describe('PostgreSQL deployment integration',()=>{
   afterAll(async()=>{spy?.mockRestore();await pg?.close();});
   it('allows same IDs in two restaurants, and round-trips every financial ledger field',async()=>{
     for(const tid of [tenant,'pg-restaurant-b']) {
+      await Database.getInstance().saveObject(tid,'subscription_v1',{plan:'pro',status:'active',isReadOnly:false,inventoryFrozen:false});
       await staffRepo.saveAll(tid,[{id:'owner',name:'Owner',role:'Owner',pin:'98765',permissions:['billing','inventory'],phone:'9000000000',status:'active'}]);
       await menuRepo.saveAll(tid,[{id:'meal',name:'Meal',price:100,category:'Meals',isAvailable:true,isVegetarian:true}]);
       await ingredientRepo.saveAll(tid,[{id:'rice',name:'Rice',unit:'kg',currentStock:10,minStock:1,costPerUnit:40}]);

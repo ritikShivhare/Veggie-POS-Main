@@ -39,6 +39,7 @@ describe('Deployment audit: expected secure and consistent behavior', () => {
     const db: any = Database.getInstance();
     db.tablesByTenant[tid] = {};
     db.objectsByTenant[tid] = {};
+    await db.saveObject(tid,"subscription_v1",{plan:"pro",status:"active",isReadOnly:false,inventoryFrozen:false});
     await staffRepo.saveAll(tid, [
       { id: 'audit-owner', name: 'Audit owner', role: 'Owner', pin: '84519', permissions: ['billing', 'inventory', 'reports', 'settings', 'staff'] },
       { id: 'audit-cashier', name: 'Audit cashier', role: 'Cashier' as any, pin: '75418', permissions: ['billing'] }

@@ -1,3 +1,4 @@
+import {getSubscription} from '../billing/SubscriptionLifecycle';
 import { isActiveStaff } from "../../../src/features/shared/staffStatus";
 import crypto from "crypto";
 import { StaffRepository } from "../staff/StaffRepository";
@@ -282,6 +283,7 @@ export class SessionService {
     if (!session || session.securityVersion !== 2) return null;
     if ((session.role === 'SaaS Owner' || tenantId === 'saas-admin') && !isTrustedSuperAdminSession(session)) return null;
     if (session.role !== "SaaS Owner") {
+      await getSubscription(tenantId);
       const staff=await new StaffRepository().getById(tenantId,session.userId);
       if (!staff || !isActiveStaff(staff) || staff.role !== session.role || session.authVersion !== (staff.version || 1)) return null;
       session.permissions = staff.permissions || [];

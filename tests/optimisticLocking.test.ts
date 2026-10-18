@@ -39,6 +39,7 @@ describe("Optimistic Locking and Versioning Concurrency Engine", () => {
     shiftRepo = new ShiftRepository();
     settingsRepo = new SettingsRepository();
 
+    await db.saveObject(tenantId,'subscription_v1',{plan:'pro',status:'active',isReadOnly:false,inventoryFrozen:false});
     syncService = new SyncService(
       menuRepo,
       ingredientRepo,
