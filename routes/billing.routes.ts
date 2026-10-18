@@ -112,7 +112,7 @@ router.post("/billing/create-checkout-session", authMiddleware, requireRole("Own
       // global mapping is mutated from a restaurant command transaction.
     }
 
-    const priceAmount = plan === "pro" ? 99900 : 299900;
+    const priceAmount = plan === "pro" ? 99900 : 199900;
     const planLabel = plan === "pro" ? "Professional Pro Plan" : "Enterprise Elite Plan";
 
     const session = await stripe.checkout.sessions.create({
@@ -239,7 +239,7 @@ if (process.env.NODE_ENV !== "production") {
     const sessionId = (req as any).session?.id || (req.headers["x-session-id"] as string) || (req.query.sessionId as string) || "";
 
     const planName = plan === "pro" ? "Professional Pro" : "Enterprise Elite";
-    const planPrice = plan === "pro" ? "₹999.00 / month" : "₹2999.00 / month";
+    const planPrice = plan === "pro" ? "₹999.00 / month" : "₹1999.00 / month";
     const planLimits = plan === "pro" ? "Up to 10 staff members and 500 monthly orders" : "Unlimited staff members and unlimited orders";
 
     res.send(`
@@ -490,7 +490,7 @@ if (process.env.NODE_ENV !== "production") {
                 </div>
               </div>
               <div class="text-right">
-                <span class="text-sm font-extrabold text-slate-800">\${sub.plan === "pro" ? "₹999/mo" : sub.plan === "enterprise" ? "₹2999/mo" : "₹0/mo"}</span>
+                <span class="text-sm font-extrabold text-slate-800">\${sub.plan === "pro" ? "₹999/mo" : sub.plan === "enterprise" ? "₹1999/mo" : "₹0/mo"}</span>
               </div>
             </div>
           </div>
@@ -507,7 +507,7 @@ if (process.env.NODE_ENV !== "production") {
                 Switch to Professional Pro (₹999/mo)
               </button>
               <button onclick="updateSubscription('enterprise')" class="w-full bg-purple-50 hover:bg-purple-100 text-purple-600 font-semibold py-2 rounded-lg text-xs transition duration-200 cursor-pointer">
-                Switch to Enterprise Elite (₹2999/mo)
+                Switch to Enterprise Elite (₹1999/mo)
               </button>
               <button onclick="simulateFailure()" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold py-2 rounded-lg text-xs transition duration-200 cursor-pointer border border-rose-100">
                 Trigger Simulation Payment Failure (Suspends Access)

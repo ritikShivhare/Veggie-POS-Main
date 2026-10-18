@@ -2,17 +2,13 @@ import React, { useState } from "react";
 import { MarketingRoute } from "../types";
 import {
   DollarSign,
-  TrendingUp,
   ShieldCheck,
-  Zap,
   Boxes,
   ArrowRight,
   Info,
-  CheckCircle2,
-  AlertTriangle,
-  RotateCcw,
-  Sparkles
+  RotateCcw
 } from "lucide-react";
+import { PLAN_LIMITS } from "../../../../shared/planCatalog";
 
 interface RoiPageProps {
   onNavigate: (route: MarketingRoute) => void;
@@ -21,25 +17,21 @@ interface RoiPageProps {
 export default function RoiPage({ onNavigate }: RoiPageProps) {
   // Calculator inputs
   const [monthlyRevenue, setMonthlyRevenue] = useState<number>(500000); // in INR
-  const [outlets, setOutlets] = useState<number>(1);
-  const [leakageRate, setLeakageRate] = useState<number>(3.5); // %
-  const [spoilageRate, setSpoilageRate] = useState<number>(4.0); // %
-  const [turnoverGainRate, setTurnoverGainRate] = useState<number>(6.0); // %
+  const [leakageRate, setLeakageRate] = useState<number>(0); // user-entered estimate
+  const [spoilageRate, setSpoilageRate] = useState<number>(0); // user-entered estimate
 
   // Calculation logic
-  const totalMonthlySales = monthlyRevenue * outlets;
+  const totalMonthlySales = monthlyRevenue;
   const pilferageSaved = totalMonthlySales * (leakageRate / 100);
-  const spoilageSaved = totalMonthlySales * (spoilageRate / 100) * 0.45; // ingredient cost portion
-  const turnoverRevenueGain = totalMonthlySales * (turnoverGainRate / 100) * 0.35; // margin on extra tables
-  const estimatedSaaSMonthlyCost = 999 * outlets;
+  const spoilageSaved = totalMonthlySales * (spoilageRate / 100);
+  const estimatedSaaSMonthlyCost = PLAN_LIMITS.pro.price;
 
-  const totalMonthlyValue = pilferageSaved + spoilageSaved + turnoverRevenueGain;
+  const totalMonthlyValue = pilferageSaved + spoilageSaved;
   const netMonthlyProfit = totalMonthlyValue - estimatedSaaSMonthlyCost;
   const annualBenefit = netMonthlyProfit * 12;
-  const estimatedPaybackDays = Math.max(
-    3,
-    Math.round((estimatedSaaSMonthlyCost / (totalMonthlyValue / 30)) * 10) / 10
-  );
+  const estimatedPaybackDays = totalMonthlyValue > 0
+    ? Math.round((estimatedSaaSMonthlyCost / (totalMonthlyValue / 30)) * 10) / 10
+    : null;
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -51,10 +43,8 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
 
   const handleResetDefaults = () => {
     setMonthlyRevenue(500000);
-    setOutlets(1);
-    setLeakageRate(3.5);
-    setSpoilageRate(4.0);
-    setTurnoverGainRate(6.0);
+    setLeakageRate(0);
+    setSpoilageRate(0);
   };
 
   return (
@@ -74,7 +64,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
               In food service, profit isn’t just made on the menu price—it’s protected in the kitchen and at the register.
-              Use this interactive model to calculate how much margin Aatmyam POS can restore to your balance sheet.
+              Use this scenario calculator with your own estimates. It does not predict or guarantee savings from Aatmyam POS.
             </p>
           </div>
         </div>
@@ -126,30 +116,13 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                 </div>
               </div>
 
-              {/* Slider 2: Number of Outlets */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center text-xs font-mono">
-                  <span className="font-bold text-[#181A18]">Number of Outlets:</span>
-                  <span className="text-sm font-bold text-[#181A18] bg-[#FBF9F5] px-3 py-1 rounded-lg border border-[#EAE5DA]">
-                    {outlets} {outlets === 1 ? "Outlet" : "Outlets"}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min={1}
-                  max={15}
-                  step={1}
-                  value={outlets}
-                  onChange={(e) => setOutlets(Number(e.target.value))}
-                  className="w-full accent-[#181A18] cursor-pointer h-2 bg-[#EAE5DA] rounded-lg"
-                />
-              </div>
+              <p className="text-[11px] text-[#787F74]">This model is for one outlet. Enter assumptions that match your own records.</p>
 
-              {/* Slider 3: Cash & Pilferage Leakage Rate */}
+              {/* Slider 2: Cash & Pilferage Leakage Rate */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center text-xs font-mono">
                   <span className="font-bold text-[#181A18]">
-                    Estimated Pilferage & Void Leakage:
+                    Your estimated cash leakage rate:
                   </span>
                   <span className="text-sm font-bold text-[#D97706] bg-[#FEF3C7] px-2.5 py-1 rounded-lg border border-[#FDE68A]">
                     {leakageRate}%
@@ -157,7 +130,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                 </div>
                 <input
                   type="range"
-                  min={1}
+                  min={0}
                   max={8}
                   step={0.5}
                   value={leakageRate}
@@ -165,11 +138,11 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                   className="w-full accent-[#D97706] cursor-pointer h-2 bg-[#EAE5DA] rounded-lg"
                 />
                 <p className="text-[11px] text-[#787F74]">
-                  Industry average without strict role-based PINs is between 3% and 6% of gross sales.
+                  Enter your own estimate, or leave it at 0% if you do not have one.
                 </p>
               </div>
 
-              {/* Slider 4: Ingredient Spoilage Rate */}
+              {/* Slider 3: Ingredient Spoilage Rate */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center text-xs font-mono">
                   <span className="font-bold text-[#181A18]">
@@ -181,7 +154,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                 </div>
                 <input
                   type="range"
-                  min={1}
+                  min={0}
                   max={10}
                   step={0.5}
                   value={spoilageRate}
@@ -189,7 +162,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                   className="w-full accent-[#567234] cursor-pointer h-2 bg-[#EAE5DA] rounded-lg"
                 />
                 <p className="text-[11px] text-[#787F74]">
-                  Savings unlocked by linking raw materials to recipes (BOM) and tracking low stock.
+                  Enter your own estimated percentage of monthly sales, or leave it at 0%.
                 </p>
               </div>
 
@@ -197,8 +170,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
               <div className="p-3 bg-[#FBF9F5] rounded-xl border border-[#EAE5DA] flex items-start gap-2 text-[11px] text-[#787F74]">
                 <Info className="w-4 h-4 text-[#6E8F45] shrink-0 mt-0.5" />
                 <span>
-                  All calculations represent illustrative assumptions based on typical full-service and counter operations.
-                  Actual figures are validated against your outlet's historic P&L during onboarding.
+                  Results are hypothetical calculations from the values you enter. Aatmyam POS has not validated these estimates against restaurant customer results.
                 </span>
               </div>
 
@@ -210,17 +182,17 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
               <div className="flex items-center justify-between pb-4 border-b border-[#2E332D]">
                 <div>
                   <span className="text-xs font-mono text-[#84A955] uppercase font-bold">
-                    REVENUE & MARGIN IMPACT
+                    YOUR SCENARIO ESTIMATE
                   </span>
                   <h3 className="font-serif text-2xl font-bold text-[#FBF9F5]">
-                    Monthly Net Value Added
+                    Monthly Net Scenario
                   </h3>
                 </div>
                 <div className="text-right">
                   <p className="text-2xl sm:text-3xl font-serif font-bold text-[#6E8F45]">
                     {formatCurrency(netMonthlyProfit)}
                   </p>
-                  <p className="text-[10px] font-mono text-[#A6AEA0]">Net Benefit / Month</p>
+                  <p className="text-[10px] font-mono text-[#A6AEA0]">Based on your entries</p>
                 </div>
               </div>
 
@@ -230,7 +202,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                 <div className="flex items-center justify-between p-3 bg-[#242823] rounded-xl border border-[#2E332D]">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-[#D97706]" />
-                    <span>1. Pilferage & Cash Leakage Protected</span>
+                    <span>1. Estimated cash leakage amount</span>
                   </div>
                   <span className="font-bold text-[#D97706]">
                     +{formatCurrency(pilferageSaved)}
@@ -240,20 +212,10 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                 <div className="flex items-center justify-between p-3 bg-[#242823] rounded-xl border border-[#2E332D]">
                   <div className="flex items-center gap-2">
                     <Boxes className="w-4 h-4 text-[#6E8F45]" />
-                    <span>2. Recipe BOM Stock & Spoilage Saved</span>
+                    <span>2. Estimated inventory amount</span>
                   </div>
                   <span className="font-bold text-[#6E8F45]">
                     +{formatCurrency(spoilageSaved)}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-[#242823] rounded-xl border border-[#2E332D]">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-[#84A955]" />
-                    <span>3. Faster Table Turnover Throughput</span>
-                  </div>
-                  <span className="font-bold text-[#84A955]">
-                    +{formatCurrency(turnoverRevenueGain)}
                   </span>
                 </div>
 
@@ -272,7 +234,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
               <div className="p-4 bg-[#242823] rounded-2xl border border-[#6E8F45]/40 grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-[10px] font-mono text-[#A6AEA0] uppercase">
-                    Annual Margin Restored
+                    12-Month Scenario Estimate
                   </p>
                   <p className="font-serif text-xl sm:text-2xl font-bold text-[#FBF9F5]">
                     {formatCurrency(annualBenefit)}
@@ -280,10 +242,10 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                 </div>
                 <div>
                   <p className="text-[10px] font-mono text-[#A6AEA0] uppercase">
-                    Payback Timeline
+                    Estimated Payback
                   </p>
                   <p className="font-serif text-xl sm:text-2xl font-bold text-[#6E8F45]">
-                    &lt; {estimatedPaybackDays} Days
+                    {estimatedPaybackDays === null ? "Not estimated" : `${estimatedPaybackDays} days`}
                   </p>
                 </div>
               </div>
@@ -294,7 +256,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                   onClick={() => onNavigate("/contact")}
                   className="w-full py-3.5 text-xs font-bold text-[#181A18] bg-[#FBF9F5] hover:bg-[#6E8F45] hover:text-[#FBF9F5] rounded-xl transition duration-150 flex items-center justify-center gap-2 shadow-md cursor-pointer"
                 >
-                  <span>Book Walkthrough with This ROI Projection</span>
+                  <span>Discuss this scenario</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -311,10 +273,10 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           <div className="text-center max-w-2xl mx-auto space-y-3">
             <span className="text-xs font-mono uppercase tracking-widest text-[#567234] font-bold">
-              Where The Numbers Come From
+              Operational factors to review
             </span>
             <h2 className="font-serif text-3xl sm:text-4xl text-[#181A18] tracking-tight">
-              Why traditional POS systems leak margin silently.
+              Restaurant costs and workflows vary.
             </h2>
           </div>
 
@@ -324,7 +286,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                 1. Unchecked Bill Edits
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
-                When cashiers can cancel or discount dishes without a mandatory manager PIN, cash reconciliations at the end of the night will always have unexplained gaps.
+                Review who can edit or cancel orders and how those changes are recorded in your current process.
               </p>
             </div>
 
@@ -333,7 +295,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                 2. Over-portioning in the Kitchen
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
-                Without BOM recipe mapping, chefs gradually use 260g of paneer instead of the standard 200g. That 30% portion creep silently erodes your monthly gross margin.
+                Recipe records can help teams track ingredient quantities and compare them with stock on hand.
               </p>
             </div>
 
@@ -342,7 +304,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                 3. Laggy Table Turnarounds
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
-                Waiting 6 minutes for a printed bill and another 5 minutes to process a payment means tables sit idle while diners wait outside during prime revenue hours.
+                Order and payment steps can affect service flow. Review them with staff to identify where a clearer workflow may help.
               </p>
             </div>
           </div>

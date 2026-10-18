@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import BrandLogo from "./BrandLogo";
 import {
   Building,
   Users,
@@ -249,10 +250,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
 
       {/* Top logo header */}
       <header className="w-full max-w-md mx-auto text-center flex flex-col items-center">
-        <h1 className="text-3xl font-extrabold tracking-tight text-white flex items-center gap-2">
-          <span>Veggie</span>
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-rose-400 to-amber-400">POS</span>
-        </h1>
+        <h1><BrandLogo dark /></h1>
         <p className="text-xs text-slate-400 mt-2">Next-Gen Multi-Tenant Smart Restaurant POS Hub</p>
       </header>
 

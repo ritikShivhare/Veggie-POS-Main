@@ -4,6 +4,7 @@ import { StaffRepository } from "../staff/StaffRepository";
 import { EventEmitter } from "node:events";
 export const sessionEvents = new EventEmitter();
 import { Database } from "../shared/database";
+import {isTrustedSuperAdminSession, type SuperAdminIdentity} from './SuperAdminAuth';
 
 export const SESSION_COOKIE_NAME = "veggiepos_session";
 
@@ -59,6 +60,7 @@ export function generateSecureSessionId(): string {
 }
 
 export interface UserSession {
+  superAdminIdentity?: SuperAdminIdentity;
   sessionId: string;
   userId: string;
   userName: string;
@@ -278,6 +280,7 @@ export class SessionService {
     const sessions = await this.getActiveSessions(tenantId);
     const session = sessions.find(s => s.sessionId === sessionId);
     if (!session || session.securityVersion !== 2) return null;
+    if ((session.role === 'SaaS Owner' || tenantId === 'saas-admin') && !isTrustedSuperAdminSession(session)) return null;
     if (session.role !== "SaaS Owner") {
       const staff=await new StaffRepository().getById(tenantId,session.userId);
       if (!staff || !isActiveStaff(staff) || staff.role !== session.role || session.authVersion !== (staff.version || 1)) return null;
@@ -313,7 +316,8 @@ export class SessionService {
     role: string,
     ipAddress: string,
     userAgent: string,
-    permissions?: string[]
+    permissions?: string[],
+    superAdminIdentity?: SuperAdminIdentity
   ): Promise<UserSession> {
     return this.db.runTransaction(tenantId, async () => {
     const settings = await this.getSecuritySettings(tenantId);
@@ -331,6 +335,7 @@ export class SessionService {
             : ["billing", "orders"]);
     
     const newSession: UserSession = {
+      ...(superAdminIdentity ? {superAdminIdentity} : {}),
       sessionId: crypto.randomBytes(32).toString("base64url"),
       userId,
       userName,

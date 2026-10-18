@@ -206,7 +206,7 @@ describe('Deployment audit: expected secure and consistent behavior', () => {
     vi.stubEnv('SAAS_OWNER_PASSWORD_HASH',await bcrypt.hash('x'.repeat(72),4));
     try {
       const result=await request('/saas-admin/login',{password:'x'.repeat(72)+'different-suffix'});
-      expect(result.status).toBe(401);expect(result.data.challengeToken).toBeUndefined();
+      expect(result.status).toBe(410);expect(result.data.challengeToken).toBeUndefined();
     }finally{vi.unstubAllEnvs();}
   });
   it('completes signup, successful resend, PIN login and owner password login',async()=>{

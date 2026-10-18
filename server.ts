@@ -26,6 +26,8 @@ import posRouter from "./routes/pos.routes";
 import sharedRouter from "./routes/shared.routes";
 
 
+// The browser needs only the public Supabase Auth origin, never server keys.
+const supabaseAuthOrigin = (() => {try {const u=new URL(process.env.SUPABASE_URL || '');return u.protocol==='https:' ? [u.origin] : [];} catch {return [];}})();
 const app = express();
 app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT) || 3000;
@@ -33,7 +35,7 @@ const PORT = Number(process.env.PORT) || 3000;
 // Enable Helmet middleware with iframe-friendly parameters
 app.use(
   helmet({
-    contentSecurityPolicy: process.env.NODE_ENV === "production" ? {directives:{defaultSrc:["'self'"],scriptSrc:["'self'","https://accounts.google.com"],styleSrc:["'self'","'unsafe-inline'","https://fonts.googleapis.com"],imgSrc:["'self'","data:","blob:","https:"],fontSrc:["'self'","data:","https://fonts.gstatic.com"],connectSrc:["'self'","wss:","https://accounts.google.com"],frameSrc:["https://accounts.google.com"],frameAncestors:["'self'","https://*.ai.studio"]}} : false,
+    contentSecurityPolicy: process.env.NODE_ENV === "production" ? {directives:{defaultSrc:["'self'"],scriptSrc:["'self'","https://accounts.google.com"],styleSrc:["'self'","'unsafe-inline'","https://fonts.googleapis.com"],imgSrc:["'self'","data:","blob:","https:"],fontSrc:["'self'","data:","https://fonts.gstatic.com"],connectSrc:["'self'","wss:",...supabaseAuthOrigin],frameSrc:["https://accounts.google.com"],frameAncestors:["'self'","https://*.ai.studio"]}} : false,
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: false,
     frameguard: false,

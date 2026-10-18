@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import QRCode from "qrcode";
+import ReceiptTotals from "../shared/components/ReceiptTotals";
+import FssaiRegistration from "../shared/components/FssaiRegistration";
 import { MenuItem, Ingredient, Recipe, CartItem, Order, StaffMember, InventorySettings, OrderStatus, Customer } from "../shared/types";
 import { ApiClient } from "../shared/services/api";
 import {
@@ -1378,10 +1380,12 @@ export default function POSBilling({
                 <span>Subtotal:</span>
                 <span className="font-mono font-semibold text-slate-700">INR {subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between">
-                <span>GST ({(settings.gstPercentage !== undefined ? settings.gstPercentage : 5)}%):</span>
-                <span className="font-mono font-semibold text-slate-700">INR {tax.toFixed(2)}</span>
-              </div>
+              {tax > 0 && (
+                <div className="flex justify-between">
+                  <span>GST ({(settings.gstPercentage !== undefined ? settings.gstPercentage : 5)}%):</span>
+                  <span className="font-mono font-semibold text-slate-700">INR {tax.toFixed(2)}</span>
+                </div>
+              )}
               {loyaltyDiscount > 0 && (
                 <div className="flex justify-between text-amber-600 font-bold">
                   <span>Loyalty Discount:</span>
@@ -2036,6 +2040,7 @@ export default function POSBilling({
                     {activeTenant?.name || "VEGGIE RESTAURANT & POS"}
                   </h2>
                   <p className="text-[10px] text-slate-600">Pure Vegetarian Hospitality Suite</p>
+                  <FssaiRegistration number={settings.fssaiNumber} className="text-[9px] text-slate-700 mt-0.5" />
                   {(settings.gstin || activeTenant?.gstin) ? (
                     <p className="text-[9px] text-slate-700 font-bold mt-0.5">
                       GSTIN: {(settings.gstin || activeTenant?.gstin)?.toUpperCase()}
@@ -2093,26 +2098,7 @@ export default function POSBilling({
                 </div>
 
                 {/* Bill Calculation Summary */}
-                <div className="py-2 border-b border-dashed border-slate-400 space-y-1 text-[10px]">
-                  <div className="flex justify-between">
-                    <span>Subtotal</span>
-                    <span className="font-mono">INR {receiptModalOrder.subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>CGST + SGST (5%)</span>
-                    <span className="font-mono">INR {receiptModalOrder.tax.toFixed(2)}</span>
-                  </div>
-                  {receiptModalOrder.discount && receiptModalOrder.discount > 0 && (
-                    <div className="flex justify-between text-emerald-700 font-semibold">
-                      <span>Loyalty/Discount</span>
-                      <span className="font-mono">-INR {receiptModalOrder.discount.toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-black text-xs pt-1 border-t border-slate-300">
-                    <span>GRAND TOTAL</span>
-                    <span className="font-mono text-sm">INR {receiptModalOrder.total.toFixed(2)}</span>
-                  </div>
-                </div>
+                <ReceiptTotals order={receiptModalOrder} variant="thermal" />
 
                 {/* Payment Status Info */}
                 <div className="py-2 border-b border-dashed border-slate-400 text-center text-[10px] space-y-0.5">
@@ -2128,7 +2114,7 @@ export default function POSBilling({
                 <div className="text-center pt-2 space-y-0.5 text-[9px] text-slate-600">
                   <p className="font-semibold">Thank you for dining with us!</p>
                   <p>Have a wonderful day ahead.</p>
-                  <p className="font-mono text-[8px] text-slate-400 mt-1">*** POWERED BY VEGGIEPOS ENTERPRISE ***</p>
+                  <p className="font-mono text-[8px] text-slate-400 mt-1">*** POWERED BY AATMYAM POS ***</p>
                 </div>
               </div>
             </div>

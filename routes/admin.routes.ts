@@ -1,9 +1,5 @@
 import rateLimit from "express-rate-limit";
-import { OAuth2Client } from "google-auth-library";
-import { constantTimeStringCompare } from "../server/features/auth/PinSecurityService";
-import { digest, validPassword } from "../server/features/shared/security";
 import express from "express";
-import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import {
   adminAuthMiddleware,
@@ -21,9 +17,7 @@ import {
   purchaseRepo,
   shiftRepo,
   auditLogService,
-  notificationService,
-  verifyTOTP,
-  generateTOTP
+  notificationService
 } from "../server/context";
 import {
   SESSION_COOKIE_NAME,
@@ -32,70 +26,29 @@ import {
 import { hashPin } from "../server/features/auth/PinSecurityService";
 import { Database } from "../server/features/shared/database";
 
+import {verifySupabaseSuperAdmin} from "../server/features/auth/SuperAdminAuth";
+
 const router = express.Router();
 
-// Admin identity is configured separately from notification recipients.
-const adminLimiter = rateLimit({ windowMs: 15*60*1000, limit: 15, standardHeaders: true, legacyHeaders: false });
-router.use(['/saas-admin/login','/saas-admin/google-login','/saas-admin/resend-otp'], adminLimiter);
-const pendingAdminOtps = new Map<string, {hash:string, expiresAt:number, email:string, lastSentAt:number, attempts:number}>();
-async function sendAdminCode(email: string, code: string): Promise<boolean> {
-  const sent = await notificationService.send('saas-admin', {
-    title:'Aatmyam POS admin verification', message:'Your verification code expires in 10 minutes.', severity:'info',
-    channels:['email'], recipientEmail:email,
-    htmlBody:`<p>Your Aatmyam POS verification code is <strong>${code}</strong>. Valid for 10 minutes.</p>`
-  });
-  return sent.dispatchedChannels.some(c => c.channel === 'email' && c.status === 'success');
-}
-async function adminSession(req: express.Request, res: express.Response, email: string) {
-  const session = await sessionService.createSession('saas-admin','s-saas-owner','SaaS Owner','SaaS Owner',req.ip || '',String(req.headers['user-agent'] || ''));
-  res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
-  return res.json({ success:true, session, user:{id:'s-saas-owner',name:'SaaS Owner',role:'SaaS Owner',email,permissions:['super_admin']} });
-}
-router.get('/auth/public-config', (_req,res) => res.json({success:true, googleClientId:process.env.GOOGLE_CLIENT_ID || null}));
-router.post('/saas-admin/login', async (req,res) => {
-  const ownerEmail = process.env.SAAS_OWNER_EMAIL?.trim().toLowerCase();
-  const passwordHash = process.env.SAAS_OWNER_PASSWORD_HASH;
-  if (!ownerEmail || !passwordHash) return res.status(503).json({success:false,error:'ADMIN_NOT_CONFIGURED',message:'Configure the SaaS owner identity before admin sign-in.'});
-  try {
-    if (req.body.otp) {
-      const token = String(req.body.challengeToken || '');
-      const challenge = pendingAdminOtps.get(token);
-      if (!challenge || challenge.expiresAt <= Date.now() || challenge.attempts >= 5) return res.status(401).json({success:false,message:'Verification expired. Request a new code.'});
-      challenge.attempts++;
-      if (!constantTimeStringCompare(challenge.hash,digest(String(req.body.otp)))) return res.status(401).json({success:false,message:'Invalid verification code.'});
-      pendingAdminOtps.delete(token);
-      return await adminSession(req,res,ownerEmail);
-    }
-    if (!validPassword(req.body.password) || !(await bcrypt.compare(req.body.password,passwordHash))) return res.status(401).json({success:false,error:'INVALID_CREDENTIALS',message:'Incorrect admin credentials.'});
-    const code = crypto.randomInt(100000,1000000).toString();
-    if (!await sendAdminCode(ownerEmail,code)) return res.status(503).json({success:false,error:'EMAIL_SEND_FAILED',message:'Unable to send verification email. Check the mail provider configuration.'});
-    const token = crypto.randomBytes(32).toString('hex');
-    pendingAdminOtps.set(token,{hash:digest(code),expiresAt:Date.now()+600000,email:ownerEmail,lastSentAt:Date.now(),attempts:0});
-    for (const [key,c] of pendingAdminOtps) if(c.expiresAt<Date.now()) pendingAdminOtps.delete(key);
-    return res.json({success:true,requireOtp:true,challengeToken:token,email:ownerEmail,message:'Verification email accepted by the mail provider.'});
-  } catch (e) { return res.status(503).json({success:false,message:'Authentication service unavailable.'}); }
+// No legacy credential path can mint an administrator session.
+const adminLimiter = rateLimit({windowMs:15*60*1000,limit:15,standardHeaders:true,legacyHeaders:false});
+router.post(['/saas-admin/login','/saas-admin/google-login','/saas-admin/resend-otp'], (_req,res) => {
+  res.status(410).json({success:false,error:'LEGACY_ADMIN_LOGIN_DISABLED',message:'Use the verified Supabase administrator login with authenticator verification.'});
 });
-router.post('/saas-admin/google-login', async (req,res) => {
-  const expectedEmail = process.env.SAAS_OWNER_EMAIL?.trim().toLowerCase();
-  const audience = process.env.GOOGLE_CLIENT_ID;
-  if (!audience || !expectedEmail || typeof req.body.credential !== 'string') return res.status(401).json({success:false,message:'A valid Google credential is required.'});
+router.post('/saas-admin/exchange', adminLimiter, async (req,res) => {
+  const authorization=req.get('authorization') || '';
+  if (!authorization.startsWith('Bearer ') || !authorization.slice(7).trim()) {
+    return res.status(401).json({success:false,error:'ADMIN_TOKEN_REQUIRED'});
+  }
   try {
-    const ticket = await new OAuth2Client(audience).verifyIdToken({idToken:req.body.credential,audience});
-    const payload = ticket.getPayload();
-    if (!payload?.email_verified || payload.email?.toLowerCase() !== expectedEmail) return res.status(403).json({success:false,message:'This Google account is not the configured SaaS owner.'});
-    return await adminSession(req,res,expectedEmail);
-  } catch { return res.status(401).json({success:false,message:'Google credential is invalid or expired.'}); }
-});
-router.post('/saas-admin/resend-otp', async (req,res) => {
-  const c = pendingAdminOtps.get(String(req.body.challengeToken || ''));
-  if (!c || c.expiresAt<=Date.now()) return res.status(400).json({success:false,message:'Verification expired. Sign in again.'});
-  if (Date.now()-c.lastSentAt<30000) return res.status(429).json({success:false,message:'Wait 30 seconds before requesting another code.'});
-  const code=crypto.randomInt(100000,1000000).toString();
-  try {
-    if (!await sendAdminCode(c.email,code)) return res.status(503).json({success:false,message:'Unable to send verification email. Your previous valid code is unchanged.'});
-    Object.assign(c,{hash:digest(code),expiresAt:Date.now()+600000,lastSentAt:Date.now(),attempts:0});
-    return res.json({success:true,message:'Verification email accepted by the mail provider.'});
-  } catch { return res.status(503).json({success:false,message:'Email service unavailable.'}); }
+    const verified=await verifySupabaseSuperAdmin(authorization.slice(7).trim());
+    if(!verified) return res.status(403).json({success:false,error:'ADMIN_NOT_AUTHORIZED_OR_MFA_REQUIRED'});
+    const session=await sessionService.createSession('saas-admin',`supabase:${verified.user.id}`,'SaaS Owner','SaaS Owner',req.ip || '',String(req.headers['user-agent'] || ''),['super_admin'],verified.identity);
+    res.cookie(SESSION_COOKIE_NAME,session.sessionId,{...getSessionCookieOptions(req),maxAge:verified.identity.expiresAt-Date.now()});
+    return res.json({success:true,session,user:{id:session.userId,name:session.userName,role:session.role,permissions:['super_admin']}});
+  } catch {
+    return res.status(503).json({success:false,error:'ADMIN_IDENTITY_SERVICE_UNAVAILABLE'});
+  }
 });
 
 router.get("/admin/tenants", adminAuthMiddleware, async (req, res) => {

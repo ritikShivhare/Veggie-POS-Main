@@ -66,13 +66,16 @@ provider environment and confirm connected database/schema readiness before real
 onboarding tests. Keep API keys in the server environment, outside frontend code,
 source control and public discussion.
 
-To enable SaaS admin sign-in, also configure `SAAS_OWNER_EMAIL` and a bcrypt
-`SAAS_OWNER_PASSWORD_HASH` for a private password. Password admin login requires
-email OTP. Optional Google login requires a web OAuth `GOOGLE_CLIENT_ID` and
-its authorized origin; only the configured owner's verified Google identity is accepted.
-No default admin password or six-digit master override is provided.
-Passwords must be at least eight characters and at most 72 UTF-8 bytes, so bcrypt
-never silently truncates them. Use the same bound for the private SaaS password.
+SaaS admin sign-in now requires Supabase Auth email/password plus authenticator MFA.
+Set `SUPER_ADMIN_USER_ID` on the backend and `VITE_SUPABASE_URL` /
+`VITE_SUPABASE_ANON_KEY` at build time. These must use the same project as the backend.
+Only the approved UID with server-controlled `app_metadata.role = SUPER_ADMIN`
+and a provider-verified `aal2` token can exchange for a server session. Retired
+password/email-OTP and Google admin endpoints return HTTP 410. Store signup OTP
+is unchanged. See `ops/SUPER_ADMIN_SETUP.md` for enrollment and release checks.
+Admin sessions have a fixed expiry bounded by their verified Supabase token;
+changing the configured approved UID immediately rejects prior admin sessions.
+No legacy SaaS Owner session is accepted by the new backend.
 
 Optional settings are listed in `.env.example`. Redis, AI and Stripe credentials
 are not required for cash/manual UPI billing. Do not use a Gemini API key as a

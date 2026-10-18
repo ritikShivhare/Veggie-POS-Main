@@ -3,6 +3,7 @@ import StaffAccessEditor from "../../staff/StaffAccessEditor";
 import { ApiClient } from "../services/api";
 import { offlineRepository } from "../services/offline";
 import React, { useState, useEffect } from "react";
+import FssaiRegistration, { isFssaiNumber } from "./FssaiRegistration";
 import { Settings, ShieldCheck, RefreshCw, UserMinus, AlertTriangle, CheckCircle2, Bell, Mail, Activity, Lock, Globe, Percent, Receipt, QrCode, Smartphone, Copy, Check, Info, IndianRupee, Sparkles, ExternalLink } from "lucide-react";
 import QRCode from "qrcode";
 import { BillingSettings } from "./BillingSettings";
@@ -71,6 +72,7 @@ export default function SettingsPanel({
 
   // GSTIN & UPI QR Payment states
   const [gstinInput, setGstinInput] = useState<string>(() => settings.gstin || activeTenant.gstin || "");
+  const [fssaiInput, setFssaiInput] = useState(() => settings.fssaiNumber || "");
   const [upiInputVpa, setUpiInputVpa] = useState<string>(() => settings.upiVpa || activeTenant.vpa || "");
   const [upiMerchantInput, setUpiMerchantInput] = useState<string>(() => settings.upiMerchantName || activeTenant.upiMerchantName || activeTenant.name || "");
   const [testAmount, setTestAmount] = useState<string>("1.00");
@@ -79,6 +81,10 @@ export default function SettingsPanel({
   const [isSavingTaxPayment, setIsSavingTaxPayment] = useState<boolean>(false);
 
   // Sync inputs if activeTenant or settings change externally
+  useEffect(() => {
+    setFssaiInput(settings.fssaiNumber || "");
+  }, [settings.fssaiNumber, activeTenant.tenantId]);
+
   useEffect(() => {
     setGstinInput(settings.gstin || activeTenant.gstin || "");
   }, [settings.gstin, activeTenant.gstin]);
@@ -185,6 +191,11 @@ export default function SettingsPanel({
   };
 
   const handleSaveTaxAndPaymentSettings = () => {
+    const cleanedFssai = fssaiInput.trim();
+    if (cleanedFssai && !isFssaiNumber(cleanedFssai)) {
+      setToastMessage({ type: "error", text: "Enter a 14-digit FSSAI number, or leave it blank to hide it on receipts." });
+      return;
+    }
     setIsSavingTaxPayment(true);
     const cleanedGstin = gstinInput.trim().toUpperCase();
     const cleanedVpa = upiInputVpa.trim();
@@ -194,6 +205,7 @@ export default function SettingsPanel({
     const updatedSettings: InventorySettings = {
       ...settings,
       gstin: cleanedGstin,
+      fssaiNumber: cleanedFssai,
       upiVpa: cleanedVpa,
       upiMerchantName: cleanedMerchant
     };
@@ -225,7 +237,7 @@ export default function SettingsPanel({
       setIsSavingTaxPayment(false);
       setToastMessage({
         type: "success",
-        text: "GSTIN and UPI QR payment settings saved and synced successfully!"
+        text: "Receipt registration and UPI payment settings saved."
       });
     }, 200);
   };
@@ -431,10 +443,10 @@ export default function SettingsPanel({
               <div>
                 <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                   <Receipt className="w-5 h-5 text-emerald-600" />
-                  <span>Tax Rate & GSTIN Invoicing</span>
+                  <span>Tax Rate & Receipt Registration</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Configure GST percentage and your optional 15-character GSTIN number for customer receipts and legal tax invoices.
+                  Configure GST percentage and optional GSTIN and FSSAI details for customer receipts.
                 </p>
               </div>
               <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono font-bold text-xs rounded-full shrink-0 shadow-xs">
@@ -537,6 +549,26 @@ export default function SettingsPanel({
                 </span>
               </div>
 
+              <div className="border-t border-slate-100 pt-3 space-y-1.5">
+                <label htmlFor="settings-fssai-input" className="block text-xs font-bold text-slate-800">
+                  Restaurant FSSAI Number <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  id="settings-fssai-input"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={14}
+                  value={fssaiInput}
+                  onChange={(e) => setFssaiInput(e.target.value)}
+                  placeholder="Enter your restaurant's 14-digit number"
+                  aria-describedby="settings-fssai-help"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono text-slate-800 focus:outline-none focus:border-emerald-500"
+                />
+                <p id="settings-fssai-help" className="text-[11px] text-slate-500">
+                  Leave blank to omit FSSAI from both dashboard invoices and thermal receipts.
+                </p>
+              </div>
+
               {/* Live Receipt Header Preview */}
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-[11px] font-mono text-slate-600 space-y-1">
                 <div className="flex items-center justify-between text-[10px] text-slate-400 font-sans font-bold uppercase tracking-wider">
@@ -547,6 +579,7 @@ export default function SettingsPanel({
                 </div>
                 <div className="bg-white p-2 rounded border border-dashed border-slate-300 text-center space-y-0.5">
                   <div className="font-bold text-slate-800 text-xs">{activeTenant.name}</div>
+                  <FssaiRegistration number={fssaiInput} />
                   {gstinInput.trim() ? (
                     <>
                       <div className="text-emerald-700 font-bold">GSTIN: {gstinInput.trim().toUpperCase()}</div>
@@ -729,7 +762,7 @@ export default function SettingsPanel({
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Save & Apply GSTIN and UPI Payment Settings</span>
+                    <span>Save Receipt & Payment Settings</span>
                   </>
                 )}
               </button>

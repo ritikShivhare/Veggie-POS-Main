@@ -178,7 +178,7 @@ export default function LandingPage({
           </div>
           <div className="flex flex-col">
             <h1 className="text-base font-extrabold text-slate-800 tracking-tight leading-none">
-              VEGGIE<span className="text-pink-600 font-extrabold">POS</span>
+              AATMYAM<span className="text-pink-600 font-extrabold"> POS</span>
             </h1>
             <p className="text-[8px] uppercase tracking-wider text-slate-400 mt-0.5 font-mono font-bold">
               EASY BILLING & STAFF APP

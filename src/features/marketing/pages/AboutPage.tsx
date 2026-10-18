@@ -22,7 +22,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
       number: "01",
       title: "Respect the Rush",
       description:
-        "When 40 orders hit the kitchen at 8:30 PM, software must never hesitate. Every screen transition, modifier tap, and KOT dispatch in Aatmyam POS is optimized for sub-100ms response times. We build for the floor, not the boardroom."
+        "Aatmyam POS is being developed around restaurant order entry, kitchen status, inventory, and staff workflows. We build for the floor, not the boardroom."
     },
     {
       number: "02",
@@ -52,7 +52,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF2E4] border border-[#D5E3C8] text-xs font-mono font-bold text-[#567234]">
             <Heart className="w-3.5 h-3.5 text-[#6E8F45]" />
-            <span>THE VEGGIE POS MANIFESTO</span>
+            <span>THE AATMYAM POS MANIFESTO</span>
           </div>
           <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl tracking-tight text-[#181A18] leading-[1.12]">
             Restoring calm to the <br />

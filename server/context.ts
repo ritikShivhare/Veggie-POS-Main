@@ -1,3 +1,4 @@
+import {createRequireSuperAdmin} from "./features/auth/SuperAdminAuth";
 import express from "express";
 import crypto from "crypto";
 import { MenuRepository } from "./features/pos/MenuRepository";
@@ -129,7 +130,7 @@ export const PUBLIC_ROUTES = [
   { method: "POST", path: "/api/auth/logout" },
   { method: "GET", path: "/api/auth/tenant-info" },
   { method: "GET", path: "/api/auth/staff-directory" },
-  { method: "POST", path: "/api/saas-admin/login" },
+  { method: "POST", path: "/api/saas-admin/exchange" },
   { method: "POST", path: "/api/webhooks/stripe" },
   { method: "POST", path: "/api/copilot-chat" }
 ];
@@ -365,46 +366,7 @@ export const requirePermission = (...requiredPermissions: string[]) => {
 };
 
 // SaaS Super-Admin Management Middleware with Anti-CSRF
-export const adminAuthMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const headerSessionId =
-    (req.headers["x-session-id"] as string) ||
-    (typeof req.headers["authorization"] === "string" && req.headers["authorization"].startsWith("Bearer ")
-      ? req.headers["authorization"].substring(7).trim()
-      : undefined);
-
-  const cookieSessionId = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
-
-  if (!headerSessionId) {
-    return res.status(401).json({
-      success: false,
-      error: "UNAUTHORIZED",
-      message: cookieSessionId
-        ? "Anti-CSRF Protection: 'x-session-id' header is mandatory for admin endpoints."
-        : "Super-Admin session ID required."
-    });
-  }
-
-  if (cookieSessionId && cookieSessionId !== headerSessionId) {
-    return res.status(401).json({
-      success: false,
-      error: "UNAUTHORIZED",
-      message: "Security violation: 'x-session-id' header does not match active admin cookie."
-    });
-  }
-
-  const sessionId = headerSessionId;
-  
-  try {
-    const session = await sessionService.validateAndTouchSession("saas-admin", sessionId);
-    if (!session || session.role !== "SaaS Owner") {
-      return res.status(403).json({ success: false, error: "FORBIDDEN", message: "Only SaaS Owner can access these super-admin methods." });
-    }
-    (req as any).session = session;
-    next();
-  } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
-  }
-};
+export const adminAuthMiddleware = createRequireSuperAdmin(sessionService);
 
 // TOTP Helpers
 export function base32tohex(base32: string): string {

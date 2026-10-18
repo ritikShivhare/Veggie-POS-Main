@@ -1,14 +1,16 @@
 import React, { useState, useMemo } from "react";
-import {
-  TrendingUp,
-  Activity,
-  Clock,
-  AlertTriangle,
-  Sparkles,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
-  BarChart3,
+import ReceiptTotals from "./ReceiptTotals";
+import FssaiRegistration from "./FssaiRegistration";
+import { 
+  TrendingUp, 
+  Activity, 
+  Clock, 
+  AlertTriangle, 
+  Sparkles, 
+  Calendar, 
+  ArrowUpRight, 
+  ArrowDownRight, 
+  BarChart3, 
   TrendingDown,
   Layers,
   ShoppingBag,
@@ -1342,8 +1344,9 @@ export default function Dashboard({
                 </h2>
                 <p className="text-[11px] text-slate-500 mt-0.5">Authentic Dining & Quick Billing Hub</p>
                 <p className="text-[10px] text-slate-400 mt-1">
-                  {(settings?.gstin || activeTenant?.gstin) ? `GSTIN: ${(settings?.gstin || activeTenant?.gstin)?.toUpperCase()} • ` : "Retail Cash Bill • "}FSSAI: 10020011000123
+                  {(settings?.gstin || activeTenant?.gstin) ? `GSTIN: ${(settings?.gstin || activeTenant?.gstin)?.toUpperCase()}` : "Retail Cash Bill"}
                 </p>
+                <FssaiRegistration number={settings?.fssaiNumber} />
               </div>
 
               {/* Order Meta Info */}
@@ -1405,20 +1408,7 @@ export default function Dashboard({
               </div>
 
               {/* Bill Financial Totals */}
-              <div className="border-t border-dashed border-slate-300 pt-3 space-y-1 text-[11px]">
-                <div className="flex justify-between text-slate-600">
-                  <span>Subtotal</span>
-                  <span className="font-bold font-mono">₹{selectedOrderReceipt.subtotal || (selectedOrderReceipt.total - (selectedOrderReceipt.tax || 0))}</span>
-                </div>
-                <div className="flex justify-between text-slate-600">
-                  <span>GST (5%)</span>
-                  <span className="font-bold font-mono">₹{selectedOrderReceipt.tax || Math.round((selectedOrderReceipt.total || 0) * 0.05)}</span>
-                </div>
-                <div className="flex justify-between text-sm font-black text-slate-900 border-t border-slate-200 pt-1.5 mt-1.5">
-                  <span>Grand Total</span>
-                  <span className="font-mono text-indigo-700">₹{selectedOrderReceipt.total}</span>
-                </div>
-              </div>
+              <ReceiptTotals order={selectedOrderReceipt} />
 
               {/* Payment Method Details */}
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-[11px]">

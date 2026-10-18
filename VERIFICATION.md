@@ -20,7 +20,8 @@ account identifiers or real credentials.
 
 ## Core repairs
 
-Authentication verifies the configured SaaS owner, hashes password/OTP challenges,
+Administrator authentication verifies the approved Supabase UID, app metadata role,
+and signed MFA assurance before issuing an expiry-bounded server session. Store authentication hashes password/OTP challenges and
 checks current staff roles and versions, strips private staff fields, and removes
 shared default credentials. Password inputs obey bcrypt's UTF-8 length bound;
 user-provided text in verification email templates is escaped.

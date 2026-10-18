@@ -2,49 +2,55 @@ import React, { useState } from "react";
 import { MarketingRoute } from "../types";
 import {
   Check,
-  X,
   ArrowRight,
-  Sparkles,
-  HelpCircle,
   ChevronDown,
   ChevronUp,
-  ShieldCheck,
-  Terminal,
-  Zap,
-  Boxes,
-  Building
+  ShieldCheck
 } from "lucide-react";
+import { PLAN_LIMITS } from "../../../../shared/planCatalog";
 
 interface PricingPageProps {
   onNavigate: (route: MarketingRoute) => void;
 }
 
 export default function PricingPage({ onNavigate }: PricingPageProps) {
-  const [annualBilling, setAnnualBilling] = useState<boolean>(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   const plans = [
-    {id:"free",name:"Free Starter",tagline:"Try one restaurant outlet.",monthlyPrice:0,annualPrice:0,popular:false,features:["3 staff accounts","30 orders per month","Cash and manual UPI billing","Kitchen display and recipe inventory","Browser receipt printing"],ctaText:"Create a free restaurant"},
-    {id:"pro",name:"Professional Pro",tagline:"For a growing single outlet.",monthlyPrice:999,annualPrice:999,popular:true,features:["10 staff accounts","500 orders per month","Customer profiles and loyalty","Purchase and stock ledgers","Sales reports"],ctaText:"Contact for Pro setup"},
-    {id:"enterprise",name:"Higher Volume",tagline:"Higher limits for a single outlet.",monthlyPrice:2999,annualPrice:2999,popular:false,features:["Up to 100,000 orders per month","Higher staff limit","The same restaurant tools","One outlet per restaurant","Provider setup required for optional AI and billing"],ctaText:"Contact for setup"}
-  ];
+    { id: "free", tagline: "For one outlet getting started.", popular: false, ctaText: "Request a walkthrough" },
+    { id: "pro", tagline: "For a single outlet with more staff and orders.", popular: true, ctaText: "Request a walkthrough" },
+    { id: "enterprise", tagline: "Higher usage limits for one outlet.", popular: false, ctaText: "Contact us about this plan" }
+  ].map((display) => {
+    const plan = PLAN_LIMITS[display.id as keyof typeof PLAN_LIMITS];
+    const features = [
+      `${plan.staffCount >= 100000 ? "Unlimited" : plan.staffCount} staff members`,
+      `${plan.monthlyOrders >= 100000 ? "Unlimited" : plan.monthlyOrders} orders per month`,
+      ...(plan.features.posTerminal ? ["POS terminal"] : []),
+      ...(plan.features.basicReports ? ["Basic sales reports"] : []),
+      ...(plan.features.advancedInventory ? ["Advanced inventory"] : []),
+      ...(plan.features.aiCopilot ? ["AI Copilot (provider setup required)"] : []),
+      ...(plan.features.dedicatedSupport ? ["Dedicated support"] : []),
+      "One outlet per restaurant"
+    ];
+    return { ...display, name: plan.label, monthlyPrice: plan.price, features };
+  });
 
   const faqs = [
     {
-      q: "Are there any hidden transaction fees or per-order commissions?",
-      a: "No. Aatmyam POS charges a simple, transparent flat subscription fee. We never take a percentage cut of your restaurant sales, UPI payments, or card orders."
+      q: "How is the listed price billed?",
+      a: "The prices shown are monthly subscription amounts. Contact us to discuss account setup and any payment-processing charges that may apply to your chosen payment provider."
     },
     {
       q: "Do I need to buy expensive proprietary hardware from you?",
-      a: "Never. Aatmyam POS runs natively inside any modern web browser on the devices you already own—whether iPads, Android tablets, Windows All-in-One touch terminals, or laptops. It connects seamlessly to standard ESC/POS thermal printers and electronic cash drawers."
+      a: "Aatmyam POS is a web app. Request a walkthrough so we can discuss your device and printer setup."
     },
     {
-      q: "How fast can we onboard and import our menu?",
-      a: "Most restaurants go live within 24 to 48 hours. You can upload an Excel/PDF of your menu or share photos, and our dedicated implementation team will format and configure your categories, modifiers, and table floor plans."
+      q: "How do I get started?",
+      a: "Request a product walkthrough to discuss your menu, device setup, and the current early-access process."
     },
     {
-      q: "Can I upgrade or switch between plans as my restaurant grows?",
-      a: "Yes. You can switch between Starter, Pro, and Enterprise at any time. When upgrading, charges are automatically prorated without service interruptions."
+      q: "How can I change plans?",
+      a: "Contact us to discuss a plan change and the billing steps for your account."
     },
     {
       q: "What happens if our restaurant internet disconnects during service?",
@@ -68,41 +74,11 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
               <span className="text-[#6E8F45] italic">No hidden percentages.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              Choose the operational tier built for your outlet volume. Every plan includes free software updates, unlimited menu items, and zero per-order commissions.
+              Aatmyam POS is in early access. These monthly plans use the same prices and limits as the app.
             </p>
 
-            {/* Billing Frequency Toggle */}
-            <div className="pt-4 flex items-center justify-center gap-3">
-              <span
-                className={`text-xs font-mono font-bold ${
-                  !annualBilling ? "text-[#181A18]" : "text-[#787F74]"
-                }`}
-              >
-                Monthly Billing
-              </span>
-              <button
-                onClick={() => setAnnualBilling(!annualBilling)}
-                className="w-14 h-7 bg-[#181A18] rounded-full p-1 transition duration-200 cursor-pointer relative"
-                aria-label="Toggle annual billing"
-              >
-                <div
-                  className={`w-5 h-5 rounded-full bg-[#FBF9F5] transition-transform duration-200 ${
-                    annualBilling ? "translate-x-7 bg-[#6E8F45]" : "translate-x-0"
-                  }`}
-                />
-              </button>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`text-xs font-mono font-bold ${
-                    annualBilling ? "text-[#181A18]" : "text-[#787F74]"
-                  }`}
-                >
-                  Annual Billing
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-[#EBF2E4] text-[#567234] text-[10px] font-mono font-bold border border-[#D5E3C8]">
-                  Save 0%
-                </span>
-              </div>
+            <div className="pt-4 text-xs font-mono text-[#787F74]">
+              Monthly billing • One outlet per restaurant
             </div>
 
           </div>
@@ -115,7 +91,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
             {plans.map((plan) => {
-              const activePrice = annualBilling ? plan.annualPrice : plan.monthlyPrice;
+              const activePrice = plan.monthlyPrice;
               return (
                 <div
                   key={plan.id}
@@ -162,7 +138,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                           plan.popular ? "text-[#84A955]" : "text-[#567234]"
                         }`}
                       >
-                        {annualBilling ? "Billed annually (₹" + activePrice * 12 + "/yr)" : "Billed monthly"}
+                        Billed monthly
                       </p>
                     </div>
 

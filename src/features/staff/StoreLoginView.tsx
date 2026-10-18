@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import BrandLogo from "../shared/components/BrandLogo";
 import { RestaurantTenant } from "../shared/types";
 import {
   Store,
@@ -86,9 +87,7 @@ export default function StoreLoginView({
         <div className="w-full max-w-md bg-[#F4F0E8] border border-[#EAE5DA] rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
 
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-[#181A18] text-[#FBF9F5] flex items-center justify-center font-serif text-2xl font-bold mx-auto border border-[#2E332D] shadow-sm">
-              V
-            </div>
+            <BrandLogo />
             <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#181A18]">
               Connect Store Terminal
             </h1>

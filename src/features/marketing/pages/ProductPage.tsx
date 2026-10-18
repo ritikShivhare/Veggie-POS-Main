@@ -31,21 +31,20 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
   const modules = [
     {
       id: "billing",
-      title: "Touch Terminal & Fast PIN Register",
-      tagline: "Sub-10 second checkouts with zero operator friction",
+      title: "Order Entry & Billing",
+      tagline: "Record menu orders and payment methods.",
       description:
-        "Engineered for the peak rush. Servers and cashiers punch orders with single-tap modifiers, split checks with one gesture, and generate dynamic UPI QR codes instantly.",
+        "Staff can enter restaurant orders and record cash or manual UPI payments.",
       features: [
-        "1-Second Staff PIN switching between table attendants",
-        "Physical keyboard hotkeys (0-9, Enter, Backspace) & touch acceleration",
-        "Customizable floor maps with live table occupancy status",
-        "Dynamic UPI QR code with exact decimal amount generation",
-        "Manager authorization required for bill voids & discounts"
+        "Table-based order entry",
+        "Menu item and quantity selection",
+        "Cash and manual UPI payment recording",
+        "Order status available to staff"
       ],
       icon: Terminal,
       codePreview: {
         header: "TERMINAL_DISPATCH // OUTLET_01",
-        metric: "Avg Punch Time: 6.8s",
+        metric: "Illustrative sample data",
         lines: [
           "TABLE: T-12 [Dine-In, 4 Pax]",
           "+ 2x Butter Chicken (Special)",
@@ -58,21 +57,19 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
     },
     {
       id: "kds",
-      title: "Multi-Station Kitchen Display (KDS)",
-      tagline: "Eliminate lost paper slips and kitchen shouting",
+      title: "Kitchen Order Status",
+      tagline: "View and update order preparation status.",
       description:
-        "Orders routed automatically to designated kitchen prep stations (e.g. Tandoor, Curry, Beverage Bar, Dessert). Real-time timers ensure no table sits waiting.",
+        "Kitchen staff can view incoming orders and mark them as preparing or completed.",
       features: [
-        "Color-coded urgency timers (Green ➔ Amber ➔ Red)",
-        "Preparation station splitting (KOTs sent only to relevant chefs)",
-        "Special cooking notes & allergen alerts highlighted in bold",
-        "1-tap 'Item Ready' signal back to server terminal",
-        "Zero missing tickets during peak dinner rush"
+        "Incoming kitchen order list",
+        "Preparing and completed statuses",
+        "Order status visible to staff"
       ],
       icon: ChefHat,
       codePreview: {
         header: "KDS_STATION_ROUTER // TANDOOR_LINE",
-        metric: "Active Prep Tickets: 4",
+        metric: "Illustrative sample data",
         lines: [
           "TICKET #1048 [Table T-12] - 03m 12s",
           "-> 4x Garlic Naan [CRISPY / EXTRA BUTTER]",
@@ -85,20 +82,19 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
     {
       id: "inventory",
       title: "Recipe-Linked BOM Inventory",
-      tagline: "Automated stock depletion down to the gram",
+      tagline: "Connect recipes to ingredient inventory.",
       description:
-        "Every menu item connects directly to raw material recipes. As dishes are billed, your pantry balances adjust automatically, preventing unexpected stockouts and portion leakage.",
+        "Link menu items to recipes and track ingredient stock changes as orders are recorded.",
       features: [
         "Bill of Materials (BOM) linking raw ingredients to menu recipes",
-        "Real-time low stock threshold alerts for essential staples",
-        "Purchase invoice logging with automated weighted average costing",
-        "Theoretical vs. physical inventory variance audits",
-        "Wastage and spoilage logging by shift"
+        "Low-stock threshold alerts",
+        "Purchase and stock records",
+        "Inventory reports"
       ],
       icon: Boxes,
       codePreview: {
         header: "BOM_STOCK_ENGINE // AUTO_DEDUCT",
-        metric: "Pantry Accuracy: 99.4%",
+        metric: "Illustrative sample data",
         lines: [
           "RECIPE: Paneer Butter Masala (1 Plate)",
           "- Deduct Cottage Cheese: 200g [Batch #B-88]",
@@ -112,20 +108,19 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
     {
       id: "staff",
       title: "Staff Security & Shift Cash Reconciliation",
-      tagline: "Complete accountability for every rupee and drawer open",
+      tagline: "Manage restaurant roles and permissions.",
       description:
-        "Eliminate cash pilferage. Clock-in shifts, log starting float, track manual cash drawer openings, and perform blind close reconciliations at the end of every shift.",
+        "Owners can manage staff access for restaurant operations and review recorded sales activity.",
       features: [
         "Role-Based Access Control (Owner, Manager, Cashier, Kitchen)",
-        "Cash drawer open audit logs with mandatory reason capture",
-        "Blind cash count at shift end to prevent count manipulation",
-        "Staff attendance and shift-wise sales performance tracking",
-        "Automated Day-End (EOD) summary pushed to owner's phone"
+        "Role-based access control",
+        "Staff PIN and permission settings",
+        "Sales reports"
       ],
       icon: ShieldCheck,
       codePreview: {
         header: "SECURITY_AUDIT // SHIFT_CLOSING",
-        metric: "Drawer Variance: Rs. 0.00",
+        metric: "Illustrative sample data",
         lines: [
           "STAFF: Rajesh K. [Cashier Shift #2]",
           "START FLOAT: Rs. 3,000.00",
@@ -138,25 +133,23 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
     },
     {
       id: "analytics",
-      title: "Owner Command & AI Leakage Copilot",
-      tagline: "Crystal-clear decisions without standing over the register",
+      title: "Owner Reports & AI Copilot",
+      tagline: "Review restaurant activity from the owner view.",
       description:
-        "Understand exactly which dishes generate your highest gross margin, identify slow table turnover patterns, and receive proactive advice on pricing and prep batches.",
+        "Review available sales reports. AI Copilot access depends on the selected plan and provider setup.",
       features: [
-        "Real-time revenue, gross margin, and tax tracking from any mobile browser",
-        "Hourly sales distribution curve to optimize staffing schedules",
-        "Top & bottom selling menu engineering matrices",
-        "Automated daily profit & loss breakdown",
-        "Multi-outlet comparative sales benchmarking"
+        "Basic sales reports",
+        "AI Copilot access on supported plans",
+        "Single outlet per restaurant"
       ],
       icon: TrendingUp,
       codePreview: {
         header: "COPILOT_INTELLIGENCE // LIVE_PULSE",
-        metric: "Margin Health: 68.2%",
+        metric: "Illustrative sample data",
         lines: [
-          "TODAY GROSS: Rs. 84,200 (↑ 14% vs. last Friday)",
+          "TODAY GROSS: Sample amount",
           "PEAK HOUR: 20:00 - 21:30 (Avg. ticket: Rs. 920)",
-          "MENU INSIGHT: 'Paneer Lababdar' margin is 74%",
+          "MENU INSIGHT: Sample margin view",
           "SUGGESTION: Prep 6L base gravy before 19:30 rush",
           "STATUS: ALL 3 OUTLETS SYNCED"
         ]
@@ -180,7 +173,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               <span className="text-[#6E8F45] italic">Every gram</span> accounted for.
             </h1>
             <p className="text-base sm:text-lg text-[#A6AEA0] leading-relaxed">
-              Explore the modular architecture powering Aatmyam POS. Built from the ground up to eliminate restaurant friction across billing, kitchen line dispatch, inventory depletion, and owner reconciliation.
+              Explore the current Aatmyam POS workflows for order entry, kitchen order status, inventory, and staff access.
             </p>
             <div className="pt-2 flex flex-wrap items-center gap-3">
               <button
@@ -264,7 +257,8 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
 
             {/* Right Terminal Logic Simulator */}
             <div className="lg:col-span-5">
-              <div className="bg-[#181A18] rounded-2xl p-5 border border-[#2E332D] font-mono text-xs shadow-inner">
+                <div className="bg-[#181A18] rounded-2xl p-5 border border-[#2E332D] font-mono text-xs shadow-inner">
+                <p className="mb-3 text-[10px] font-sans text-[#A6AEA0]">Illustrative interface only; figures shown are sample data, not restaurant results.</p>
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#2E332D]">
                   <span className="text-[11px] text-[#6E8F45] font-bold">
                     {modules[activeModule].codePreview.header}
@@ -290,8 +284,8 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
                   ))}
                 </div>
                 <div className="pt-4 mt-4 border-t border-[#2E332D] flex items-center justify-between text-[10px] text-[#787F74]">
-                  <span>Sub-50ms sync latency</span>
-                  <span className="text-[#6E8F45]">● ACTIVE ENGINE</span>
+                  <span>Product preview</span>
+                  <span className="text-[#6E8F45]">● SAMPLE</span>
                 </div>
               </div>
             </div>
@@ -328,7 +322,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               </div>
               <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Order Captured</h3>
               <p className="text-xs text-[#A6AEA0] leading-relaxed">
-                Guest sits at Table 7. Server enters items on tablet in 8 seconds. Bill state locked.
+                Staff records a table order. The order appears in the restaurant workflow.
               </p>
             </div>
 
@@ -339,7 +333,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
                 </span>
                 <span className="text-[11px] font-mono text-[#A6AEA0]">19:42 PM (+0.1s)</span>
               </div>
-              <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">KDS Dispatch</h3>
+              <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Kitchen Status Updated</h3>
               <p className="text-xs text-[#A6AEA0] leading-relaxed">
                 Kitchen stations receive split tickets. Chef acknowledges prep time timer.
               </p>
@@ -352,9 +346,9 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
                 </span>
                 <span className="text-[11px] font-mono text-[#A6AEA0]">20:15 PM</span>
               </div>
-              <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Instant Payment</h3>
+              <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Payment Recorded</h3>
               <p className="text-xs text-[#A6AEA0] leading-relaxed">
-                Server displays dynamic UPI QR code. Diner scans & pays in 4 seconds. Receipt prints.
+                Staff records the selected payment method for the order.
               </p>
             </div>
 

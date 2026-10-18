@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { RestaurantTenant, StaffMember } from "../shared/types";
 import { ApiClient } from "../shared/services/api";
+import { PLAN_LIMITS } from "../../../shared/planCatalog";
 import {
   Sparkles,
   Send,
@@ -105,23 +106,16 @@ How can I help you or your restaurant today? (Feel free to ask in English or Hin
 
       // Smart offline fallback
       setTimeout(() => {
-        let reply = "Aatmyam POS is the calm command center for restaurants, cafés, QSRs, and cloud kitchens. It combines ultra-fast touch billing, multi-course KOTs, recipe-level inventory deduction, and real-time owner analytics.";
-
+        const planSummary = Object.values(PLAN_LIMITS).map(plan => `• ${plan.label}: ₹${plan.price}/month`).join("\n");
+        let reply = "Aatmyam POS is in early access for restaurants and cafés. Explore billing, kitchen tickets, inventory, and reports in a walkthrough.";
+        
         const lowercaseText = text.toLowerCase();
-        if (lowercaseText.includes("hindi") || lowercaseText.includes("kya") || lowercaseText.includes("kaise") || lowercaseText.includes("dam") || lowercaseText.includes("price")) {
-          reply = `Aatmyam POS restaurants aur cafés ke liye complete software hai:
-1. Fast PIN Billing: Sub-100ms speed se quick bills aur UPI payments.
-2. Kitchen KOT & KDS: Stations ke hisab se automatic orders dispatch.
-3. Recipe & Stock BOM: Har dish bikne par raw materials gram-to-gram deduct hote hain.
-4. Pricing: Starter plan ₹799/month se start hota hai, aur 48 hours me aapka menu live ho jata hai!`;
+        if (lowercaseText.includes("price") || lowercaseText.includes("cost") || lowercaseText.includes("plan") || lowercaseText.includes("pricing") || lowercaseText.includes("dam")) {
+          reply = `Aatmyam POS monthly plans:\n${planSummary}\nOne outlet per restaurant. Contact us to discuss setup and availability.`;
+        } else if (lowercaseText.includes("hindi") || lowercaseText.includes("kya") || lowercaseText.includes("kaise")) {
+          reply = `Aatmyam POS abhi early access mein hai. Ismein billing, kitchen tickets aur inventory workflows ka walkthrough dekh sakte hain.\nMonthly plans:\n${planSummary}\nSetup timing aur device compatibility aapke restaurant ke liye check karni hogi.`;
         } else if (lowercaseText.includes("recipe") || lowercaseText.includes("ingredient") || lowercaseText.includes("stock") || lowercaseText.includes("inventory")) {
           reply = `In Aatmyam POS, each dish links to raw ingredients via our Bill of Materials (BOM). When a cashier checks out an order at the POS, ingredient quantities (like cheese, coffee beans, sauces) are automatically deducted in real time, preventing inventory leakage.`;
-        } else if (lowercaseText.includes("price") || lowercaseText.includes("cost") || lowercaseText.includes("plan") || lowercaseText.includes("pricing")) {
-          reply = `Aatmyam POS offers simple, transparent tiers:
-• Starter / Counter: ₹799/mo (billed annually) for single counter QSRs & cafés.
-• Growth / Full Dine-In: ₹1,499/mo with table layouts, paced KOTs & recipe BOM.
-• Multi-Outlet: ₹2,999/mo for multi-location groups.
-All plans include free updates and zero hardware lease lock-ins!`;
         } else if (lowercaseText.includes("hardware") || lowercaseText.includes("printer") || lowercaseText.includes("ipad") || lowercaseText.includes("tablet")) {
           reply = `Aatmyam POS runs in any modern browser on iPads, Android tablets, Windows laptops, MacBooks, and phones. It connects seamlessly with standard 58mm/80mm ESC/POS thermal receipt and kitchen ticket printers over Bluetooth, USB, and LAN/Wi-Fi.`;
         } else if (lowercaseText.includes("login") || lowercaseText.includes("terminal") || lowercaseText.includes("sign in")) {
@@ -160,7 +154,7 @@ All plans include free updates and zero hardware lease lock-ins!`;
         </span>
         <Sparkles className="w-5 h-5 text-[#84A955] group-hover:rotate-12 transition-transform" />
         <span className="text-xs font-bold font-mono max-w-0 overflow-hidden group-hover:max-w-[160px] transition-all duration-300 whitespace-nowrap pl-0 group-hover:pl-1">
-          Ask Veggie AI
+          Ask Aatmyam AI
         </span>
       </button>
 
@@ -209,7 +203,7 @@ All plans include free updates and zero hardware lease lock-ins!`;
                 >
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="text-[9px] text-[#787F74] font-mono uppercase tracking-wide">
-                      {msg.sender === "ai" ? "Veggie AI Assistant" : "You"}
+                      {msg.sender === "ai" ? "Aatmyam AI Assistant" : "You"}
                     </span>
                     <span className="text-[8px] text-[#A6AEA0] font-mono">• {msg.timestamp}</span>
                   </div>
@@ -227,7 +221,7 @@ All plans include free updates and zero hardware lease lock-ins!`;
 
               {isTyping && (
                 <div className="flex flex-col max-w-[85%] self-start mr-auto">
-                  <span className="text-[9px] text-[#787F74] font-mono mb-1">VEGGIE AI IS THINKING...</span>
+                  <span className="text-[9px] text-[#787F74] font-mono mb-1">AATMYAM AI IS THINKING...</span>
                   <div className="bg-[#F4F0E8] border border-[#EAE5DA] p-3.5 rounded-2xl rounded-tl-none flex items-center gap-2">
                     <span className="w-2 h-2 bg-[#6E8F45] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
                     <span className="w-2 h-2 bg-[#6E8F45] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />

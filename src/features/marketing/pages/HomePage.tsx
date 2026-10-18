@@ -32,10 +32,10 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     {
       id: "01",
       station: "Counter Register",
-      title: "Order Placed in 8 Seconds",
-      metric: "Sub-10s turnaround",
+      title: "Order Entry",
+      metric: "Billing and order entry",
       description:
-        "Cashier or server taps table, punches item modifiers, and displays dynamic UPI QR code. No laggy dropdowns, no double-clicking.",
+        "Staff can record table orders and item details in the POS.",
       statusColor: "bg-[#6E8F45]",
       badge: "Instant Sync"
     },
@@ -43,29 +43,29 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       id: "02",
       station: "Kitchen Pass",
       title: "KOT Fired to Cooking Stations",
-      metric: "0 Lost Paper Slips",
+      metric: "Kitchen order status",
       description:
-        "Kitchen display screens and thermal printers update simultaneously with special cooking notes (e.g. 'Less Oil / Extra Spicy').",
+        "Kitchen staff can view incoming orders and update their preparation status.",
       statusColor: "bg-[#6E8F45]",
       badge: "Live Broadcast"
     },
     {
       id: "03",
       station: "Pantry & Stock",
-      title: "Ingredients Auto-Deducted to the Gram",
-      metric: "99.2% Stock Precision",
+      title: "Recipe-Linked Inventory",
+      metric: "Recipe stock tracking",
       description:
-        "When 1 Paneer Tikka is billed, 200g cottage cheese, 40g marinade, and 15g butter are deducted automatically from live batch inventory.",
+        "Link menu items to ingredient recipes and track stock changes as orders are recorded.",
       statusColor: "bg-[#6E8F45]",
       badge: "BOM Recipe Mapping"
     },
     {
       id: "04",
       station: "Owner Command",
-      title: "Reconciliation & Leakage Alert",
-      metric: "Zero Pilferage Gap",
+      title: "Staff Permissions",
+      metric: "Role-based access",
       description:
-        "End-of-shift cash drawer balance, discounts, and item cancellations require authorized PIN validation and appear on the mobile dashboard.",
+        "Owners can manage staff roles and permissions for restaurant operations.",
       statusColor: "bg-[#D97706]",
       badge: "Saffron Audit Flag"
     }
@@ -85,9 +85,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               {/* Category Pill */}
               <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#EBF2E4] border border-[#D5E3C8] text-xs font-mono font-bold text-[#567234]">
                 <span className="w-2 h-2 rounded-full bg-[#6E8F45] animate-pulse"></span>
-                <span>Hospitality Command Standard</span>
+                <span>Early access</span>
                 <span className="text-[#84A955]">|</span>
-                <span>Multi-Station Restaurant OS</span>
+                <span>Restaurant POS</span>
               </div>
 
               {/* Main Headline */}
@@ -99,7 +99,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               {/* Editorial Subhead */}
               <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed max-w-2xl">
                 Aatmyam POS is the calm operational command center for independent kitchens and single-outlet restaurants.
-                Fast 4-digit PIN counter billing, synchronized KOTs, automated recipe-level stock deductions, and real-time leakage alerts—unified on the hardware you already own.
+                Order entry, kitchen status, recipe-linked inventory, and staff permissions for single-outlet restaurants.
               </p>
 
               {/* Action Buttons & Assurance */}
@@ -109,7 +109,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                   id="hero-book-demo-btn"
                   className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-sm font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition-all duration-200 shadow-md hover:shadow-lg cursor-pointer border border-[#2E332D]"
                 >
-                  <span>Book a 15-Minute Walkthrough</span>
+                  <span>Request a Product Walkthrough</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
 
@@ -123,20 +123,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 </button>
               </div>
 
-              {/* Trust Tokens */}
-              <div className="pt-4 grid grid-cols-3 gap-4 border-t border-[#EAE5DA] text-xs">
-                <div>
-                  <p className="font-serif text-lg font-bold text-[#181A18]">8 Sec</p>
-                  <p className="text-[11px] text-[#787F74]">Average check-out speed</p>
-                </div>
-                <div>
-                  <p className="font-serif text-lg font-bold text-[#6E8F45]">100%</p>
-                  <p className="text-[11px] text-[#787F74]">Kitchen status updates</p>
-                </div>
-                <div>
-                  <p className="font-serif text-lg font-bold text-[#D97706]">&lt; 14 Days</p>
-                  <p className="text-[11px] text-[#787F74]">Typical payback on leakage</p>
-                </div>
+              <div className="pt-4 border-t border-[#EAE5DA] text-xs text-[#787F74]">
+                Aatmyam POS is in early access. Request a walkthrough to review the current product.
               </div>
             </div>
 
@@ -150,10 +138,10 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                     <span className="w-3 h-3 rounded-full bg-[#E57373]/80"></span>
                     <span className="w-3 h-3 rounded-full bg-[#FFD54F]/80"></span>
                     <span className="w-3 h-3 rounded-full bg-[#81C784]/80"></span>
-                    <span className="text-[11px] font-mono text-[#A6AEA0] ml-2">Live Floor Console</span>
+                    <span className="text-[11px] font-mono text-[#A6AEA0] ml-2">Illustrative product preview</span>
                   </div>
                   <span className="text-[10px] font-mono bg-[#242823] px-2 py-0.5 rounded text-[#6E8F45] border border-[#2E332D]">
-                    Outlet #01 • Peak Mode
+                    Sample outlet • Demo data
                   </span>
                 </div>
 
