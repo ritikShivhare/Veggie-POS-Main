@@ -4,6 +4,7 @@ import http from "http";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import {validateStartup} from "./server-startup-validation";
+import {mountStaticClient} from "./server/static-client";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -226,10 +227,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist', 'client');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    mountStaticClient(app, distPath);
   }
 
   const httpServer = http.createServer(app);

@@ -1,3 +1,4 @@
+import {startVisiblePolling} from '../utils/visiblePolling';
 import { ApiClient } from "../services/api";
 import React, { useState, useEffect } from "react";
 import {
@@ -105,9 +106,7 @@ export default function EventDrivenDashboard() {
   };
 
   useEffect(() => {
-    fetchEventData();
-    const interval = setInterval(() => fetchEventData(true), 6000);
-    return () => clearInterval(interval);
+    return startVisiblePolling(fetchEventData, 6000);
   }, []);
 
   const handlePublishEvent = async (type: string, payload: any) => {

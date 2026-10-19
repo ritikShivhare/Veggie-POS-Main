@@ -1,3 +1,4 @@
+import {startVisiblePolling} from '../utils/visiblePolling';
 import {useAppContext} from '../context/AppContext';
 import { ApiClient } from "../services/api";
 import React, { useState, useEffect, useRef } from "react";
@@ -81,9 +82,7 @@ export default function NotificationCenter() {
   };
 
   useEffect(() => {
-    fetchNotificationData();
-    const interval = setInterval(() => fetchNotificationData(true), 8000);
-    return () => clearInterval(interval);
+    return startVisiblePolling(fetchNotificationData, 8000);
   }, []);
 
   const handleMarkAsRead = async (id: string) => {

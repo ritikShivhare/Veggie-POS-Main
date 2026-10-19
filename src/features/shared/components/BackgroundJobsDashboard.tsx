@@ -1,3 +1,4 @@
+import {startVisiblePolling} from '../utils/visiblePolling';
 import { ApiClient } from "../services/api";
 import React, { useState, useEffect } from "react";
 import {
@@ -69,10 +70,7 @@ export default function BackgroundJobsDashboard() {
   };
 
   useEffect(() => {
-    fetchJobsAndLogs();
-    // Auto-refresh every 10 seconds for real-time live monitoring feel
-    const interval = setInterval(() => fetchJobsAndLogs(), 10000);
-    return () => clearInterval(interval);
+    return startVisiblePolling(() => fetchJobsAndLogs(), 10000);
   }, []);
 
   const handleTriggerJob = async (jobId: string) => {

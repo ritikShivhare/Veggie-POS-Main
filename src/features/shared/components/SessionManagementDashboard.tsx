@@ -1,3 +1,4 @@
+import {startVisiblePolling} from '../utils/visiblePolling';
 import { ApiClient } from "../services/api";
 import React, { useState, useEffect } from "react";
 import {
@@ -125,9 +126,7 @@ export default function SessionManagementDashboard({
   };
 
   useEffect(() => {
-    fetchSessionData();
-    const interval = setInterval(() => fetchSessionData(true), 12000);
-    return () => clearInterval(interval);
+    return startVisiblePolling(fetchSessionData, 12000);
   }, []);
 
   const handleRevokeSession = async (sessionId: string) => {

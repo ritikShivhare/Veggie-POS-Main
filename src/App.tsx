@@ -1,3 +1,4 @@
+import {startVisiblePolling} from './features/shared/utils/visiblePolling';
 import SyncQueueStatus from "./features/shared/components/SyncQueueStatus";
 import React, { useState, useEffect } from "react";
 import { StaffMember, RestaurantTenant } from "./features/shared/types";
@@ -172,8 +173,8 @@ function AppContent() {
         setUnreadNotifsCount(notifications.filter((n:any)=>!n.read).length);
       }catch(err){console.warn('Failed to poll unread notifications:',err);}finally{busy=false;}
     };
-    fetchUnreadCount();const interval=setInterval(fetchUnreadCount,10000);
-    return()=>{active=false;clearInterval(interval);};
+    const stopPolling=startVisiblePolling(fetchUnreadCount,10000);
+    return()=>{active=false;stopPolling();};
   },[activeTenant.tenantId,currentStaff?.id,currentSessionId]);
 
   const handleSignupSuccess = (data: {

@@ -9,7 +9,7 @@ export function offlineShellPlugin():Plugin {
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('aatmyam-shell-')&&k!==CACHE).map(k=>caches.delete(k))))));
 self.addEventListener('fetch',e=>{const r=e.request,u=new URL(r.url);if(r.method!=='GET'||u.origin!==self.location.origin||u.pathname.startsWith('/api/')||u.pathname==='/ws')return;
-if(r.mode==='navigate'){e.respondWith(fetch(r).catch(()=>caches.match('/index.html')));return;}
+if(r.mode==='navigate'||u.pathname==='/'||u.pathname==='/index.html'){e.respondWith(fetch(r,{cache:'no-cache'}).catch(()=>caches.match('/index.html')));return;}
 if(ASSETS.includes(u.pathname))e.respondWith(caches.match(r).then(hit=>hit||fetch(r)));});`});
   }};
 }

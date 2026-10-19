@@ -1,3 +1,4 @@
+import {startVisiblePolling} from '../utils/visiblePolling';
 import { ApiClient } from "../services/api";
 import React, { useState, useEffect } from "react";
 import {
@@ -193,15 +194,9 @@ export default function ApplicationMonitoringDashboard() {
   };
 
   useEffect(() => {
-    fetchTelemetryData();
-    fetchRedisStatus();
-    fetchBackups();
-    const interval = setInterval(() => {
-      fetchTelemetryData(true);
-      fetchRedisStatus();
-      fetchBackups(true);
-    }, 3000);
-    return () => clearInterval(interval);
+    return startVisiblePolling(silent => Promise.all([
+      fetchTelemetryData(silent), fetchRedisStatus(), fetchBackups(silent)
+    ]), 3000);
   }, [isLiveStreaming]);
 
   const handleClearLogs = async () => {
