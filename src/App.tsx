@@ -693,11 +693,11 @@ function AppContent() {
             <NotificationCenter key={activeTenant.tenantId+':'+currentStaff.id}/>
           )}
 
-          {activeTab === "events" && (
+          {activeTab === "events" && currentStaff.role === "Owner" && (
             <EventDrivenDashboard />
           )}
 
-          {activeTab === "settings" && (
+          {activeTab === "settings" && currentStaff.role === "Owner" && (
             <React.Suspense fallback={
               <div className="flex flex-col items-center justify-center p-12 space-y-4">
                 <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
@@ -729,7 +729,7 @@ function AppContent() {
             </React.Suspense>
           )}
 
-          {activeTab === "security" && (
+          {activeTab === "security" && currentStaff.role === "Owner" && (
             <SessionManagementDashboard
               currentSessionId={currentSessionId}
               onSessionTerminated={handleLogout}
