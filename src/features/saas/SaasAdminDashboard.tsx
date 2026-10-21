@@ -380,16 +380,53 @@ export default function SaasAdminDashboard({
           {label}
         </button>)}
       </nav>
-      {["billing","activity","support","analytics","security"].includes(activeAdminTab) && (
+      {activeAdminTab === "billing" && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4" aria-label="Billing and Subscriptions">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 className="font-bold text-base text-slate-900">Billing &amp; Subscriptions</h2>
+              <p className="text-xs text-slate-600 mt-1">Read-only status from the authenticated restaurant registry. Payments and invoices are not available in this view.</p></div>
+            <button type="button" onClick={fetchTenants} disabled={isLoading}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold disabled:opacity-50">Refresh subscription data</button>
+          </div>
+          {error && <p role="alert" className="text-sm text-rose-700">Unable to refresh restaurant data: {error}</p>}
+          {localTenants.length === 0 ? <p className="text-sm text-slate-500">No registered restaurants to display.</p> :
+            <div className="overflow-x-auto"><table className="min-w-full text-left text-xs">
+              <thead><tr className="border-b border-slate-200 text-slate-600">
+                <th className="p-3">Restaurant</th><th className="p-3">Plan</th><th className="p-3">Subscription status</th>
+                <th className="p-3">Trial ends</th><th className="p-3">Cycle orders</th><th className="p-3">Staff</th>
+              </tr></thead>
+              <tbody>{localTenants.map(t => <tr key={t.tenantId} className="border-b border-slate-100">
+                <td className="p-3 font-semibold">{t.name}</td>
+                <td className="p-3">{t.plan || "Not available"}</td>
+                <td className="p-3">{t.planStatus || "Not available"}</td>
+                <td className="p-3">{(t as any).subscription?.trialEndsAt || "—"}</td>
+                <td className="p-3">{t.usage?.monthlyOrders ?? "—"}</td>
+                <td className="p-3">{t.usage?.staffCount ?? "—"}</td>
+              </tr>)}</tbody>
+            </table></div>}
+        </section>
+      )}
+      {activeAdminTab === "analytics" && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4" aria-label="Restaurant Analytics">
+          <h2 className="font-bold text-base text-slate-900">Restaurant Analytics</h2>
+          <p className="text-xs text-slate-600">Registry overview only. Revenue, payment conversion, retention and historical trends require a separate verified analytics API.</p>
+          {error && <p role="alert" className="text-sm text-rose-700">Restaurant data refresh issue: {error}</p>}
+          <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl bg-slate-50 p-4"><dt className="text-xs text-slate-500">Registered restaurants</dt>
+              <dd className="text-xl font-bold">{localTenants.length}</dd></div>
+            <div className="rounded-xl bg-slate-50 p-4"><dt className="text-xs text-slate-500">Active workspaces</dt>
+              <dd className="text-xl font-bold">{localTenants.filter(t => t.status === "active").length}</dd></div>
+            <div className="rounded-xl bg-slate-50 p-4"><dt className="text-xs text-slate-500">Suspended workspaces</dt>
+              <dd className="text-xl font-bold">{localTenants.filter(t => t.status === "suspended").length}</dd></div>
+          </dl>
+        </section>
+      )}
+      {(["activity","support","security"] as const).includes(activeAdminTab as "activity" | "support" | "security") && (
         <section className="rounded-2xl border border-slate-200 bg-white p-5" aria-label="Control Center section status">
           <h2 className="font-bold text-base text-slate-900">
-            {({"billing":"Billing & Subscriptions","activity":"Activity & Audit","support":"Support",
-              "analytics":"Analytics","security":"Settings & Security"} as Record<string,string>)[activeAdminTab]}
+            {({"activity":"Activity & Audit","support":"Support","security":"Settings & Security"} as Record<string,string>)[activeAdminTab]}
           </h2>
-          <p className="text-sm text-slate-600 mt-2">
-            This section is not yet connected to a verified management API. Use Restaurants for available
-            tenant subscription details; no simulated payments or customer activity is shown.
-          </p>
+          <p className="text-sm text-slate-600 mt-2">This section is not yet connected to an authorized management API. No fabricated records are displayed.</p>
         </section>
       )}
       {/* 1. TOP HEADER BANNER - SEAMLESS DYNAMIC INFOGRAPHIC */}
