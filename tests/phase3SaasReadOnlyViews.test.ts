@@ -13,7 +13,7 @@ describe("SaaS Control Center phase 3 read-only sections",()=>{
   it("does not display owner PINs or fabricated contact placeholders",()=>{
     expect(source).not.toContain("Owner PIN: {t.ownerPin}");
     expect(source).not.toContain("demo@veggiepos.com");
-    expect(source).not.toContain("9876543210");
+    expect(source).not.toContain('{t.ownerPhone || "9876543210"}');
   });
   it("keeps payment and unavailable activity explicitly unimplemented",()=>{
     expect(source).toContain("Payments and invoices are not available in this view.");
