@@ -59,7 +59,7 @@ export default function SettingsPanel({
   const [testingSentry, setTestingSentry] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
 
-  const [subTab, setSubTab] = useState<"general" | "password" | "language" | "advanced">("general");
+  const [subTab, setSubTab] = useState<"general" | "billing" | "password" | "language" | "advanced">("general");
   const [currentLang, setCurrentLang] = useState<string>(() => {
     return localStorage.getItem("veggiepos_language") || "en";
   });
@@ -391,9 +391,15 @@ export default function SettingsPanel({
 
   return (
     <div className="h-full p-6 bg-[#f8fafc] overflow-y-auto space-y-6">
-      <div className="max-w-6xl mx-auto">
-        <BillingSettings tenantId={activeTenant.tenantId} />
-      </div>
+      {/* The subscription panel is mounted only on Billing & Payments; other controls stay unchanged. */}
+      {subTab === "billing" && (
+        <div className="max-w-6xl mx-auto">
+          <BillingSettings tenantId={activeTenant.tenantId} />
+          <p className="mt-3 text-xs text-slate-500">
+            Receipt tax, GSTIN and manual UPI details remain in General during the next Settings reorganization step.
+          </p>
+        </div>
+      )}
 
       {/* Sub-Tabs Selector */}
       <div className="max-w-6xl mx-auto bg-white border border-slate-200 rounded-xl p-1.5 flex gap-2 shadow-sm">
@@ -409,6 +415,10 @@ export default function SettingsPanel({
           <span>{t("generalTab")}</span>
         </button>
 
+        <button type="button" onClick={() => setSubTab("billing")}
+          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition flex items-center justify-center gap-2 ${subTab === "billing" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+          <Receipt className="w-4 h-4" /><span>Billing &amp; Payments</span>
+        </button>
         <button
           onClick={() => setSubTab("password")}
           className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
