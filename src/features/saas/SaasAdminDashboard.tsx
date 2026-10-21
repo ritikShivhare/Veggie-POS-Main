@@ -86,6 +86,21 @@ export default function SaasAdminDashboard({
   const [activeAdminTab, setActiveAdminTab] = useState<"overview" | "tenants" | "leads" | "syncLogs" | "billing" | "activity" | "support" | "analytics" | "security">("overview");
 
   const [inspectedTenantId, setInspectedTenantId] = useState<string | null>(null);
+  const [platformAudit, setPlatformAudit] = useState<Array<{id:string;timestamp:string;eventType:string;actor:string;description:string}>>([]);
+  const [auditLoading,setAuditLoading] = useState(false);
+  const [auditError,setAuditError] = useState<string | null>(null);
+
+  useEffect(()=>{
+    if(activeAdminTab!=="activity") return;
+    let active=true;
+    setAuditLoading(true);setAuditError(null);
+    fetch("/api/admin/audit",{credentials:"include",headers:{"x-session-id":currentSessionId || "","x-tenant-id":"saas-admin"}})
+      .then(async response=>{if(!response.ok)throw new Error("Audit API unavailable");return response.json();})
+      .then(result=>{if(active){if(!result.success)throw new Error("Audit data unavailable");setPlatformAudit(Array.isArray(result.logs)?result.logs:[]);}})
+      .catch(()=>{if(active)setAuditError("Could not load platform audit history.");})
+      .finally(()=>{if(active)setAuditLoading(false);});
+    return ()=>{active=false;};
+  },[activeAdminTab,currentSessionId]);
 
   // Walkthrough Leads states (Option 1 & Address feature)
   const [leads, setLeads] = useState<WalkthroughLead[]>([]);
@@ -421,7 +436,19 @@ export default function SaasAdminDashboard({
           </dl>
         </section>
       )}
-      {(["activity","support","security"] as const).includes(activeAdminTab as "activity" | "support" | "security") && (
+      {activeAdminTab==="activity" && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3" aria-label="Platform Activity and Audit">
+          <h2 className="font-bold text-base">Activity &amp; Audit</h2>
+          <p className="text-xs text-slate-500">Read-only SaaS administration events. Restaurant-level records are not included.</p>
+          {auditLoading ? <p role="status">Loading audit events…</p> : auditError ? <p role="alert" className="text-red-700">{auditError}</p> :
+           platformAudit.length===0 ? <p className="text-sm text-slate-500">No administrator audit events recorded.</p> :
+           <div className="overflow-x-auto"><table className="min-w-full text-xs text-left">
+             <thead><tr><th className="p-2">Time</th><th className="p-2">Action</th><th className="p-2">Actor</th><th className="p-2">Description</th></tr></thead>
+             <tbody>{platformAudit.map(event=><tr key={event.id} className="border-t border-slate-100"><td className="p-2">{event.timestamp}</td><td className="p-2">{event.eventType}</td><td className="p-2">{event.actor}</td><td className="p-2">{event.description}</td></tr>)}</tbody>
+           </table></div>}
+        </section>
+      )}
+      {(["support","security"] as const).includes(activeAdminTab as "support" | "security") && (
         <section className="rounded-2xl border border-slate-200 bg-white p-5" aria-label="Control Center section status">
           <h2 className="font-bold text-base text-slate-900">
             {({"activity":"Activity & Audit","support":"Support","security":"Settings & Security"} as Record<string,string>)[activeAdminTab]}
