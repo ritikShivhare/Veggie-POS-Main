@@ -26,7 +26,8 @@ export default function StaffShifts({
   activeTenant,
   setActiveTab
 }: StaffShiftsProps) {
-  const isManagerOrOwner = currentStaff.role === "Owner" || currentStaff.role === "Manager";
+  const isOwner = currentStaff.role === "Owner";
+  const isManagerOrOwner = isOwner || currentStaff.role === "Manager";
   const [billingPlan,setBillingPlan]=useState<any>(null);
   useEffect(()=>{if(!activeTenant?.tenantId)return;let active=true;fetch(`/api/billing/subscription?tenantId=${encodeURIComponent(activeTenant?.tenantId || "")}`,{credentials:"include",headers:{"x-session-id":ApiClient.getSessionId() || ""}}).then(r=>r.json()).then(data=>{if(active && data.success)setBillingPlan(data);}).catch(()=>{});return ()=>{active=false;};},[activeTenant?.tenantId]);
   const planName = billingPlan?.subscription?.plan || activeTenant?.plan || "free";
@@ -161,7 +162,7 @@ export default function StaffShifts({
 
   const handleRegisterStaff = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSaving || needsRefresh) return;
+    if (!isOwner || isSaving || needsRefresh) return;
     setFormError("");
     setFormSuccess("");
 
@@ -227,7 +228,7 @@ export default function StaffShifts({
   };
 
   const handleDeleteStaffMember=async(staffId:string)=>{
-    if (isSaving || needsRefresh) return;
+    if (!isOwner || isSaving || needsRefresh) return;
     setFormError(""); setFormSuccess(""); setIsSaving(true);
     try {
       const response=await ApiClient.authenticatedFetch(`/api/staff/${encodeURIComponent(staffId)}`,{method:"DELETE"});const data=await response.json();
@@ -370,10 +371,10 @@ export default function StaffShifts({
                 </button>
               </div>
 
-              {/* Add Staff Member (Owner / Manager only) */}
-              {isManagerOrOwner && (
+              {/* Team membership and staff credentials are Owner-only; managers keep shift oversight. */}
+              {isOwner && (
                 <div className="space-y-6">
-                  {/* Staff Login QR Code Banner for Owner/Manager */}
+                  {/* Staff Login QR Code Banner for Owner */}
                   {activeTenant && (
                     <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900 to-indigo-950/40 border border-emerald-500/30 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                       <div className="flex items-start gap-3.5">
@@ -493,7 +494,6 @@ export default function StaffShifts({
                             { id: "billing", label: "POS & Billing", desc: "Orders & Tables" },
                             { id: "inventory", label: "Inventory & Stock", desc: "Stock & Recipes" },
                             { id: "reports", label: "Reports & Insights", desc: "Sales & Analytics" },
-                            { id: "settings", label: "Settings & Setup", desc: "Printer & Config" }
                           ].map((perm) => {
                             const active = newPerms.includes(perm.id);
                             return (
