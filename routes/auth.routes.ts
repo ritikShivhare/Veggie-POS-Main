@@ -502,7 +502,7 @@ router.get("/auth/tenant-info", async (req, res) => {
 });
 
 // Rotate / Change QR Code for restaurant staff access (Protected by session auth & settings permission)
-router.post("/auth/tenant/regenerate-qr", authMiddleware, requirePermission("settings"), async (req, res) => {
+router.post("/auth/tenant/regenerate-qr", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant could not be resolved from session" });
@@ -722,7 +722,7 @@ router.post("/auth/unlock-override", async (req, res) => {
     const targetTenant = globalTenants.find(t => t.tenantId === tenantId || t.id === tenantId);
 
     const staff = (await staffRepo.getAll(tenantId)) || [];
-    const owner = staff.find(s => s.role === "Owner" || s.permissions.includes("settings"));
+    const owner = staff.find(s => s.role === "Owner");
 
     // Strictly require MASTER_VERIFICATION_CODE from environment variable; no fallback default string
     const isMasterCode = verifyMasterVerificationCode(masterPin);
@@ -965,7 +965,7 @@ router.post("/auth/sessions/revoke", authMiddleware, requireRole("Owner"), async
   }
 });
 
-router.post("/auth/sessions/revoke-all", authMiddleware, requirePermission("settings"), async (req, res) => {
+router.post("/auth/sessions/revoke-all", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { exceptSessionId } = req.body;
   try {
@@ -983,7 +983,7 @@ router.post("/auth/sessions/revoke-all", authMiddleware, requirePermission("sett
   }
 });
 
-router.post("/auth/history/clear", authMiddleware, requirePermission("settings"), async (req, res) => {
+router.post("/auth/history/clear", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await sessionService.clearLoginHistory(tenantId);
@@ -993,7 +993,7 @@ router.post("/auth/history/clear", authMiddleware, requirePermission("settings")
   }
 });
 
-router.post("/auth/settings/update", authMiddleware, requirePermission("settings"), async (req, res) => {
+router.post("/auth/settings/update", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { sessionTimeoutMinutes, maxFailedAttempts, lockoutDurationSeconds, enableBruteForceProtection } = req.body;
   try {
