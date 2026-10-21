@@ -310,7 +310,7 @@ export default function SaasAdminDashboard({
         });
         const data = await res.json();
         if (data.success) {
-          setRegSuccess(`Restaurant "${businessName}" successfully registered & database schema initialized!`);
+          setRegSuccess(`Restaurant "${businessName}" successfully registered in the database.`);
           fetchTenants();
 
           // Trigger the App.tsx prop logic too to keep client collections in sync if needed
@@ -340,26 +340,7 @@ export default function SaasAdminDashboard({
         setRegError(err.message || "Connection error.");
       }
     } else {
-      // Fallback fallback
-      onRegisterBusiness({
-        businessName,
-        ownerName,
-        ownerPhone,
-        email,
-        region,
-        pin
-      });
-      setRegSuccess(`Restaurant "${businessName}" successfully registered locally!`);
-      // Reset fields
-      setBusinessName("");
-      setOwnerName("");
-      setOwnerPhone("");
-      setEmail("");
-      setPin("");
-      setTimeout(() => {
-        setShowQuickRegister(false);
-        setRegSuccess("");
-      }, 3000);
+      setRegError("Super Admin session is required. Sign in with MFA before registering a restaurant.");
     }
   };
 
