@@ -1,5 +1,6 @@
 import NotificationRoutingSettings from './NotificationRoutingSettings';
 import OwnerAuditReadOnly from './OwnerAuditReadOnly';
+import { getReceiptPaperSize, saveReceiptPaperSize, type ReceiptPaperSize } from '../utils/receiptPaperSize';
 import StaffAccessEditor from "../../staff/StaffAccessEditor";
 import { ApiClient } from "../services/api";
 import { offlineRepository } from "../services/offline";
@@ -55,6 +56,7 @@ export default function SettingsPanel({
   tenants,
   setTenants
 }: SettingsPanelProps) {
+  const [receiptPaperSize, setReceiptPaperSize] = useState<ReceiptPaperSize>(getReceiptPaperSize);
   const [testingSlack, setTestingSlack] = useState(false);
   const [testingSentry, setTestingSentry] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
@@ -734,7 +736,18 @@ export default function SettingsPanel({
             <div className="bg-white border border-slate-200 rounded-xl p-5 text-xs text-slate-600 space-y-2">
               <h3 className="font-bold text-slate-900">Receipt &amp; Printer</h3>
               <p>GST, optional GSTIN/FSSAI and manual UPI settings are managed here.</p>
-              <p>Use your browser print dialog with existing receipt print CSS. A configurable 58mm/80mm printer selector is not connected yet.</p>
+              <label htmlFor="receipt-paper-size" className="block font-semibold text-slate-800">Thermal receipt paper width</label>
+              <select id="receipt-paper-size" value={receiptPaperSize}
+                onChange={e => {
+                  const size = e.target.value as ReceiptPaperSize;
+                  saveReceiptPaperSize(size);
+                  setReceiptPaperSize(size);
+                }}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900">
+                <option value="80mm">80mm receipt roll (default)</option>
+                <option value="58mm">58mm receipt roll</option>
+              </select>
+              <p>Saved on this device for browser receipt printing. In the print dialog, select the matching printer and paper size. This does not pair or configure the printer itself.</p>
             </div>
           </div>
         </div>
