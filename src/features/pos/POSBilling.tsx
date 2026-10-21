@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import QRCode from "qrcode";
 import ReceiptTotals from "../shared/components/ReceiptTotals";
+import { getReceiptPaperSize } from "../shared/utils/receiptPaperSize";
 import FssaiRegistration from "../shared/components/FssaiRegistration";
 import { MenuItem, Ingredient, Recipe, CartItem, Order, StaffMember, InventorySettings, OrderStatus, Customer } from "../shared/types";
 import { ApiClient } from "../shared/services/api";
@@ -88,6 +89,13 @@ export default function POSBilling({
 
   // Printing & Floor Map Modals
   const [receiptModalOrder, setReceiptModalOrder] = useState<Order | null>(null);
+  const [receiptPaperSize, setReceiptPaperSize] = useState(getReceiptPaperSize);
+  useEffect(() => {
+    const syncPaperSize = () => setReceiptPaperSize(getReceiptPaperSize());
+    window.addEventListener("aatmyam:receipt-paper-size", syncPaperSize);
+    window.addEventListener("storage", syncPaperSize);
+    return () => { window.removeEventListener("aatmyam:receipt-paper-size", syncPaperSize); window.removeEventListener("storage", syncPaperSize); };
+  }, []);
   const [kotModalOrder, setKotModalOrder] = useState<Order | null>(null);
   const [showFloorMap, setShowFloorMap] = useState<boolean>(false);
   const [billsFilter, setBillsFilter] = useState<"unpaid" | "settled" | "all">("unpaid");
@@ -2021,7 +2029,7 @@ export default function POSBilling({
             <div className="no-print bg-slate-100 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Printer className="w-4 h-4 text-emerald-600" />
-                <span className="text-xs font-bold text-slate-800">Thermal Receipt Preview (80mm)</span>
+                <span className="text-xs font-bold text-slate-800">Thermal Receipt Preview ({receiptPaperSize})</span>
               </div>
               <button
                 onClick={() => setReceiptModalOrder(null)}
@@ -2034,7 +2042,7 @@ export default function POSBilling({
 
             {/* Printable Thermal Receipt Container */}
             <div className="p-6 overflow-y-auto max-h-[70vh] bg-white">
-              <div className="printable-thermal-receipt bg-white text-black p-4 border border-dashed border-slate-300 rounded font-mono text-[11px] leading-relaxed mx-auto">
+              <div data-paper-size={receiptPaperSize} className="printable-thermal-receipt bg-white text-black p-4 border border-dashed border-slate-300 rounded font-mono text-[11px] leading-relaxed mx-auto">
                 <div className="text-center pb-2 border-b border-dashed border-slate-400">
                   <h2 className="text-sm font-black uppercase tracking-wider">
                     {activeTenant?.name || "VEGGIE RESTAURANT & POS"}
