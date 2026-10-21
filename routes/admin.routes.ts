@@ -52,6 +52,17 @@ router.post('/saas-admin/exchange', adminLimiter, async (req,res) => {
   }
 });
 
+// SaaS-wide audit is scoped to administrator actions only; never expose restaurant audit logs.
+router.get("/admin/audit", adminAuthMiddleware, async (_req, res) => {
+  try {
+    const logs = await auditLogService.getLogs("saas-admin");
+    return res.json({success: true, logs: logs.slice(0, 100).map(({id, timestamp, eventType, actor, description}) =>
+      ({id, timestamp, eventType, actor, description}))});
+  } catch {
+    return res.status(503).json({success:false,error:"ADMIN_AUDIT_UNAVAILABLE"});
+  }
+});
+
 router.get("/admin/tenants", adminAuthMiddleware, async (req, res) => {
   try {
     const tenants = await getGlobalTenantsList();
