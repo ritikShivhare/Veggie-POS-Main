@@ -1,5 +1,6 @@
 import NotificationRoutingSettings from './NotificationRoutingSettings';
 import OwnerAuditReadOnly from './OwnerAuditReadOnly';
+import SessionManagementDashboard from './SessionManagementDashboard';
 import { getReceiptPaperSize, saveReceiptPaperSize, type ReceiptPaperSize } from '../utils/receiptPaperSize';
 import StaffAccessEditor from "../../staff/StaffAccessEditor";
 import { ApiClient } from "../services/api";
@@ -30,6 +31,7 @@ interface SettingsPanelProps {
   purchases: Purchase[];
   shifts: Shift[];
   handleLogout: () => void;
+  currentSessionId: string;
   tenants: RestaurantTenant[];
   setTenants: (list: RestaurantTenant[]) => void;
 }
@@ -53,6 +55,7 @@ export default function SettingsPanel({
   purchases,
   shifts,
   handleLogout,
+  currentSessionId,
   tenants,
   setTenants
 }: SettingsPanelProps) {
@@ -1190,6 +1193,7 @@ export default function SettingsPanel({
       </div>}
       {subTab === "advanced" && <div className="max-w-6xl mx-auto space-y-5">
         <OwnerAuditReadOnly owner={currentStaff?.role === "Owner"} tenantKey={activeTenant.tenantId}/>
+        <SessionManagementDashboard currentSessionId={currentSessionId} onSessionTerminated={handleLogout} />
           {/* GDPR Privacy & Data Portability */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
             <div>
