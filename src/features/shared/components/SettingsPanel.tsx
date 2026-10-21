@@ -31,7 +31,7 @@ interface SettingsPanelProps {
   purchases: Purchase[];
   shifts: Shift[];
   handleLogout: () => void;
-  currentSessionId: string;
+  currentSessionId: string | null;
   tenants: RestaurantTenant[];
   setTenants: (list: RestaurantTenant[]) => void;
 }
