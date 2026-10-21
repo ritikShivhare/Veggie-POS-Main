@@ -4,20 +4,20 @@ import {ApiClient} from '../shared/services/api';
 import {isActiveStaff} from '../shared/staffStatus';
 
 interface Props {tenantId:string;staffList:StaffMember[];currentStaffId:string;onSaved:(staff:StaffMember)=>void;onDeleted:(id:string)=>void;onOwnChange:()=>void;}
-const visiblePermissions=['billing','inventory','reports','settings'] as const;
+const visiblePermissions=['billing','inventory','reports'] as const;
 function StaffAccessRow({tenantId,staff,currentStaffId,onSaved,onDeleted,onOwnChange}:Omit<Props,'staffList'> & {staff:StaffMember}) {
   const mounted=useRef(true);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
-  const [pin,setPin]=useState(''),[permissions,setPermissions]=useState(staff.permissions),[version,setVersion]=useState(staff.version || 1);
+  const [pin,setPin]=useState(''),[permissions,setPermissions]=useState(staff.permissions.filter(permission=>permission!=='settings')),[version,setVersion]=useState(staff.version || 1);
   const [dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[conflict,setConflict]=useState(false);
-  useEffect(()=>{if(!dirty){setPermissions(staff.permissions);setVersion(staff.version || 1);}},[staff.version,staff.permissions,dirty]);
+  useEffect(()=>{if(!dirty){setPermissions(staff.permissions.filter(permission=>permission!=='settings'));setVersion(staff.version || 1);}},[staff.version,staff.permissions,dirty]);
   const refresh=async()=>{
     setBusy(true);setError('');
     try {
       const response=await ApiClient.authenticatedFetch(`/api/staff/${encodeURIComponent(staff.id)}`,{headers:{'x-tenant-id':tenantId}});const result=await response.json();
       if(!response.ok || !result.success || !result.data) throw new Error(result.message || 'Could not load the latest staff record.');
       if(!mounted.current) return;
-      onSaved(result.data);setPermissions(result.data.permissions);setVersion(result.data.version || 1);setPin('');setDirty(false);setConflict(false);setMessage('Latest permissions loaded. Review and enter your changes again.');
+      onSaved(result.data);setPermissions(result.data.permissions.filter((permission:string)=>permission!=='settings'));setVersion(result.data.version || 1);setPin('');setDirty(false);setConflict(false);setMessage('Latest permissions loaded. Review and enter your changes again.');
     }catch(e:any){setError(e.message);}finally{setBusy(false);}
   };
   const save=async()=>{
@@ -26,7 +26,7 @@ function StaffAccessRow({tenantId,staff,currentStaffId,onSaved,onDeleted,onOwnCh
     if(pin && !/^\d{4,6}$/.test(pin)){setError('Enter a complete 4–6 digit PIN, or leave PIN empty to keep it unchanged.');return;}
     setBusy(true);
     try {
-      const response=await ApiClient.authenticatedFetch(`/api/staff/${encodeURIComponent(staff.id)}`,{method:'PUT',headers:{'Content-Type':'application/json','x-tenant-id':tenantId},body:JSON.stringify({version,...(pin?{pin}:{}),...(staff.role!=='Owner'?{permissions}:{})})});
+      const response=await ApiClient.authenticatedFetch(`/api/staff/${encodeURIComponent(staff.id)}`,{method:'PUT',headers:{'Content-Type':'application/json','x-tenant-id':tenantId},body:JSON.stringify({version,...(pin?{pin}:{}),...(staff.role!=='Owner'?{permissions:permissions.filter(permission=>permission!=='settings')}:{})})});
       const result=await response.json();
       if(response.status===409){setConflict(true);throw new Error('This staff record changed elsewhere. Load the latest record and review before saving again.');}
       if(!response.ok || !result.success || !result.data) throw new Error(result.message || result.error || 'Staff changes were not saved.');
