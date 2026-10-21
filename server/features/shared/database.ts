@@ -341,6 +341,21 @@ export class Database {
     try {await this.runTransaction(tenantId,trx => trx.saveObject(key,data));}
     catch (err) {this.markObjectStale(tenantId,key); throw err;}
   }
+  async registerAdminRestaurantAtomic(input: {
+    tenantId:string;ownerId:string;businessName:string;ownerName:string;
+    ownerPhone:string;email:string;region:string;hashedPin:string;
+  }): Promise<any> {
+    const client = this.getSupabaseClient(input.tenantId);
+    this.checkAvailable(client);
+    if (!client) throw new DatabaseUnavailableError();
+    const {data,error} = await client.rpc('register_admin_test_restaurant',{
+      p_tenant_id:input.tenantId,p_owner_id:input.ownerId,p_name:input.businessName,
+      p_owner_name:input.ownerName,p_phone:input.ownerPhone,p_email:input.email,
+      p_region:input.region,p_pin_hash:input.hashedPin
+    });
+    if (error) this.dbError(error);
+    return data;
+  }
   async registerRestaurant(token:string,codeHash:string,tenantId:string,ownerId:string):Promise<any> {
     const client=this.getSupabaseClient();this.checkAvailable(client);
     if(client) {
