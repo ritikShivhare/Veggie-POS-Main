@@ -395,68 +395,8 @@ export default function SettingsPanel({
       {subTab === "billing" && (
         <div className="max-w-6xl mx-auto">
           <BillingSettings tenantId={activeTenant.tenantId} />
-          <p className="mt-3 text-xs text-slate-500">
-            Receipt tax, GSTIN and manual UPI details remain in General during the next Settings reorganization step.
-          </p>
-        </div>
-      )}
-
-      {/* Sub-Tabs Selector */}
-      <div className="max-w-6xl mx-auto bg-white border border-slate-200 rounded-xl p-1.5 flex gap-2 shadow-sm">
-        <button
-          onClick={() => setSubTab("general")}
-          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
-            subTab === "general"
-              ? "bg-blue-600 text-white shadow-sm shadow-blue-500/10"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-          }`}
-        >
-          <Settings className="w-4 h-4" />
-          <span>{t("generalTab")}</span>
-        </button>
-
-        <button type="button" onClick={() => setSubTab("billing")}
-          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition flex items-center justify-center gap-2 ${subTab === "billing" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
-          <Receipt className="w-4 h-4" /><span>Billing &amp; Payments</span>
-        </button>
-        <button
-          onClick={() => setSubTab("password")}
-          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
-            subTab === "password"
-              ? "bg-blue-600 text-white shadow-sm shadow-blue-500/10"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-          }`}
-        >
-          <Lock className="w-4 h-4" />
-          <span>{t("passwordTab")}</span>
-        </button>
-
-        <button
-          onClick={() => setSubTab("language")}
-          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
-            subTab === "language"
-              ? "bg-blue-600 text-white shadow-sm shadow-blue-500/10"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-          }`}
-        >
-          <Globe className="w-4 h-4" />
-          <span>{t("languageTab")}</span>
-        </button>
-        <button type="button"
-          onClick={() => setSubTab("advanced")}
-          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition flex items-center justify-center gap-2 ${subTab === "advanced" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
-          <ShieldCheck className="w-4 h-4" /><span>Advanced</span>
-        </button>
-      </div>
-
-      {subTab === "advanced" && (
-        <OwnerAuditReadOnly owner={currentStaff?.role === "Owner"} tenantKey={activeTenant.tenantId} />
-      )}
-
-      {subTab === "general" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto animate-fadeIn">
-
-        <div className="lg:col-span-5 flex flex-col gap-6 w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5 items-start">
+            <div className="space-y-5">
           {/* Restaurant Tax Rate & GSTIN (Optional) Configuration Card */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-5" id="settings-gst-config-card">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -789,6 +729,73 @@ export default function SettingsPanel({
             </div>
           </div>
 
+
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xl p-5 text-xs text-slate-600 space-y-2">
+              <h3 className="font-bold text-slate-900">Receipt &amp; Printer</h3>
+              <p>GST, optional GSTIN/FSSAI and manual UPI settings are managed here.</p>
+              <p>Use your browser print dialog with existing receipt print CSS. A configurable 58mm/80mm printer selector is not connected yet.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-Tabs Selector */}
+      <div className="max-w-6xl mx-auto bg-white border border-slate-200 rounded-xl p-1.5 flex gap-2 shadow-sm">
+        <button
+          onClick={() => setSubTab("general")}
+          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+            subTab === "general"
+              ? "bg-blue-600 text-white shadow-sm shadow-blue-500/10"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+          }`}
+        >
+          <Settings className="w-4 h-4" />
+          <span>{t("generalTab")}</span>
+        </button>
+
+        <button type="button" onClick={() => setSubTab("billing")}
+          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition flex items-center justify-center gap-2 ${subTab === "billing" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+          <Receipt className="w-4 h-4" /><span>Billing &amp; Payments</span>
+        </button>
+        <button
+          onClick={() => setSubTab("password")}
+          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+            subTab === "password"
+              ? "bg-blue-600 text-white shadow-sm shadow-blue-500/10"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+          }`}
+        >
+          <Lock className="w-4 h-4" />
+          <span>{t("passwordTab")}</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab("language")}
+          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+            subTab === "language"
+              ? "bg-blue-600 text-white shadow-sm shadow-blue-500/10"
+              : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+          }`}
+        >
+          <Globe className="w-4 h-4" />
+          <span>{t("languageTab")}</span>
+        </button>
+        <button type="button"
+          onClick={() => setSubTab("advanced")}
+          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition flex items-center justify-center gap-2 ${subTab === "advanced" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+          <ShieldCheck className="w-4 h-4" /><span>Advanced</span>
+        </button>
+      </div>
+
+      {subTab === "advanced" && (
+        <OwnerAuditReadOnly owner={currentStaff?.role === "Owner"} tenantKey={activeTenant.tenantId} />
+      )}
+
+      {subTab === "general" && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto animate-fadeIn">
+
+        <div className="lg:col-span-5 flex flex-col gap-6 w-full">
           {currentStaff.role==='Owner' && <NotificationRoutingSettings key={activeTenant.tenantId+':'+currentStaff.id}/> }
 
           {/* Terminal & Operational Rules */}
