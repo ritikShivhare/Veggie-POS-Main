@@ -17,6 +17,6 @@ describe("SaaS Control Center phase 3 read-only sections",()=>{
   });
   it("keeps payment and unavailable activity explicitly unimplemented",()=>{
     expect(source).toContain("Payments and invoices are not available in this view.");
-    expect(source).toContain("No fabricated records are displayed.");
+    expect(source).toContain("There is no support ticket inbox connected yet");
   });
 });
