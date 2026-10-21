@@ -496,10 +496,10 @@ export default function SaasAdminDashboard({
           </div>
           <div className="mt-4">
             <h3 className="text-3xl font-black text-slate-800 tracking-tight leading-none">
-              {tenants.length} <span className="text-xs text-slate-400 font-medium">registered</span>
+              {localTenants.length} <span className="text-xs text-slate-400 font-medium">registered</span>
             </h3>
             <p className="text-[10px] text-slate-500 mt-2 font-medium">
-              Active: {tenants.filter(t => t.status === 'active').length} | Pending: {tenants.filter(t => t.status === 'pending').length}
+              Active: {localTenants.filter(t => t.status === 'active').length} | Pending: {localTenants.filter(t => t.status === 'pending').length}
             </p>
           </div>
         </div>
