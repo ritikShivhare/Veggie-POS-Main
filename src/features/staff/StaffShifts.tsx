@@ -139,7 +139,7 @@ export default function StaffShifts({
   const handleRoleChange = (role: "Owner" | "Manager" | "Cashier" | "Waiter" | "Chef" | "Custom") => {
     setNewRole(role);
     if (role === "Owner") {
-      setNewPerms(["billing", "inventory", "reports", "settings"]);
+      setNewPerms(["billing", "inventory", "reports"]);
     } else if (role === "Manager") {
       setNewPerms(["billing", "inventory", "reports"]);
     } else if (role === "Chef") {
@@ -202,7 +202,7 @@ export default function StaffShifts({
       role: finalRoleTitle as StaffRole,
       pin: newPin,
       status: "active",
-      permissions: (newPerms.length > 0 ? newPerms : ["billing"]) as any
+      permissions: (newPerms.filter(p => p !== "settings").length > 0 ? newPerms.filter(p => p !== "settings") : ["billing"]) as any
     };
 
     setIsSaving(true);
@@ -552,7 +552,7 @@ export default function StaffShifts({
                           {setActiveTab && (
                             <button
                               type="button"
-                              onClick={() => setActiveTab("settings")}
+                              onClick={() => setActiveTab("shifts")}
                               className="w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-xs rounded-xl transition duration-150 shadow-md flex items-center justify-center gap-1.5 select-none cursor-pointer"
                             >
                               <Zap className="w-3.5 h-3.5 fill-slate-950" />
