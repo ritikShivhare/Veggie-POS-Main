@@ -62,8 +62,9 @@ router.get("/staff/:id", authMiddleware, requirePermission("staff"), async (req,
 router.post("/staff", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    validateEntity("staffList",req.body,true);
-    await staffRepo.add(tenantId, req.body);
+    const newStaff = {...req.body, permissions: Array.isArray(req.body.permissions) && req.body.role !== "Owner" ? req.body.permissions.filter((permission: string) => permission !== "settings") : req.body.permissions};
+    validateEntity("staffList",newStaff,true);
+    await staffRepo.add(tenantId, newStaff);
     res.json({ success: true, message: "Staff member added successfully.", data: publicStaff(await staffRepo.getById(tenantId, req.body.id)) });
   } catch (error: any) {
     handleApiError(res, error);
@@ -87,6 +88,7 @@ router.put("/staff/:id", authMiddleware, requireRole("Owner"), async (req, res) 
       const current=await staffRepo.getById(tenantId,req.params.id);
       if(!current) throw Object.assign(new Error("Staff member not found."),{status:404});
       const patch={...req.body,id:req.params.id};
+      if(current.role !== "Owner" && Array.isArray(patch.permissions)) patch.permissions=patch.permissions.filter((permission:string)=>permission!=="settings");
       if((patch.pin!==undefined || patch.permissions!==undefined) && !Number.isInteger(patch.version)) throw Object.assign(new Error("Load the latest staff record before saving access changes."),{status:400});
       if(patch.pin!==undefined && !/^\d{4,6}$/.test(patch.pin)) throw Object.assign(new Error("Enter a complete 4–6 digit PIN."),{status:400});
       validateEntity("staffList",{...publicStaff(current),...patch});
