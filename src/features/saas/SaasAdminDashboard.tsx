@@ -89,6 +89,20 @@ export default function SaasAdminDashboard({
   const [platformAudit, setPlatformAudit] = useState<Array<{id:string;timestamp:string;eventType:string;actor:string;description:string}>>([]);
   const [auditLoading,setAuditLoading] = useState(false);
   const [auditError,setAuditError] = useState<string | null>(null);
+  const [securitySummary,setSecuritySummary] = useState<{activeSessionCount:number;sessions:Array<{createdAt:string;lastActivityAt:string;expiresAt:string;deviceType:string}>}|null>(null);
+  const [securityLoading,setSecurityLoading]=useState(false);
+  const [securityError,setSecurityError]=useState<string|null>(null);
+  useEffect(()=>{
+    if(activeAdminTab!=="security" || !currentSessionId)return;
+    let mounted=true;setSecurityLoading(true);setSecurityError(null);
+    fetch("/api/admin/security/summary",{credentials:"include",headers:{"x-session-id":currentSessionId,"x-tenant-id":"saas-admin"}})
+      .then(async response=>{if(!response.ok)throw new Error("SECURITY_SUMMARY_UNAVAILABLE");return response.json();})
+      .then(data=>{if(mounted){if(!data.success)throw Error("SECURITY_SUMMARY_UNAVAILABLE");setSecuritySummary(data);}})
+      .catch(()=>{if(mounted)setSecurityError("Could not load administrator security summary.");})
+      .finally(()=>{if(mounted)setSecurityLoading(false);});
+    return ()=>{mounted=false;};
+  },[activeAdminTab,currentSessionId]);
+
 
   useEffect(()=>{
     if(activeAdminTab!=="activity") return;
@@ -448,14 +462,25 @@ export default function SaasAdminDashboard({
            </table></div>}
         </section>
       )}
-      {(["support","security"] as const).includes(activeAdminTab as "support" | "security") && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5" aria-label="Control Center section status">
-          <h2 className="font-bold text-base text-slate-900">
-            {({"activity":"Activity & Audit","support":"Support","security":"Settings & Security"} as Record<string,string>)[activeAdminTab]}
-          </h2>
-          <p className="text-sm text-slate-600 mt-2">This section is not yet connected to an authorized management API. No fabricated records are displayed.</p>
-        </section>
-      )}
+      {activeAdminTab==="support" && <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4" aria-label="Support workspace triage">
+        <h2 className="text-base font-bold">Support — Workspace Triage</h2>
+        <p className="text-xs text-slate-600">Read-only restaurant status overview. There is no support ticket inbox connected yet; do not treat walkthrough leads as support tickets.</p>
+        {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+        <p className="text-sm">{localTenants.filter(t=>t.status==="suspended").length} suspended workspace(s) · {localTenants.length} registered restaurant(s)</p>
+        <button type="button" onClick={()=>{setActiveAdminTab("tenants");setStatusFilter("suspended");}} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold">Review suspended restaurants</button>
+      </section>}
+      {activeAdminTab==="security" && <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4" aria-label="SaaS Owner Security">
+        <h2 className="text-base font-bold">Settings &amp; Security</h2>
+        <p className="text-xs text-slate-600">Read-only SaaS administrator session summary. MFA enrollment, credentials, session revocation and identity changes are intentionally not offered in this dashboard.</p>
+        {securityLoading ? <p role="status">Loading security summary…</p> : securityError ? <p role="alert" className="text-rose-700">{securityError}</p> :
+        securitySummary ? <>
+          <p className="font-semibold text-sm">Active administrator sessions: {securitySummary.activeSessionCount}</p>
+          <div className="overflow-x-auto"><table className="min-w-full text-xs text-left">
+            <thead><tr><th className="p-2">Device type</th><th className="p-2">Created</th><th className="p-2">Last activity</th><th className="p-2">Expires</th></tr></thead>
+            <tbody>{securitySummary.sessions.map((session,i)=><tr key={i} className="border-t border-slate-100"><td className="p-2">{session.deviceType}</td><td className="p-2">{session.createdAt}</td><td className="p-2">{session.lastActivityAt}</td><td className="p-2">{session.expiresAt}</td></tr>)}</tbody>
+          </table></div>
+        </> : <p className="text-sm text-slate-500">Session summary not loaded.</p>}
+      </section>}
       {/* 1. TOP HEADER BANNER - SEAMLESS DYNAMIC INFOGRAPHIC */}
       <div className="bg-gradient-to-r from-pink-500 via-rose-500 to-indigo-600 p-6 md:p-8 rounded-3xl text-white shadow-lg relative overflow-hidden">
         <div className="absolute right-0 bottom-0 top-0 w-1/3 opacity-10 pointer-events-none flex items-center justify-center">
