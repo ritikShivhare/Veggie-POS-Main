@@ -53,15 +53,6 @@ interface SaasAdminDashboardProps {
   currentSessionId?: string | null;
 }
 
-interface SyncLog {
-  id: string;
-  timestamp: string;
-  tenantName: string;
-  tenantId: string;
-  eventType: string;
-  syncStatus: "SUCCESS" | "PENDING" | "FAILED";
-  recordsCount: number;
-}
 
 export default function SaasAdminDashboard({
   tenants,
@@ -90,10 +81,6 @@ export default function SaasAdminDashboard({
   const [pin, setPin] = useState("");
   const [regError, setRegError] = useState("");
   const [regSuccess, setRegSuccess] = useState("");
-
-  // Live Sync Log generation
-  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
-  const [isSyncingAll, setIsSyncingAll] = useState(false);
 
   // Sub-tab switcher: "tenants" | "leads" | "syncLogs"
   const [activeAdminTab, setActiveAdminTab] = useState<"tenants" | "leads" | "syncLogs">("tenants");
@@ -195,97 +182,6 @@ export default function SaasAdminDashboard({
   useEffect(() => {
     fetchTenants();
   }, [currentSessionId, tenants]);
-
-  // Generate initial mock sync log stream
-  useEffect(() => {
-    const initialLogs: SyncLog[] = [
-      {
-        id: "log-1029",
-        timestamp: new Date(Date.now() - 1000 * 60 * 2).toLocaleTimeString(),
-        tenantName: "The Green Kitchen",
-        tenantId: "veg-main-001",
-        eventType: "POS_BILL_DEDUCT_STOCK",
-        syncStatus: "SUCCESS",
-        recordsCount: 3
-      },
-      {
-        id: "log-1028",
-        timestamp: new Date(Date.now() - 1000 * 60 * 8).toLocaleTimeString(),
-        tenantName: "Organic Bites",
-        tenantId: "org-bites-02",
-        eventType: "BATCH_INVENTORY_RESTOCK",
-        syncStatus: "SUCCESS",
-        recordsCount: 12
-      },
-      {
-        id: "log-1027",
-        timestamp: new Date(Date.now() - 1000 * 60 * 15).toLocaleTimeString(),
-        tenantName: "The Green Kitchen",
-        tenantId: "veg-main-001",
-        eventType: "SHIFT_CLOCK_OUT_SYNC",
-        syncStatus: "SUCCESS",
-        recordsCount: 1
-      },
-      {
-        id: "log-1026",
-        timestamp: new Date(Date.now() - 1000 * 60 * 24).toLocaleTimeString(),
-        tenantName: "Organic Bites",
-        tenantId: "org-bites-02",
-        eventType: "CUSTOMER_DISCOUNT_REDEEM",
-        syncStatus: "SUCCESS",
-        recordsCount: 1
-      }
-    ];
-    setSyncLogs(initialLogs);
-
-    // Stream random simulated live database sync events
-    const interval = setInterval(() => {
-      if (localTenants.length === 0) return;
-      const randomTenant = localTenants[Math.floor(Math.random() * localTenants.length)];
-      const events = [
-        "POS_BILL_DEDUCT_STOCK",
-        "SYNC_INGREDIENT_LEDGER",
-        "CRM_CUSTOMER_REGISTER",
-        "AI_REPORT_QUERY",
-        "SHIFT_CLOCK_IN_SYNC",
-        "ZOMATO_API_POLL"
-      ];
-      const randomEvent = events[Math.floor(Math.random() * events.length)];
-      const randomCount = Math.floor(Math.random() * 8) + 1;
-
-      const newLog: SyncLog = {
-        id: `log-${Math.floor(2000 + Math.random() * 8000)}`,
-        timestamp: new Date().toLocaleTimeString(),
-        tenantName: randomTenant.name,
-        tenantId: randomTenant.tenantId,
-        eventType: randomEvent,
-        syncStatus: Math.random() > 0.05 ? "SUCCESS" : "PENDING",
-        recordsCount: randomCount
-      };
-
-      setSyncLogs((prev) => [newLog, ...prev.slice(0, 9)]);
-    }, 12000);
-
-    return () => clearInterval(interval);
-  }, [localTenants]);
-
-  const handleForceSync = () => {
-    setIsSyncingAll(true);
-    setTimeout(() => {
-      setIsSyncingAll(false);
-      // Add a fresh success log
-      const newLog: SyncLog = {
-        id: `log-${Math.floor(9000 + Math.random() * 1000)}`,
-        timestamp: new Date().toLocaleTimeString(),
-        tenantName: "GLOBAL SAAS SYSTEM",
-        tenantId: "all-tenants",
-        eventType: "FORCE_RE_SYNC_ALL_STORES",
-        syncStatus: "SUCCESS",
-        recordsCount: localTenants.length
-      };
-      setSyncLogs((prev) => [newLog, ...prev]);
-    }, 1500);
-  };
 
   const handleResolveReview=async(tenantId:string,kind:'trial'|'financial')=>{
     const reason=window.prompt(kind==='trial'?'Reason for approving trial eligibility (minimum 10 characters):':'Reason for closing Financial Review (access remains Free; minimum 10 characters):');
@@ -633,7 +529,7 @@ export default function SaasAdminDashboard({
             }`}
           >
             <Activity className="w-4 h-4" />
-            <span>Live Cloud Sync Logs ({syncLogs.length})</span>
+            <span>Sync Logs</span>
           </button>
         </div>
 
@@ -673,14 +569,6 @@ export default function SaasAdminDashboard({
             >
               <Plus className="w-4 h-4" />
               <span>Register New Restaurant</span>
-            </button>
-            <button
-              onClick={handleForceSync}
-              disabled={isSyncingAll}
-              className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-750 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAll ? "animate-spin text-pink-600" : ""}`} />
-              <span>{isSyncingAll ? "Syncing..." : "Force Database Re-Sync"}</span>
             </button>
           </div>
         </div>
@@ -1293,65 +1181,18 @@ export default function SaasAdminDashboard({
         </div>
       )}
 
-      {/* 4. REAL-TIME SQL & CLOUD SYNC LIVE STREAM */}
+      {/* No sync-event API has been wired yet. Never invent database activity. */}
       {(activeAdminTab === "syncLogs" || activeAdminTab === "tenants") && (
-        <div className="bg-white border border-slate-250 rounded-2xl p-5 shadow-sm space-y-4">
-        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <h3 className="font-extrabold text-sm text-slate-900 tracking-tight flex items-center gap-1.5 font-display">
-              <Database className="w-4 h-4 text-pink-600" />
-              Restaurant database Sync logs (डेटाबेस रीयल-टाइम लाइव स्ट्रीम)
-            </h3>
-            <span className="px-2 py-0.5 bg-pink-100 border border-pink-200 text-pink-600 rounded text-[9px] font-mono font-bold animate-pulse">LIVE STREAM</span>
-          </div>
-          <span className="text-[10px] text-slate-400 font-mono">Simulated master syncing protocol active</span>
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+          <h3 className="font-extrabold text-sm text-slate-900 tracking-tight flex items-center gap-1.5 font-display">
+            <Database className="w-4 h-4 text-pink-600" />
+            Restaurant Database Sync Logs (डेटाबेस सिंक लॉग)
+          </h3>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            No synchronization activity recorded yet. Live sync-event logging is not connected to this dashboard.
+            Restaurant registration and billing data are managed separately.
+          </p>
         </div>
-
-        <p className="text-xs text-slate-500 leading-relaxed">
-          SaaS प्लेटफॉर्म का बैकएंड लगातार प्रत्येक स्टोर से जुड़कर नए बिल, बदलती हुई इन्वेंट्री सामग्री और स्टाफ़ की जानकारी को सर्वर पर सिंक करता रहता है। नीचे सिंक डेटा की रीयल-टाइम स्थिति देखें:
-        </p>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse">
-            <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider font-mono text-[9px]">
-              <tr>
-                <th className="p-3">Log ID</th>
-                <th className="p-3">Timestamp</th>
-                <th className="p-3">Restaurant Name</th>
-                <th className="p-3">Sync Event Type</th>
-                <th className="p-3">Records Size</th>
-                <th className="p-3">Sync Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-150 font-mono text-[11px] text-slate-650">
-              {syncLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="p-3 text-pink-600 font-bold">#{log.id}</td>
-                  <td className="p-3 text-slate-400">{log.timestamp}</td>
-                  <td className="p-3 font-sans font-semibold text-slate-700">{log.tenantName}</td>
-                  <td className="p-3">
-                    <span className="bg-slate-100 border border-slate-200 text-slate-850 px-1.5 py-0.5 rounded text-[9.5px]">
-                      {log.eventType}
-                    </span>
-                  </td>
-                  <td className="p-3 text-slate-500">{log.recordsCount} items</td>
-                  <td className="p-3">
-                    {log.syncStatus === "SUCCESS" ? (
-                      <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold rounded-full text-[9px] font-sans">
-                        SUCCESS
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-amber-50 border border-amber-100 text-amber-700 font-bold rounded-full text-[9px] font-sans animate-pulse">
-                        PENDING
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
       )}
 
     </div>
