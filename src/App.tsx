@@ -723,6 +723,7 @@ function AppContent() {
                 purchases={purchases}
                 shifts={shifts}
                 handleLogout={handleLogout}
+                currentSessionId={currentSessionId}
                 tenants={tenants}
                 setTenants={setTenants}
               />
