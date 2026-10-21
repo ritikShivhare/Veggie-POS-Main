@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiClient } from "../../../lib/apiClient";
+import { ApiClient } from "../services/api";
 
 interface AuditEntry {
   id?: string;
