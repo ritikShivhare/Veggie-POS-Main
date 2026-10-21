@@ -40,7 +40,7 @@ router.get("/settings", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/settings", authMiddleware, requirePermission("settings"), async (req, res) => {
+router.post("/settings", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     validateSettings(req.body);
