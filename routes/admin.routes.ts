@@ -230,41 +230,6 @@ export interface WalkthroughLeadRecord {
   internalNotes?: string;
 }
 
-const DEFAULT_SAMPLE_LEADS: WalkthroughLeadRecord[] = [
-  {
-    id: "lead-sample-1",
-    fullName: "Vikram Malhotra",
-    email: "vikram@urbanbistro.in",
-    phone: "9820198201",
-    restaurantName: "Urban Bistro & Brews",
-    address: "Shop 14, High Street Mall, Senapati Bapat Road, Pune, Maharashtra - 411016",
-    format: "casual-dine",
-    outletCount: "2-4",
-    primaryGoal: "Recipe BOM stock & ingredient leakage control",
-    preferredDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-    preferredTime: "morning",
-    notes: "Facing inventory wastage issue across 2 locations.",
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    status: "new"
-  },
-  {
-    id: "lead-sample-2",
-    fullName: "Pooja Singhania",
-    email: "pooja@chaico.com",
-    phone: "9811234567",
-    restaurantName: "Chai & Conversations Cafe",
-    address: "Ground Floor, Cyber Hub, DLF Phase 2, Gurugram, Haryana - 122002",
-    format: "cafe-bakery",
-    outletCount: "5-10",
-    primaryGoal: "Fast PIN billing & speed at register",
-    preferredDate: new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10),
-    preferredTime: "afternoon",
-    notes: "Opening 2 more quick-service outlets next month, need fast counter setup.",
-    createdAt: new Date(Date.now() - 3600000 * 18).toISOString(),
-    status: "contacted",
-    internalNotes: "Spoke with manager on WhatsApp. Walkthrough call scheduled."
-  }
-];
 
 // 1. Public Endpoint: Book Walkthrough from Marketing Website
 router.post("/leads/walkthrough", async (req, res) => {
@@ -293,7 +258,7 @@ router.post("/leads/walkthrough", async (req, res) => {
     const db = Database.getInstance();
     let existingLeads = await db.getObject<WalkthroughLeadRecord[]>("system-tenant", "walkthrough_leads");
     if (!existingLeads || !Array.isArray(existingLeads)) {
-      existingLeads = [...DEFAULT_SAMPLE_LEADS];
+      existingLeads = [];
     }
 
     const cleanPhone = String(phone).replace(/[^0-9]/g, "");
@@ -400,9 +365,8 @@ router.get("/leads/walkthrough", adminAuthMiddleware, async (req, res) => {
   try {
     const db = Database.getInstance();
     let leads = await db.getObject<WalkthroughLeadRecord[]>("system-tenant", "walkthrough_leads");
-    if (!leads || !Array.isArray(leads) || leads.length === 0) {
-      leads = [...DEFAULT_SAMPLE_LEADS];
-      await db.saveObject("system-tenant", "walkthrough_leads", leads);
+    if (!leads || !Array.isArray(leads)) {
+      leads = [];
     }
 
     res.json({
@@ -423,7 +387,7 @@ router.patch("/leads/walkthrough/:id", adminAuthMiddleware, async (req, res) => 
     const db = Database.getInstance();
     let leads = await db.getObject<WalkthroughLeadRecord[]>("system-tenant", "walkthrough_leads");
     if (!leads || !Array.isArray(leads)) {
-      leads = [...DEFAULT_SAMPLE_LEADS];
+      leads = [];
     }
 
     const index = leads.findIndex((l) => l.id === id);
