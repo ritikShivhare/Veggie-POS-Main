@@ -90,6 +90,18 @@ h1, h2, h3, .font-serif {
     border: none !important;
   }
 
+  /* Printable content widths leave margins for 58/80mm thermal rolls. */
+  .printable-thermal-receipt[data-paper-size="58mm"] {
+    width: 54mm;
+    max-width: 54mm;
+    padding: 3mm 2mm;
+    font-size: 9px;
+    overflow-wrap: anywhere;
+  }
+  .printable-thermal-receipt[data-paper-size="80mm"] {
+    width: 76mm;
+    max-width: 76mm;
+  }
   .no-print {
     display: none !important;
   }
