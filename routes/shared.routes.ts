@@ -325,7 +325,7 @@ router.post("/notifications/clear-logs", authMiddleware, requireRole("Owner"), a
 });
 
 // Central Event-Driven Architecture Endpoints (Owner & Manager authorized, strictly tenant-scoped)
-router.get("/events", authMiddleware, requireRole("Owner","Manager"), async (req, res) => {
+router.get("/events", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
