@@ -1,4 +1,5 @@
 import NotificationRoutingSettings from './NotificationRoutingSettings';
+import OwnerAuditReadOnly from './OwnerAuditReadOnly';
 import StaffAccessEditor from "../../staff/StaffAccessEditor";
 import { ApiClient } from "../services/api";
 import { offlineRepository } from "../services/offline";
@@ -58,7 +59,7 @@ export default function SettingsPanel({
   const [testingSentry, setTestingSentry] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
 
-  const [subTab, setSubTab] = useState<"general" | "password" | "language">("general");
+  const [subTab, setSubTab] = useState<"general" | "password" | "language" | "advanced">("general");
   const [currentLang, setCurrentLang] = useState<string>(() => {
     return localStorage.getItem("veggiepos_language") || "en";
   });
@@ -431,7 +432,16 @@ export default function SettingsPanel({
           <Globe className="w-4 h-4" />
           <span>{t("languageTab")}</span>
         </button>
+        <button type="button"
+          onClick={() => setSubTab("advanced")}
+          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition flex items-center justify-center gap-2 ${subTab === "advanced" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"}`}>
+          <ShieldCheck className="w-4 h-4" /><span>Advanced</span>
+        </button>
       </div>
+
+      {subTab === "advanced" && (
+        <OwnerAuditReadOnly owner={currentStaff?.role === "Owner"} tenantKey={activeTenant.tenantId} />
+      )}
 
       {subTab === "general" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto animate-fadeIn">
