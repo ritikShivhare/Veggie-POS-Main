@@ -53,6 +53,18 @@ router.post('/saas-admin/exchange', adminLimiter, async (req,res) => {
 });
 
 // SaaS-wide audit is scoped to administrator actions only; never expose restaurant audit logs.
+// Read-only SaaS security summary; never return session tokens, IPs, MFA secrets or recovery factors.
+router.get("/admin/security/summary", adminAuthMiddleware, async (_req,res) => {
+  try {
+    const sessions=await sessionService.getActiveSessions("saas-admin");
+    return res.json({success:true, activeSessionCount:sessions.length,
+      sessions:sessions.map(s=>({createdAt:s.createdAt,lastActivityAt:s.lastActivityAt,expiresAt:s.expiresAt,
+        deviceType:s.device?.deviceType || "Unknown"}))});
+  } catch {
+    return res.status(503).json({success:false,error:"ADMIN_SECURITY_UNAVAILABLE"});
+  }
+});
+
 router.get("/admin/audit", adminAuthMiddleware, async (_req, res) => {
   try {
     const logs = await auditLogService.getLogs("saas-admin");
