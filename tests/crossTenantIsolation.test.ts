@@ -312,6 +312,21 @@ describe("Cross-Tenant Isolation and Server-Side RBAC Hardening Suite", () => {
       expect(body.error).toBe("FORBIDDEN");
     });
 
+    it("Rejects conflicting query tenant even when x-tenant-id matches the session", async () => {
+      const response = await fetch(`${serverUrl}/api/orders?tenantId=${TENANT_B}`, {
+        method: "GET",
+        headers: {
+          "x-session-id": ownerASessionToken,
+          "x-tenant-id": TENANT_A,
+          Cookie: `${SESSION_COOKIE_NAME}=${ownerASessionToken}`
+        }
+      });
+      expect(response.status).toBe(403);
+      const body = await response.json();
+      expect(body).toMatchObject({success:false,error:"TENANT_MISMATCH"});
+      expect(body.data).toBeUndefined();
+    });
+
     it("Tenant spoofing: Restaurant A session with x-tenant-id header set to Restaurant B is rejected with 403 TENANT_MISMATCH", async () => {
       const response = await fetch(`${serverUrl}/api/orders`, {
         method: "GET",
