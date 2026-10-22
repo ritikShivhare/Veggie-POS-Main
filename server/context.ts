@@ -226,23 +226,22 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     });
   }
 
-  // Anti-Spoofing: Client-sent tenantId cannot override or contradict session tenant
-  const clientProvidedTenant =
-    (req.headers["x-tenant-id"] as string) ||
-    (req.query?.tenantId as string) ||
-    (req.body?.tenantId as string);
-
-  if (clientProvidedTenant && clientProvidedTenant !== tenantId) {
-    const isSaaSAdmin = session.role === "SaaS Owner" || tenantId === "saas-admin";
-    if (!isSaaSAdmin) {
-      const isOutboxRoute = req.originalUrl?.includes("/sync/outbox") || req.path?.includes("/sync/outbox");
-      const error = isOutboxRoute ? "CROSS_TENANT_VIOLATION" : "TENANT_MISMATCH";
-      return res.status(403).json({
-        success: false,
-        error,
-        message: `Tenant isolation violation: Client-provided tenantId (${clientProvidedTenant}) does not match authenticated session tenant (${tenantId}).`
-      });
-    }
+  // Validate every supplied tenant claim, not just the highest-priority header.
+  // A valid x-tenant-id must not mask a conflicting query or body tenantId.
+  const tenantClaims = [
+    req.headers["x-tenant-id"],
+    req.query?.tenantId,
+    req.body?.tenantId
+  ].flatMap(value => Array.isArray(value) ? value : value == null ? [] : [value]);
+  const isSaaSAdmin = session.role === "SaaS Owner" || tenantId === "saas-admin";
+  if (!isSaaSAdmin && tenantClaims.some(claim => typeof claim !== "string" || claim !== tenantId)) {
+    const isOutboxRoute = req.originalUrl?.includes("/sync/outbox") || req.path?.includes("/sync/outbox");
+    const error = isOutboxRoute ? "CROSS_TENANT_VIOLATION" : "TENANT_MISMATCH";
+    return res.status(403).json({
+      success: false,
+      error,
+      message: "Tenant isolation violation: supplied tenant identifier does not match the authenticated session."
+    });
   }
 
   // Branch verification: validate x-branch-id if provided
