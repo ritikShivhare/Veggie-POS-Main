@@ -115,7 +115,7 @@ router.get("/supabase-config", authMiddleware, (req, res) => {
 });
 
 // Report generation & retrieval endpoints (Tenant Scoped & Protected)
-router.get("/reports", authMiddleware, requirePermission("reports"), async (req, res) => {
+router.get("/reports", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     const orders = (await orderRepo.getAll(tenantId)) || [];
@@ -146,7 +146,7 @@ router.get("/reports", authMiddleware, requirePermission("reports"), async (req,
   }
 });
 
-router.post("/reports/generate", authMiddleware, requirePermission("reports"), async (req, res) => {
+router.post("/reports/generate", authMiddleware, requireRole("Owner"), async (req, res) => {
   const { salesData, inventoryData, shiftsData, language } = req.body;
   try {
     const result = await runAiReport((req as any).tenantId,()=>reportService.generateReport(salesData, inventoryData, shiftsData, language || "hindi"));
