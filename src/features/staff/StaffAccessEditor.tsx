@@ -45,9 +45,9 @@ function StaffAccessRow({tenantId,staff,currentStaffId,onSaved,onDeleted,onOwnCh
       onDeleted(staff.id);
     }catch(e:any){setError(e.message);}finally{setBusy(false);}
   };
-  return <section className="border rounded-xl p-4 space-y-3" aria-label={`Access for ${staff.name}`}>
-    <h4 className="font-bold">{staff.name} <span className="text-xs text-slate-500">{staff.role}</span></h4>
-    <label className="block text-sm">New PIN for {staff.name}
+  return <section className="border border-slate-200 rounded-xl p-4 space-y-3 text-sm text-slate-700" aria-label={`Access for ${staff.name}`}>
+    <h4 className="text-sm font-bold text-slate-800">{staff.name} <span className="text-xs text-slate-500">{staff.role}</span></h4>
+    <label className="block text-sm font-semibold text-slate-700">New PIN for {staff.name}
       <input type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin} disabled={busy} placeholder="Leave blank to keep PIN" onChange={e=>{setPin(e.target.value.replace(/\D/g,'').slice(0,6));setDirty(true);setMessage('');}} className="block border rounded px-2 py-1"/>
     </label>
     <div className="flex flex-wrap gap-3">{visiblePermissions.map(permission=><label key={permission}>
