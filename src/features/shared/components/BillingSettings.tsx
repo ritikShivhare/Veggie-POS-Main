@@ -21,13 +21,13 @@ export function BillingSettings({tenantId}:BillingSettingsProps){
   const result=await api('create-checkout-session',{plan,customer},key);
   if(result.url) window.location.assign(result.url);
  });
- return <section className="bg-white rounded-xl border border-slate-200 p-5 space-y-5">
-  <h2 className="text-lg font-bold">Subscription & Billing</h2>
-  <p className="text-sm text-slate-600">One outlet. Prices include all subscription charges. Cashfree verifies your payment before access changes.</p>
+ return <section className="bg-white rounded-xl border border-slate-200 p-6 space-y-5 text-sm text-slate-700">
+  <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3">Subscription & Billing</h2>
+  <p className="text-xs text-slate-500 leading-relaxed">One outlet. Prices include all subscription charges. Cashfree verifies your payment before access changes.</p>
   {error && <p role="alert" className="bg-rose-50 text-rose-700 p-3 rounded">{error}</p>}
   {!data ? <button onClick={refresh}>Load subscription</button> : <>
    <div className="bg-slate-50 p-4 rounded space-y-1">
-    <strong>{sub.trialEndsAt?'14-day trial':PLAN_LIMITS[sub.plan as keyof typeof PLAN_LIMITS]?.label}</strong>
+    <strong className="text-sm font-bold text-slate-800">{sub.trialEndsAt?'14-day trial':PLAN_LIMITS[sub.plan as keyof typeof PLAN_LIMITS]?.label}</strong>
     <p>Owner + {usage.staffCount} / {limits.staffCount} active staff</p>
     <p>{usage.monthlyOrders} / {limits.monthlyOrders<0?'Unlimited (fair use)':limits.monthlyOrders} orders · {usage.openKots} open KOTs{sub.plan==='free'?' / 5':''}</p>
     {sub.plan!=='free' && <p>5 successful AI reports/day · resets at midnight IST</p>}
@@ -40,7 +40,7 @@ export function BillingSettings({tenantId}:BillingSettingsProps){
     {Object.keys(sub.frozenKots || {}).length>0 && <p>Trial KOT items/totals are frozen. Each bill has a 12-hour settlement window from trial expiry.</p>}
    </div>
    {!sub.trialUsed && sub.plan==='free' && <button disabled={!!busy} onClick={()=>action('trial',async()=>{await api('start-trial',{});})} className="border rounded px-4 py-2">Start eligible 14-day trial</button>}
-   {sub.plan==='free' && data.staffOptions?.length>0 && <fieldset className="border rounded p-3"><legend>Choose up to 3 active staff · Owner remains active</legend>
+   {sub.plan==='free' && data.staffOptions?.length>0 && <fieldset className="border rounded p-3"><legend className="text-sm font-semibold text-slate-800">Choose up to 3 active staff · Owner remains active</legend>
     {data.staffOptions.map((s:any)=><label key={s.id} className="block"><input type="checkbox" checked={selected.includes(s.id)} onChange={e=>setSelected(e.target.checked?[...selected,s.id]:selected.filter(id=>id!==s.id))} disabled={!selected.includes(s.id) && selected.length>=3}/> {s.name}</label>)}
     <p className="text-sm text-slate-600">Cashier/Manager priority keeps up to 3 active staff running after expiry. You can change these selections at any time.</p>
     <button disabled={!!busy} onClick={()=>action('staff',async()=>{await api('select-staff',{staffIds:selected});})}>Save staff selection</button>
@@ -54,7 +54,7 @@ export function BillingSettings({tenantId}:BillingSettingsProps){
     </div>)}
    </fieldset>}
    {!sub.financialReview && <>
-    <fieldset className="space-y-2"><legend className="font-semibold">Payment contact</legend>
+    <fieldset className="space-y-2"><legend className="text-sm font-bold text-slate-800">Payment contact</legend>
      {(['name','email','phone'] as const).map(key=><label key={key} className="block text-sm">{key==='phone'?'Indian mobile':key==='name'?'Name':'Email'}<input className="block border rounded p-2 w-full" type={key==='email'?'email':key==='phone'?'tel':'text'} autoComplete={key==='phone'?'tel':key} value={customer[key]} onChange={e=>setCustomer({...customer,[key]:e.target.value})}/></label>)}
     </fieldset>
     <div className="grid sm:grid-cols-3 gap-3">{Object.entries(PLAN_LIMITS).map(([id,plan])=><div className="border rounded p-4 space-y-2" key={id}>
