@@ -104,6 +104,11 @@ function AppContent() {
 
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  useEffect(() => {
+    if (currentStaff && currentStaff.role !== "Owner" && ["dashboard", "ai-reports"].includes(activeTab)) {
+      setActiveTab("billing");
+    }
+  }, [activeTab, currentStaff]);
 
   // Safety watchdog: Automatically dismiss initial sync overlay after 2.5s if not resolved
   useEffect(() => {
@@ -367,7 +372,7 @@ function AppContent() {
           staffList={staffList}
           onLoginSuccess={(staff, sessId, loggedInTenant) => {
             handleLoginSuccess(staff, sessId, loggedInTenant);
-            setActiveTab(staff.permissions.includes("reports") ? "dashboard" : "billing");
+            setActiveTab(staff.role === "Owner" ? "dashboard" : "billing");
           }}
           restaurantName={activeTenant.name}
           tenantId={activeTenant.tenantId}
@@ -477,7 +482,7 @@ function AppContent() {
               )}
             </button>
 
-            {activeTab === "dashboard" && (
+            {activeTab === "dashboard" && currentStaff.role === "Owner" && (
               <button
                 onClick={() => {
                   setActiveTab("ai-reports");
@@ -625,7 +630,7 @@ function AppContent() {
             />
           )}
 
-          {activeTab === "ai-reports" && (
+          {activeTab === "ai-reports" && currentStaff.role === "Owner" && (
             <React.Suspense fallback={
               <div className="flex flex-col items-center justify-center p-12 space-y-4">
                 <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
