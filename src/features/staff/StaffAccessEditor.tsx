@@ -46,7 +46,7 @@ function StaffAccessRow({tenantId,staff,currentStaffId,onSaved,onDeleted,onOwnCh
     }catch(e:any){setError(e.message);}finally{setBusy(false);}
   };
   return <section className="border border-slate-200 bg-slate-50/50 rounded-xl p-4 sm:p-5 space-y-4 text-sm text-slate-700" aria-label={`Access for ${staff.name}`}>
-    <h4 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-3">{staff.name} <span className="text-xs text-slate-500">{staff.role}</span></h4>
+    <h4 className="flex flex-wrap items-center gap-2 text-sm font-bold text-slate-800 border-b border-slate-200 pb-3">{staff.name} <span className="rounded-md bg-white border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-500">{staff.role}</span></h4>
     <label className="block text-sm font-semibold text-slate-700">New PIN for {staff.name}
       <input type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin} disabled={busy} placeholder="Leave blank to keep PIN" onChange={e=>{setPin(e.target.value.replace(/\D/g,'').slice(0,6));setDirty(true);setMessage('');}} className="mt-2 block w-full sm:max-w-xs rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"/>
     </label>
@@ -54,7 +54,7 @@ function StaffAccessRow({tenantId,staff,currentStaffId,onSaved,onDeleted,onOwnCh
       <input className="h-4 w-4 accent-blue-600" type="checkbox" checked={permissions.includes(permission)} disabled={busy || staff.role==='Owner'} onChange={e=>{setPermissions(p=>e.target.checked?[...p,permission]:p.filter(v=>v!==permission));setDirty(true);setMessage('');}}/> {permission}
     </label>)}</div>
     {staff.role==='Owner' && <p className="text-xs">Owner access is protected. Saving your own new PIN requires signing in again.</p>}
-    <button type="button" disabled={!dirty || busy || conflict} onClick={save} className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 disabled:opacity-50 transition-colors">{busy?'Saving…':`Save changes for ${staff.name}`}</button>
+    <button type="button" disabled={!dirty || busy || conflict} onClick={save} className="w-full sm:w-auto rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 disabled:opacity-50 transition-colors">{busy?'Saving…':`Save changes for ${staff.name}`}</button>
     {conflict && <button type="button" disabled={busy} onClick={refresh} className="border border-slate-300 bg-white rounded-lg px-3 py-2.5 font-semibold">Load latest record</button>}
     {staff.role!=='Owner' && <button type="button" disabled={busy} onClick={remove} className="ml-0 sm:ml-3 px-3 py-2.5 text-red-700 font-semibold hover:bg-red-50 rounded-lg">Deactivate {staff.name}</button>}
     {error && <p role="alert" className="text-red-700">{error}</p>}{message && <p role="status" className="text-green-700">{message}</p>}
