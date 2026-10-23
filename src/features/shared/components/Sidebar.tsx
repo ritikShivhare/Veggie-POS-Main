@@ -87,13 +87,13 @@ export default function Sidebar({
 
   const menuItems: Array<{ id: string; label: string; icon: any; permission?: string; role?: string }> = [
     { id: "saas-admin", label: "SaaS Admin Panel", icon: Crown, role: "Owner" },
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, permission: "reports" },
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, role: "Owner" },
     { id: "billing", label: "POS Billing", icon: ShoppingCart, permission: "billing" },
     { id: "kds", label: "Kitchen (KDS)", icon: ChefHat, permission: "billing" },
     { id: "crm", label: "CRM & Loyalty", icon: Users, permission: "billing" },
     { id: "inventory", label: "Inventory & Recipes", icon: Boxes, permission: "inventory" },
     { id: "shifts", label: "Staff Shifts", icon: Clock, permission: "billing" },
-    { id: "ai-reports", label: "Automated AI Reports", icon: FileText, permission: "reports" },
+    { id: "ai-reports", label: "Automated AI Reports", icon: FileText, role: "Owner" },
     { id: "jobs", label: "Background Jobs", icon: Cpu, permission: "settings" },
     { id: "notifications", label: "Notification Center", icon: Bell },
     { id: "settings", label: "Settings", icon: Settings, role: "Owner" }
