@@ -61,6 +61,8 @@ export default function SettingsPanel({
 }: SettingsPanelProps) {
   const [receiptPaperSize, setReceiptPaperSize] = useState<ReceiptPaperSize>(getReceiptPaperSize);
   const [testingSlack, setTestingSlack] = useState(false);
+  // Keep partially typed discount values out of the 500ms autosave pipeline.
+  const [discountDraft, setDiscountDraft] = useState<string | null>(null);
   const [testingSentry, setTestingSentry] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
 
@@ -1006,14 +1008,22 @@ export default function SettingsPanel({
                     min="0"
                     max="100"
                     step="1"
-                    value={settings.maxDiscountPercentage ?? ""}
+                    value={discountDraft ?? (settings.maxDiscountPercentage ?? "")}
                     placeholder="None"
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      setSettings({
-                        ...settings,
-                        maxDiscountPercentage: isNaN(val) ? undefined : Math.max(0, Math.min(100, val))
-                      });
+                    onChange={(e) => setDiscountDraft(e.target.value)}
+                    onBlur={() => {
+                      if (discountDraft === null) return;
+                      const raw = discountDraft.trim();
+                      const numeric = raw === "" ? undefined : Number(raw);
+                      if (numeric === undefined || (Number.isInteger(numeric) && numeric >= 0 && numeric <= 100)) {
+                        setSettings({ ...settings, maxDiscountPercentage: numeric });
+                      } else {
+                        setToastMessage({ type: "error", text: "Enter a whole-number discount limit between 0 and 100." });
+                      }
+                      setDiscountDraft(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
                     }}
                     className="w-20 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-bold text-slate-800 text-right focus:outline-none focus:border-purple-500 focus:bg-white"
                     id="settings-max-discount-percentage-input"
