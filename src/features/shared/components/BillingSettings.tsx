@@ -26,7 +26,7 @@ export function BillingSettings({tenantId}:BillingSettingsProps){
   <p className="text-xs text-slate-500 leading-relaxed">One outlet. Prices include all subscription charges. Cashfree verifies your payment before access changes.</p>
   {error && <p role="alert" className="bg-rose-50 text-rose-700 p-3 rounded">{error}</p>}
   {!data ? <button onClick={refresh}>Load subscription</button> : <>
-   <div className="bg-slate-50 p-4 rounded space-y-1">
+   <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
     <strong className="text-sm font-bold text-slate-800">{sub.trialEndsAt?'14-day trial':PLAN_LIMITS[sub.plan as keyof typeof PLAN_LIMITS]?.label}</strong>
     <p>Owner + {usage.staffCount} / {limits.staffCount} active staff</p>
     <p>{usage.monthlyOrders} / {limits.monthlyOrders<0?'Unlimited (fair use)':limits.monthlyOrders} orders · {usage.openKots} open KOTs{sub.plan==='free'?' / 5':''}</p>
@@ -40,10 +40,10 @@ export function BillingSettings({tenantId}:BillingSettingsProps){
     {Object.keys(sub.frozenKots || {}).length>0 && <p>Trial KOT items/totals are frozen. Each bill has a 12-hour settlement window from trial expiry.</p>}
    </div>
    {!sub.trialUsed && sub.plan==='free' && <button disabled={!!busy} onClick={()=>action('trial',async()=>{await api('start-trial',{});})} className="border rounded px-4 py-2">Start eligible 14-day trial</button>}
-   {sub.plan==='free' && data.staffOptions?.length>0 && <fieldset className="border rounded p-3"><legend className="text-sm font-semibold text-slate-800">Choose up to 3 active staff · Owner remains active</legend>
-    {data.staffOptions.map((s:any)=><label key={s.id} className="block"><input type="checkbox" checked={selected.includes(s.id)} onChange={e=>setSelected(e.target.checked?[...selected,s.id]:selected.filter(id=>id!==s.id))} disabled={!selected.includes(s.id) && selected.length>=3}/> {s.name}</label>)}
+   {sub.plan==='free' && data.staffOptions?.length>0 && <fieldset className="border border-slate-200 bg-slate-50/50 rounded-xl p-4 space-y-3"><legend className="text-sm font-semibold text-slate-800 px-1">Choose up to 3 active staff · Owner remains active</legend>
+    {data.staffOptions.map((s:any)=><label key={s.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5"><input className="h-4 w-4 accent-blue-600" type="checkbox" checked={selected.includes(s.id)} onChange={e=>setSelected(e.target.checked?[...selected,s.id]:selected.filter(id=>id!==s.id))} disabled={!selected.includes(s.id) && selected.length>=3}/> {s.name}</label>)}
     <p className="text-sm text-slate-600">Cashier/Manager priority keeps up to 3 active staff running after expiry. You can change these selections at any time.</p>
-    <button disabled={!!busy} onClick={()=>action('staff',async()=>{await api('select-staff',{staffIds:selected});})}>Save staff selection</button>
+    <button className="rounded-lg bg-blue-600 hover:bg-blue-700 px-4 py-2.5 font-semibold text-white disabled:opacity-50" disabled={!!busy} onClick={()=>action('staff',async()=>{await api('select-staff',{staffIds:selected});})}>Save staff selection</button>
    </fieldset>}
    {!!data.expiredFrozenKots?.length && <fieldset className="border rounded p-3 space-y-3"><legend className="font-semibold">Resolve expired trial KOTs · Owner only</legend>
     <p className="text-sm text-slate-600">Settle the original frozen amount after receiving Cash/UPI, or close an unpaid bill with an audit reason. Closing records no payment and makes no stock adjustment.</p>
@@ -54,18 +54,18 @@ export function BillingSettings({tenantId}:BillingSettingsProps){
     </div>)}
    </fieldset>}
    {!sub.financialReview && <>
-    <fieldset className="space-y-2"><legend className="text-sm font-bold text-slate-800">Payment contact</legend>
-     {(['name','email','phone'] as const).map(key=><label key={key} className="block text-sm">{key==='phone'?'Indian mobile':key==='name'?'Name':'Email'}<input className="block border rounded p-2 w-full" type={key==='email'?'email':key==='phone'?'tel':'text'} autoComplete={key==='phone'?'tel':key} value={customer[key]} onChange={e=>setCustomer({...customer,[key]:e.target.value})}/></label>)}
+    <fieldset className="rounded-xl border border-slate-200 p-4 space-y-3"><legend className="text-sm font-bold text-slate-800 px-1">Payment contact</legend>
+     {(['name','email','phone'] as const).map(key=><label key={key} className="block text-sm">{key==='phone'?'Indian mobile':key==='name'?'Name':'Email'}<input className="mt-1.5 block border border-slate-300 bg-white rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" type={key==='email'?'email':key==='phone'?'tel':'text'} autoComplete={key==='phone'?'tel':key} value={customer[key]} onChange={e=>setCustomer({...customer,[key]:e.target.value})}/></label>)}
     </fieldset>
-    <div className="grid sm:grid-cols-3 gap-3">{Object.entries(PLAN_LIMITS).map(([id,plan])=><div className="border rounded p-4 space-y-2" key={id}>
-     <h3 className="font-bold">{plan.label}</h3><p className="text-xl">₹{plan.price}{plan.price>0?' / 30 days':''}</p>
+    <div className="grid sm:grid-cols-3 gap-3">{Object.entries(PLAN_LIMITS).map(([id,plan])=><div className="border border-slate-200 bg-white rounded-xl p-4 sm:p-5 space-y-3 shadow-sm" key={id}>
+     <h3 className="text-sm font-bold text-slate-800">{plan.label}</h3><p className="text-xl font-bold text-slate-900">₹{plan.price}{plan.price>0?' / 30 days':''}</p>
      <p>Owner + {plan.staffCount} staff</p><p>{plan.monthlyOrders<0?'Unlimited orders (fair use)':`${plan.monthlyOrders} orders per 30-day cycle`}</p>
      {id==='enterprise' && sub.plan==='pro' && <p id="elite-upgrade-note" className="text-sm font-medium text-amber-800">Elite upgrade: verified payment starts a fresh 30-day cycle immediately. No proration or credit for unused Pro days.</p>}
-     {id!=='free' && <button aria-describedby={id==='enterprise' && sub.plan==='pro'?'elite-upgrade-note':undefined} className="bg-emerald-700 text-white rounded px-3 py-2 disabled:opacity-50" disabled={!!busy || (pending?.status==='CREATING' && pending.plan!==id)} onClick={()=>startCheckout(id)}>{busy===id?'Creating…':pending?.status==='CREATING'?'Recover checkout':'Pay with Cashfree'}</button>}
+     {id!=='free' && <button aria-describedby={id==='enterprise' && sub.plan==='pro'?'elite-upgrade-note':undefined} className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg px-3 py-2.5 disabled:opacity-50 transition-colors" disabled={!!busy || (pending?.status==='CREATING' && pending.plan!==id)} onClick={()=>startCheckout(id)}>{busy===id?'Creating…':pending?.status==='CREATING'?'Recover checkout':'Pay with Cashfree'}</button>}
     </div>)}</div>
     <p className="text-xs text-slate-600">Payment links expire in 60 minutes. A new link cancels the previous pending one. Elite upgrades start a fresh 30-day cycle without proration. Paid renewals within 24 hours of expiry retain the original renewal date.</p>
    </>}
-   {!!data.links?.length && <div className="space-y-2"><h3 className="font-semibold">Recent payment links</h3>{data.links.slice(0,10).map((link:any)=><div key={link.id} className="border rounded p-3 text-sm space-y-1">
+   {!!data.links?.length && <div className="space-y-2"><h3 className="font-semibold">Recent payment links</h3>{data.links.slice(0,10).map((link:any)=><div key={link.id} className="border border-slate-200 rounded-xl p-4 text-sm space-y-2">
     <p>{PLAN_LIMITS[link.plan as keyof typeof PLAN_LIMITS]?.label} · ₹{link.amount} · {link.status}</p>
     <p>Expires: {new Date(link.expiresAt).toLocaleString()}</p>
     {!sub.financialReview && link.url && link.status==='ACTIVE' && Date.parse(link.expiresAt)>Date.now() && <a href={link.url} target="_blank" rel="noreferrer" className="text-blue-700 underline mr-4">Open payment link</a>}
