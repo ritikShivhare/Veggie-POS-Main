@@ -236,7 +236,7 @@ export function useAuthSession({
       }
       const shift:Shift={id:crypto.randomUUID(),staffId:currentStaff.id,staffName:currentStaff.name,role:currentStaff.role,startTime:new Date().toISOString(),status:"Active"};
       await offlineRepository.recordShiftOffline(activeTenantId,shift);
-      setShifts(previous => [...previous,shift]);
+      setShifts([...shifts,shift]);
       await OutboxProcessor.triggerDrain(activeTenantId);
     } catch(error:any) {
       alert(`Shift was not saved: ${error.message}`);
