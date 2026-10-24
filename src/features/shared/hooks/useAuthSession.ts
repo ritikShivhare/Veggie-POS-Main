@@ -63,6 +63,13 @@ export function useAuthSession({
   // Production-level Secure Session Idle Timeout and Keep-Alive Engine
   const lastActivityRef = useRef<number>(Date.now());
   const idleTimeoutMinutesRef = useRef<number>(60);
+  const trackedSessionRef = useRef<string | null>(null);
+  // A newly authenticated PIN session must never inherit elapsed idle time
+  // from a previous staff member, previous session, or an old mobile tab.
+  if (trackedSessionRef.current !== currentSessionId) {
+    trackedSessionRef.current = currentSessionId;
+    lastActivityRef.current = Date.now();
+  }
 
   useEffect(() => {
     if (!currentStaff || !currentSessionId) {
@@ -189,6 +196,9 @@ export function useAuthSession({
 
   // Handle Employee Login
   const handleLoginSuccess = (staff: StaffMember, sessionId?: string, _loggedInTenant?: any) => {
+    lastActivityRef.current = Date.now();
+    setShowIdleWarning(false);
+    setIdleCountdown(30);
     setCurrentStaff(staff);
     if (sessionId) {
       setCurrentSessionId(sessionId);
