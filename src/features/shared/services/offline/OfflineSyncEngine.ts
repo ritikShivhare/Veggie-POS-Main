@@ -159,6 +159,8 @@ export class OfflineSyncEngine {
           break;
         }
 
+        const dependencies=(await repo.getAllOutbox(effectiveTenantId)).filter(q=>q.id!==item.id && q.entityId===item.entityId && q.clientTimestamp<=item.clientTimestamp && !["SYNCED","completed"].includes(q.status));
+        if (dependencies.length) continue;
         result.processed++;
         const itemResult = await this.processOperation(item, options);
 
@@ -291,26 +293,22 @@ export class OfflineSyncEngine {
       // =======================================================================
       // HTTP 2xx: Server validated tenant/branch and committed transactional write
       // =======================================================================
-      if (res.ok) {
+      if (res.ok && resJson?.success === true) {
         // 6. Server returns canonical entity / version
         const canonicalData =
           resJson?.canonicalData ||
           resJson?.data ||
           resJson?.order ||
           resJson?.customer ||
-          resJson?.shift ||
-          item.payload;
+          resJson?.shift;
+        if (canonicalData === undefined && item.entityType !== "sync") throw new Error("Server omitted the canonical result.");
 
-        // 7. Mark operation SYNCED in IndexedDB
-        await repo.updateOutboxStatus(item.id, "SYNCED");
-
-        // 8. Update local IndexedDB with canonical entity and version
-        await repo.updateEntityWithCanonical(
-          item.tenantId,
-          item.entityType,
-          item.entityId,
-          canonicalData
-        );
+        // Canonical data and acknowledgement share a local transaction. A crash
+        // or disk failure leaves the command retryable with the same idempotency key.
+        await repo.db.transaction("rw", repo.db.tables, async()=>{
+          await repo.updateEntityWithCanonical(item.tenantId,item.entityType,item.entityId,canonicalData);
+          await repo.updateOutboxStatus(item.id,"SYNCED");
+        });
 
         // 9. Broadcast realtime event (locally to window CustomEvent and WebSocket listeners)
         this.dispatchCustomEvent("veggiepos_realtime_event", {
@@ -370,7 +368,7 @@ export class OfflineSyncEngine {
       }
 
       // --- 422 Validation Failure (and 400 Bad Request) ---
-      if (res.status === 422 || res.status === 400) {
+      if (res.status === 422 || res.status === 400 || res.status === 404 || (res.ok && resJson?.success !== true)) {
         console.warn(`[OfflineSyncEngine] 422/400 Validation Failure on [${item.id}]: ${errorMsg}`);
         // Permanent payload error: NEVER delete, mark as validation_error
         await repo.recordOutboxFailure(item.id, errorMsg, "validation_error", 600000);

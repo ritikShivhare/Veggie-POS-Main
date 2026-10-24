@@ -2,112 +2,65 @@ import React, { useState } from "react";
 import { MarketingRoute } from "../types";
 import {
   Check,
-  X,
   ArrowRight,
-  Sparkles,
-  HelpCircle,
   ChevronDown,
   ChevronUp,
-  ShieldCheck,
-  Terminal,
-  Zap,
-  Boxes,
-  Building
+  ShieldCheck
 } from "lucide-react";
+import { PLAN_LIMITS } from "../../../../shared/planCatalog";
 
 interface PricingPageProps {
   onNavigate: (route: MarketingRoute) => void;
 }
 
 export default function PricingPage({ onNavigate }: PricingPageProps) {
-  const [annualBilling, setAnnualBilling] = useState<boolean>(true);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   const plans = [
-    {
-      id: "starter",
-      name: "Starter / Counter",
-      tagline: "For single-counter QSRs, coffee bars, and boutique bakeries.",
-      monthlyPrice: 999,
-      annualPrice: 799,
-      popular: false,
-      features: [
-        "Single counter touch billing terminal",
-        "Fast 4-digit staff PIN switches",
-        "Dynamic UPI QR code generation",
-        "Thermal receipt & digital invoice printing",
-        "Basic daily sales & tax summary reports",
-        "Standard email & chat support",
-        "Zero hardware lock-in (use your own tablet/PC)"
-      ],
-      ctaText: "Start Starter Plan"
-    },
-    {
-      id: "pro",
-      name: "Full-Service Pro",
-      tagline: "For busy dine-in restaurants, casual dining, and cloud kitchens.",
-      monthlyPrice: 1999,
-      annualPrice: 1599,
-      popular: true,
-      features: [
-        "Everything in Starter, plus:",
-        "Interactive Floor Plan & Table Management",
-        "Multi-Station Kitchen Display (KDS) & Split KOTs",
-        "Recipe-Linked BOM Inventory & Auto-Deduction",
-        "Cash Drawer Pop Audit & Blind Shift Reconciliation",
-        "Customer CRM & Repeat Loyalty Points",
-        "Item Modifiers & Special Cooking Instructions",
-        "Live Owner Mobile Reporting Dashboard"
-      ],
-      ctaText: "Start Pro Plan"
-    },
-    {
-      id: "enterprise",
-      name: "Multi-Outlet Chain",
-      tagline: "For expanding restaurant groups, chains, and franchise operators.",
-      monthlyPrice: 3499,
-      annualPrice: 2799,
-      popular: false,
-      features: [
-        "Everything in Full-Service Pro, plus:",
-        "Centralized SaaS Owner Console for all branches",
-        "1-Click Global Menu & Price Tier Distribution",
-        "Cross-Outlet Sales & Margin Benchmarking",
-        "Multi-Tier Role Access Control (Area Manager / GM)",
-        "Consolidated Group Purchasing & Supplier Ledger",
-        "Dedicated Implementation Specialist & Priority SLA",
-        "Custom API & Webhook Data Export"
-      ],
-      ctaText: "Contact Enterprise Sales"
-    }
-  ];
+    { id: "free", tagline: "For one outlet getting started.", popular: false, ctaText: "Request a walkthrough" },
+    { id: "pro", tagline: "For a single outlet with more staff and orders.", popular: true, ctaText: "Request a walkthrough" },
+    { id: "enterprise", tagline: "Higher usage limits for one outlet.", popular: false, ctaText: "Contact us about this plan" }
+  ].map((display) => {
+    const plan = PLAN_LIMITS[display.id as keyof typeof PLAN_LIMITS];
+    const features = [
+      `Owner + ${plan.staffCount} active staff`,
+      `${plan.monthlyOrders < 0 ? "Unlimited (fair use)" : plan.monthlyOrders} orders per 30-day cycle`,
+      ...(plan.features.posTerminal ? ["POS terminal"] : []),
+      ...(plan.features.basicReports ? ["Basic sales reports"] : []),
+      ...(plan.features.advancedInventory ? ["Advanced inventory"] : []),
+      ...(plan.features.aiCopilot ? ["AI reports: 5 successful reports/day (IST; provider setup required)"] : []),
+      ...(plan.features.dedicatedSupport ? ["Dedicated support"] : []),
+      "One outlet per restaurant"
+    ];
+    return { ...display, name: plan.label, monthlyPrice: plan.price, features };
+  });
 
   const faqs = [
     {
-      q: "Are there any hidden transaction fees or per-order commissions?",
-      a: "No. Veggie POS charges a simple, transparent flat subscription fee. We never take a percentage cut of your restaurant sales, UPI payments, or card orders."
+      q: "How is the listed price billed?",
+      a: "Pro ₹999 and Elite ₹1,999 are all-inclusive prices for a 30-day subscription. Eligible restaurants can start a one-time 14-day trial with Owner + 10 staff, 250 orders, full inventory and 5 successful AI reports/day."
     },
     {
       q: "Do I need to buy expensive proprietary hardware from you?",
-      a: "Never. Veggie POS runs natively inside any modern web browser on the devices you already own—whether iPads, Android tablets, Windows All-in-One touch terminals, or laptops. It connects seamlessly to standard ESC/POS thermal printers and electronic cash drawers."
+      a: "Aatmyam POS is a web app. Request a walkthrough so we can discuss your device and printer setup."
     },
     {
-      q: "How fast can we onboard and import our menu?",
-      a: "Most restaurants go live within 24 to 48 hours. You can upload an Excel/PDF of your menu or share photos, and our dedicated implementation team will format and configure your categories, modifiers, and table floor plans."
+      q: "How do I get started?",
+      a: "Request a product walkthrough to discuss your menu, device setup, and the current early-access process."
     },
     {
-      q: "Can I upgrade or switch between plans as my restaurant grows?",
-      a: "Yes. You can switch between Starter, Pro, and Enterprise at any time. When upgrading, charges are automatically prorated without service interruptions."
+      q: "How can I change plans?",
+      a: "Choose a plan in Billing and pay through Cashfree. Access updates after backend payment verification. Mid-cycle Elite upgrades start a fresh 30-day cycle without proration."
     },
     {
       q: "What happens if our restaurant internet disconnects during service?",
-      a: "Veggie POS uses local state caching in the browser. Active tables, orders, and local PIN terminals remain responsive, and data synchronizes to the cloud the moment connectivity is restored."
+      a: "Aatmyam POS uses local state caching in the browser. Active tables, orders, and local PIN terminals remain responsive, and data synchronizes to the cloud the moment connectivity is restored."
     }
   ];
 
   return (
     <div className="bg-[#FBF9F5] text-[#1C1E1B] min-h-screen">
-      
+
       {/* 1. PRICING HERO */}
       <section className="pt-28 pb-16 md:pt-36 md:pb-24 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -121,41 +74,11 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
               <span className="text-[#6E8F45] italic">No hidden percentages.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              Choose the operational tier built for your outlet volume. Every plan includes free software updates, unlimited menu items, and zero per-order commissions.
+              Aatmyam POS is in early access. These 30-day plans use the same prices and limits as the app.
             </p>
 
-            {/* Billing Frequency Toggle */}
-            <div className="pt-4 flex items-center justify-center gap-3">
-              <span
-                className={`text-xs font-mono font-bold ${
-                  !annualBilling ? "text-[#181A18]" : "text-[#787F74]"
-                }`}
-              >
-                Monthly Billing
-              </span>
-              <button
-                onClick={() => setAnnualBilling(!annualBilling)}
-                className="w-14 h-7 bg-[#181A18] rounded-full p-1 transition duration-200 cursor-pointer relative"
-                aria-label="Toggle annual billing"
-              >
-                <div
-                  className={`w-5 h-5 rounded-full bg-[#FBF9F5] transition-transform duration-200 ${
-                    annualBilling ? "translate-x-7 bg-[#6E8F45]" : "translate-x-0"
-                  }`}
-                />
-              </button>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`text-xs font-mono font-bold ${
-                    annualBilling ? "text-[#181A18]" : "text-[#787F74]"
-                  }`}
-                >
-                  Annual Billing
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-[#EBF2E4] text-[#567234] text-[10px] font-mono font-bold border border-[#D5E3C8]">
-                  Save 20%
-                </span>
-              </div>
+            <div className="pt-4 text-xs font-mono text-[#787F74]">
+              30-day billing • One outlet per restaurant
             </div>
 
           </div>
@@ -165,10 +88,10 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
       {/* 2. PLAN CARDS */}
       <section className="py-20 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
             {plans.map((plan) => {
-              const activePrice = annualBilling ? plan.annualPrice : plan.monthlyPrice;
+              const activePrice = plan.monthlyPrice;
               return (
                 <div
                   key={plan.id}
@@ -207,7 +130,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                             plan.popular ? "text-[#A6AEA0]" : "text-[#787F74]"
                           }`}
                         >
-                          / outlet / month
+                          / outlet / 30 days
                         </span>
                       </div>
                       <p
@@ -215,7 +138,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                           plan.popular ? "text-[#84A955]" : "text-[#567234]"
                         }`}
                       >
-                        {annualBilling ? "Billed annually (₹" + activePrice * 12 + "/yr)" : "Billed monthly"}
+                        All-inclusive • 30-day cycle
                       </p>
                     </div>
 
@@ -266,7 +189,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
       {/* 3. TRANSPARENT PRICING FAQ */}
       <section className="py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
+
           <div className="text-center space-y-3">
             <span className="text-xs font-mono uppercase tracking-widest text-[#567234] font-bold">
               Frequently Asked Questions

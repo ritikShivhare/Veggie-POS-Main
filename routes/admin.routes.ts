@@ -1,5 +1,6 @@
+import {subscriptionUsage,resolveSubscriptionReview,getPlanLimits} from '../server/features/billing/SubscriptionLifecycle';
+import rateLimit from "express-rate-limit";
 import express from "express";
-import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import {
   adminAuthMiddleware,
@@ -17,9 +18,7 @@ import {
   purchaseRepo,
   shiftRepo,
   auditLogService,
-  notificationService,
-  verifyTOTP,
-  generateTOTP
+  notificationService
 } from "../server/context";
 import {
   SESSION_COOKIE_NAME,
@@ -28,377 +27,65 @@ import {
 import { hashPin } from "../server/features/auth/PinSecurityService";
 import { Database } from "../server/features/shared/database";
 
+import {verifySupabaseSuperAdmin} from "../server/features/auth/SuperAdminAuth";
+
 const router = express.Router();
 
-// In-Memory store for SaaS Super-Admin Email OTPs with auto-expiry
-interface PendingAdminOtp {
-  otp: string;
-  expiresAt: number;
-  email: string;
-  lastSentAt: number;
-}
-const pendingAdminOtps = new Map<string, PendingAdminOtp>();
-
-// Periodic cleanup of expired OTPs every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, val] of pendingAdminOtps.entries()) {
-    if (val.expiresAt < now) {
-      pendingAdminOtps.delete(key);
-    }
+// No legacy credential path can mint an administrator session.
+const adminLimiter = rateLimit({windowMs:15*60*1000,limit:15,standardHeaders:true,legacyHeaders:false});
+router.post(['/saas-admin/login','/saas-admin/google-login','/saas-admin/resend-otp'], (_req,res) => {
+  res.status(410).json({success:false,error:'LEGACY_ADMIN_LOGIN_DISABLED',message:'Use the verified Supabase administrator login with authenticator verification.'});
+});
+router.post('/saas-admin/exchange', adminLimiter, async (req,res) => {
+  const authorization=req.get('authorization') || '';
+  if (!authorization.startsWith('Bearer ') || !authorization.slice(7).trim()) {
+    return res.status(401).json({success:false,error:'ADMIN_TOKEN_REQUIRED'});
   }
-}, 5 * 60 * 1000);
-
-// Production-Level Session and Lockout Management Endpoints for SaaS Admin login
-router.post("/saas-admin/login", async (req, res) => {
-  const { pin, password, totp, otp, challengeToken } = req.body;
-  const inputPin = pin || password;
-  const userAgent = (req.headers["user-agent"] as string) || "Unknown User Agent";
-  const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
-  const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
-
   try {
-    const hashToUse = process.env.SAAS_OWNER_PASSWORD_HASH;
-    const inputOtp = (otp || totp || "").toString().trim();
-
-    // ----------------------------------------------------
-    // STEP 2: VERIFY 6-DIGIT EMAIL OTP
-    // ----------------------------------------------------
-    if (inputOtp) {
-      if (!challengeToken || !pendingAdminOtps.has(challengeToken)) {
-        return res.status(401).json({
-          success: false,
-          error: "OTP_NOT_FOUND",
-          message: "Verification code expired. Please request a new code."
-        });
-      }
-
-      const record = pendingAdminOtps.get(challengeToken)!;
-      if (Date.now() > record.expiresAt) {
-        pendingAdminOtps.delete(challengeToken);
-        return res.status(401).json({
-          success: false,
-          error: "OTP_EXPIRED",
-          message: "Verification code expired. Please request a new code."
-        });
-      }
-
-      if (record.otp !== inputOtp) {
-        return res.status(401).json({
-          success: false,
-          error: "INVALID_OTP",
-          message: "Invalid verification code."
-        });
-      }
-
-      // Valid OTP confirmed: Invalidate so code cannot be reused
-      pendingAdminOtps.delete(challengeToken);
-
-      // Issue Super-Admin Session
-      const session = await sessionService.createSession(
-        "saas-admin",
-        "s-saas-owner",
-        "SaaS Owner",
-        "SaaS Owner",
-        ip,
-        userAgent
-      );
-
-      res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
-
-      return res.json({
-        success: true,
-        message: "Verification successful.",
-        session,
-        user: {
-          id: "s-saas-owner",
-          name: "SaaS Owner",
-          role: "SaaS Owner",
-          permissions: ["billing", "inventory", "reports", "settings", "super_admin"]
-        }
-      });
-    }
-
-    // ----------------------------------------------------
-    // STEP 1: VERIFY PASSWORD AND SEND EMAIL OTP
-    // ----------------------------------------------------
-    if (!inputPin) {
-      return res.status(400).json({ success: false, message: "Super-Admin Password is required." });
-    }
-
-    let isPasswordMatch = false;
-    if (inputPin === "admin123" || inputPin === "superadmin") {
-      isPasswordMatch = true;
-    } else if (hashToUse) {
-      isPasswordMatch = await bcrypt.compare(inputPin, hashToUse);
-    }
-
-    if (!isPasswordMatch) {
-      return res.status(401).json({
-        success: false,
-        error: "INVALID_CREDENTIALS",
-        message: "Incorrect Super-Admin Password."
-      });
-    }
-
-    // Generate fresh random 6-digit Email OTP on backend
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const targetEmail = (req.body.email && typeof req.body.email === "string" && req.body.email.includes("@"))
-      ? req.body.email.trim()
-      : (process.env.EMAIL_ALERT_ADDRESS || process.env.SMTP_USER || "shivritik53@gmail.com");
-
-    const token = crypto.randomBytes(16).toString("hex");
-
-    // Store OTP securely associated with challengeToken and target email (10 minutes expiry)
-    pendingAdminOtps.set(token, {
-      otp: generatedOtp,
-      expiresAt: Date.now() + 10 * 60 * 1000,
-      email: targetEmail,
-      lastSentAt: Date.now()
-    });
-
-    // Send the exact generated OTP to user's email using existing notification/email service
-    let emailSent = false;
-    try {
-      const sendResult = await notificationService.send("saas-admin", {
-        title: "Your VeggiePOS Verification Code",
-        message: `Your VeggiePOS Super-Admin verification code is: ${generatedOtp}. This code will expire in 10 minutes.`,
-        severity: "info",
-        channels: ["email"],
-        recipientEmail: targetEmail,
-        htmlBody: `
-          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
-            <div style="text-align: center; margin-bottom: 24px;">
-              <div style="display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #ec4899, #6366f1); line-height: 48px; color: #ffffff; font-weight: 800; font-size: 20px;">V</div>
-              <h2 style="color: #0f172a; margin: 12px 0 4px; font-size: 20px;">Super-Admin Verification</h2>
-              <p style="color: #64748b; font-size: 13px; margin: 0;">VeggiePOS SaaS Multi-Tenant Control Panel</p>
-            </div>
-            <p style="color: #334155; font-size: 14px; line-height: 1.5;">Enter the following 6-digit one-time code to complete your Super-Admin login:</p>
-            <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0;">
-              <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #db2777; font-family: 'Courier New', Courier, monospace;">${generatedOtp}</span>
-            </div>
-            <p style="color: #64748b; font-size: 12px; line-height: 1.5;">This code expires in <strong>10 minutes</strong>. Never share this code with anyone.</p>
-            <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
-            <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${targetEmail} for VeggiePOS SaaS Security</p>
-          </div>
-        `
-      });
-
-      emailSent = sendResult.dispatchedChannels.some(
-        (c) => c.channel === "email" && c.status === "success"
-      );
-    } catch (sendErr) {
-      console.warn("[Admin Auth] Email notification failed, falling back to direct password authentication:", sendErr);
-      emailSent = false;
-    }
-
-    // If email failed or SMTP is not set up, authenticate immediately with password so owner is never locked out
-    if (!emailSent) {
-      pendingAdminOtps.delete(token);
-
-      const session = await sessionService.createSession(
-        "saas-admin",
-        "s-saas-owner",
-        "SaaS Owner",
-        "SaaS Owner",
-        ip,
-        userAgent
-      );
-
-      res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
-
-      return res.json({
-        success: true,
-        message: "Authenticated successfully with Super-Admin credentials.",
-        session,
-        user: {
-          id: "s-saas-owner",
-          name: "SaaS Owner",
-          role: "SaaS Owner",
-          email: targetEmail,
-          permissions: ["billing", "inventory", "reports", "settings", "super_admin"]
-        }
-      });
-    }
-
-    return res.json({
-      success: true,
-      requireOtp: true,
-      challengeToken: token,
-      email: targetEmail,
-      message: "Verification code sent to your email."
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message, message: "Unable to process authentication. Please try again." });
+    const verified=await verifySupabaseSuperAdmin(authorization.slice(7).trim());
+    if(!verified) return res.status(403).json({success:false,error:'ADMIN_NOT_AUTHORIZED_OR_MFA_REQUIRED'});
+    const session=await sessionService.createSession('saas-admin',`supabase:${verified.user.id}`,'SaaS Owner','SaaS Owner',req.ip || '',String(req.headers['user-agent'] || ''),['super_admin'],verified.identity);
+    res.cookie(SESSION_COOKIE_NAME,session.sessionId,{...getSessionCookieOptions(req),maxAge:verified.identity.expiresAt-Date.now()});
+    return res.json({success:true,session,user:{id:session.userId,name:session.userName,role:session.role,permissions:['super_admin']}});
+  } catch {
+    return res.status(503).json({success:false,error:'ADMIN_IDENTITY_SERVICE_UNAVAILABLE'});
   }
 });
 
-// Endpoint for SaaS Owner Google Authentication
-router.post("/saas-admin/google-login", async (req, res) => {
-  const { credential, email, name } = req.body;
-  const userAgent = (req.headers["user-agent"] as string) || "Unknown User Agent";
-  const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
-  const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
-
+// SaaS-wide audit is scoped to administrator actions only; never expose restaurant audit logs.
+// Read-only SaaS security summary; never return session tokens, IPs, MFA secrets or recovery factors.
+router.get("/admin/security/summary", adminAuthMiddleware, async (_req,res) => {
   try {
-    let authenticatedEmail = (email || "").trim().toLowerCase();
-
-    // If Google JWT ID token was provided, parse token payload safely
-    if (credential && typeof credential === "string") {
-      try {
-        const parts = credential.split(".");
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
-          if (payload.email) {
-            authenticatedEmail = payload.email.trim().toLowerCase();
-          }
-        }
-      } catch (e) {
-        console.warn("[Google Auth] Error decoding credential:", e);
-      }
-    }
-
-    const expectedOwnerEmail = (process.env.EMAIL_ALERT_ADDRESS || process.env.SMTP_USER || "shivritik53@gmail.com").trim().toLowerCase();
-
-    // Allow owner login
-    const isAuthorized =
-      !authenticatedEmail ||
-      authenticatedEmail === expectedOwnerEmail ||
-      authenticatedEmail === "shivritik53@gmail.com" ||
-      authenticatedEmail === "ritikshiv53@gmail.com" ||
-      authenticatedEmail.includes("ritikshiv") ||
-      authenticatedEmail.includes("shivritik");
-
-    if (!isAuthorized) {
-      return res.status(403).json({
-        success: false,
-        message: `Google Account (${authenticatedEmail}) is not authorized as SaaS Owner. Please use ${expectedOwnerEmail}.`
-      });
-    }
-
-    const session = await sessionService.createSession(
-      "saas-admin",
-      "s-saas-owner",
-      name || "SaaS Owner",
-      "SaaS Owner",
-      ip,
-      userAgent
-    );
-
-    res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
-
-    return res.json({
-      success: true,
-      message: "Google authentication successful.",
-      session,
-      user: {
-        id: "s-saas-owner",
-        name: name || "SaaS Owner",
-        role: "SaaS Owner",
-        email: authenticatedEmail || expectedOwnerEmail,
-        permissions: ["billing", "inventory", "reports", "settings", "super_admin"]
-      }
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Google authentication failed. Please try again."
-    });
+    const sessions=await sessionService.getActiveSessions("saas-admin");
+    return res.json({success:true, activeSessionCount:sessions.length,
+      sessions:sessions.map(s=>({createdAt:s.createdAt,lastActivityAt:s.lastActivityAt,expiresAt:s.expiresAt,
+        deviceType:s.device?.deviceType || "Unknown"}))});
+  } catch {
+    return res.status(503).json({success:false,error:"ADMIN_SECURITY_UNAVAILABLE"});
   }
 });
 
-// Endpoint to resend Super-Admin Email OTP
-router.post("/saas-admin/resend-otp", async (req, res) => {
-  const { challengeToken } = req.body;
+router.get("/admin/audit", adminAuthMiddleware, async (_req, res) => {
   try {
-    if (!challengeToken || !pendingAdminOtps.has(challengeToken)) {
-      return res.status(400).json({
-        success: false,
-        message: "Verification code expired. Please request a new code."
-      });
-    }
-
-    const record = pendingAdminOtps.get(challengeToken)!;
-
-    // Cooldown check (15 seconds)
-    if (Date.now() - record.lastSentAt < 15000) {
-      const waitSec = Math.ceil((15000 - (Date.now() - record.lastSentAt)) / 1000);
-      return res.status(429).json({
-        success: false,
-        message: `Please wait ${waitSec} seconds before requesting another code.`
-      });
-    }
-
-    // 1. Generate a completely new 6-digit OTP
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // 2. Replace previous OTP and update expiration to 10 minutes
-    record.otp = newOtp;
-    record.expiresAt = Date.now() + 10 * 60 * 1000;
-    record.lastSentAt = Date.now();
-
-    // 3. Send new OTP to user's email
-    const sendResult = await notificationService.send("saas-admin", {
-      title: "Your VeggiePOS Verification Code (Resent)",
-      message: `Your new VeggiePOS Super-Admin verification code is: ${newOtp}. This code will expire in 10 minutes.`,
-      severity: "info",
-      channels: ["email"],
-      recipientEmail: record.email,
-      htmlBody: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
-          <div style="text-align: center; margin-bottom: 24px;">
-            <div style="display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #ec4899, #6366f1); line-height: 48px; color: #ffffff; font-weight: 800; font-size: 20px;">V</div>
-            <h2 style="color: #0f172a; margin: 12px 0 4px; font-size: 20px;">Super-Admin Verification</h2>
-            <p style="color: #64748b; font-size: 13px; margin: 0;">VeggiePOS SaaS Multi-Tenant Control Panel</p>
-          </div>
-          <p style="color: #334155; font-size: 14px; line-height: 1.5;">Enter the following new 6-digit one-time code to complete your Super-Admin login:</p>
-          <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0;">
-            <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #db2777; font-family: 'Courier New', Courier, monospace;">${newOtp}</span>
-          </div>
-          <p style="color: #64748b; font-size: 12px; line-height: 1.5;">This code expires in <strong>10 minutes</strong>. Only the newest code is valid.</p>
-          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
-          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${record.email} for VeggiePOS SaaS Security</p>
-        </div>
-      `
-    });
-
-    const emailSent = sendResult.dispatchedChannels.some(
-      (c) => c.channel === "email" && c.status === "success"
-    );
-
-    if (!emailSent) {
-      return res.status(200).json({
-        success: true,
-        message: "Code refreshed. If email delivery is delayed, you can also sign in directly using Google Authentication."
-      });
-    }
-
-    return res.json({
-      success: true,
-      message: "Verification code sent to your email."
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message || "Unable to send verification email. Please try again." });
+    const logs = await auditLogService.getLogs("saas-admin");
+    return res.json({success: true, logs: logs.slice(0, 100).map(({id, timestamp, eventType, actor, description}) =>
+      ({id, timestamp, eventType, actor, description}))});
+  } catch {
+    return res.status(503).json({success:false,error:"ADMIN_AUDIT_UNAVAILABLE"});
   }
 });
 
 router.get("/admin/tenants", adminAuthMiddleware, async (req, res) => {
   try {
     const tenants = await getGlobalTenantsList();
-    
+
     // Enrich with dynamic live subscription and usage stats
     const enrichedTenants = await Promise.all(tenants.map(async (t) => {
       try {
         const sub = await getSubscription(t.tenantId);
-        
+
         // Count staff
         const staffList = (await staffRepo.getAll(t.tenantId)) || [];
-        
-        // Count monthly orders
-        const orders = (await orderRepo.getAll(t.tenantId)) || [];
-        const now = new Date();
-        const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-        const monthlyCount = orders.filter(o => o.date && o.date.startsWith(currentYearMonth)).length;
 
         // Mask Owner PIN passcode completely
         const ownerMember = staffList.find(s => s.role === "Owner");
@@ -408,11 +95,9 @@ router.get("/admin/tenants", adminAuthMiddleware, async (req, res) => {
           ...t,
           plan: sub.plan || "free",
           planStatus: sub.status || "active",
+          subscription:sub,limits:getPlanLimits(sub),
           ownerPin,
-          usage: {
-            staffCount: staffList.length,
-            monthlyOrders: monthlyCount
-          }
+          usage: await subscriptionUsage(t.tenantId,sub)
         };
       } catch (err) {
         return {
@@ -428,6 +113,13 @@ router.get("/admin/tenants", adminAuthMiddleware, async (req, res) => {
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+router.post('/admin/subscription/resolve-review',adminAuthMiddleware,async(req,res)=>{
+ try{const {tenantId,kind,reason}=req.body;
+  if(!(await getGlobalTenantsList()).some(t=>t.tenantId===tenantId)) return res.status(404).json({success:false,error:'TENANT_NOT_FOUND'});
+  await resolveSubscriptionReview(tenantId,kind,reason,(req as any).session.userId);res.json({success:true});
+ }catch(error){const status=(error as any).status || 500;res.status(status).json({success:false,error:(error as any).message});}
 });
 
 router.post("/admin/tenants/suspend", adminAuthMiddleware, async (req, res) => {
@@ -491,254 +183,28 @@ router.post("/admin/tenants/activate", adminAuthMiddleware, async (req, res) => 
 });
 
 router.post("/admin/tenants/register", adminAuthMiddleware, async (req, res) => {
-  const { businessName, ownerName, ownerPhone, email, region, pin } = req.body;
-  if (!businessName || !ownerName || !email || !pin) {
-    return res.status(400).json({ success: false, error: "Missing required registration parameters" });
+  const { businessName, ownerName, ownerPhone, email, region, pin } = req.body || {};
+  if (typeof businessName !== "string" || !businessName.trim() ||
+      typeof ownerName !== "string" || !ownerName.trim() ||
+      typeof ownerPhone !== "string" || !ownerPhone.trim() ||
+      typeof email !== "string" || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) ||
+      typeof region !== "string" || typeof pin !== "string" || !/^\d{5}$/.test(pin)) {
+    return res.status(400).json({ success: false, error: "Valid restaurant details and a 5-digit Owner PIN are required." });
   }
-
   try {
-    const cleanedName = businessName.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const randomSuffix = Math.floor(100 + Math.random() * 900);
+    const randomSuffix = crypto.randomUUID();
+    const cleanedName = businessName.trim().toLowerCase().replace(/[^a-z0-9]/g, "") || "restaurant";
     const tenantId = `veg-${cleanedName}-${randomSuffix}`;
-
-    const newOwnerId = `s-${ownerName.toLowerCase().replace(/[^a-z0-9]/g, "")}-${randomSuffix}`;
+    const newOwnerId = `s-owner-${randomSuffix}`;
     const hashedPin = await hashPin(pin);
-    const newOwner = {
-      id: newOwnerId,
-      name: ownerName,
-      role: "Owner" as any,
-      pin: hashedPin,
-      permissions: ["billing", "inventory", "reports", "settings"]
-    };
-
-    const newSettings = {
-      autoDeductStock: true,
-      blockOrdersIfInsufficient: true,
-      managerCanAddPurchases: true,
-      managerCanEditRecipes: true,
-      kdsSoundAlerts: false,
-      quickPinRequired: false
-    };
-
-    // Save initial slices using repos
-    await staffRepo.saveAll(tenantId, [newOwner] as any[]);
-    await settingsRepo.save(tenantId, newSettings);
-
-    // Seed full default inventory, menu items, and editable recipes
-    const defaultIngredients = [
-      { id: "i-paneer", name: "Paneer", unit: "g", currentStock: 2200, minStock: 2000, costPerUnit: 0.4 },
-      { id: "i-butter", name: "Amul Butter", unit: "g", currentStock: 1400, minStock: 1000, costPerUnit: 0.6 },
-      { id: "i-rice", name: "Basmati Rice", unit: "g", currentStock: 8500, minStock: 5000, costPerUnit: 0.1 },
-      { id: "i-tomato", name: "Tomato", unit: "g", currentStock: 3850, minStock: 3000, costPerUnit: 0.05 },
-      { id: "i-onion", name: "Onion", unit: "g", currentStock: 12000, minStock: 8000, costPerUnit: 0.04 },
-      { id: "i-garlic", name: "Garlic", unit: "g", currentStock: 2000, minStock: 1000, costPerUnit: 0.2 },
-      { id: "i-maida", name: "Maida Flour", unit: "g", currentStock: 6000, minStock: 4000, costPerUnit: 0.08 },
-      { id: "i-milk", name: "Fresh Milk / Cream", unit: "ml", currentStock: 5000, minStock: 2000, costPerUnit: 0.06 },
-      { id: "i-lemon", name: "Fresh Lemon", unit: "pcs", currentStock: 60, minStock: 20, costPerUnit: 5 },
-      { id: "i-sugar", name: "Sugar", unit: "g", currentStock: 4500, minStock: 2000, costPerUnit: 0.04 },
-      { id: "i-tea-coffee", name: "Tea Leaves & Coffee", unit: "g", currentStock: 1200, minStock: 500, costPerUnit: 0.3 }
-    ];
-
-    const defaultMenuItems = [
-      { id: "m-thali", name: "Special Thali", nameHindi: "स्पेशल थाली", price: 220, category: "Recommended", imageUrl: "🍱", isVegetarian: true, isAvailable: true },
-      { id: "m-paneer-butter", name: "Paneer Butter Masala", nameHindi: "पनीर बटर मसाला", price: 180, category: "Main Course", imageUrl: "🥘", isVegetarian: true, isAvailable: true },
-      { id: "m-paneer-tikka", name: "Paneer Tikka", nameHindi: "पनीर टिक्का", price: 150, category: "Starters", imageUrl: "🍢", isVegetarian: true, isAvailable: true },
-      { id: "m-manchurian", name: "Veg Manchurian Dry", nameHindi: "वेज मंचूरियन", price: 140, category: "Chinese", imageUrl: "🧆", isVegetarian: true, isAvailable: true },
-      { id: "m-crispy-corn", name: "Crispy Corn", nameHindi: "क्रिस्पी कॉर्न", price: 130, category: "Starters", imageUrl: "🌽", isVegetarian: true, isAvailable: true },
-      { id: "m-hara-bhara", name: "Hara Bhara Kabab", nameHindi: "हरा भरा कबाब", price: 150, category: "Starters", imageUrl: "🥙", isVegetarian: true, isAvailable: true },
-      { id: "m-dal-makhani", name: "Dal Makhani", nameHindi: "दाल मखनी", price: 160, category: "Main Course", imageUrl: "🍲", isVegetarian: true, isAvailable: true },
-      { id: "m-dal-tadka", name: "Dal Tadka", nameHindi: "दाल तड़का", price: 140, category: "Main Course", imageUrl: "🥣", isVegetarian: true, isAvailable: true },
-      { id: "m-kadhai-paneer", name: "Kadhai Paneer", nameHindi: "कढ़ाई पनीर", price: 190, category: "Main Course", imageUrl: "🥘", isVegetarian: true, isAvailable: true },
-      { id: "m-veg-biryani", name: "Veg Biryani", nameHindi: "वेज बिरयानी", price: 250, category: "Rice & Biryani", imageUrl: "🍛", isVegetarian: true, isAvailable: true },
-      { id: "m-jeera-rice", name: "Jeera Rice", nameHindi: "जीरा राइस", price: 180, category: "Rice & Biryani", imageUrl: "🍚", isVegetarian: true, isAvailable: true },
-      { id: "m-butter-naan", name: "Butter Naan", nameHindi: "बटर नान", price: 50, category: "Breads", imageUrl: "🫓", isVegetarian: true, isAvailable: true },
-      { id: "m-tandoori-roti", name: "Tandoori Roti", nameHindi: "तंदूरी रोटी", price: 20, category: "Breads", imageUrl: "🥖", isVegetarian: true, isAvailable: true },
-      { id: "m-gulab-jamun", name: "Gulab Jamun (2pcs)", nameHindi: "गुलाब जामुन", price: 50, category: "Desserts", imageUrl: "🥯", isVegetarian: true, isAvailable: true },
-      { id: "m-vanilla-ice", name: "Vanilla Ice Cream", nameHindi: "वैनिला आइसक्रीम", price: 40, category: "Desserts", imageUrl: "🍨", isVegetarian: true, isAvailable: true },
-      { id: "m-soda", name: "Fresh Lime Soda", nameHindi: "शिकंजी", price: 50, category: "Beverages", imageUrl: "🥤", isVegetarian: true, isAvailable: true },
-      { id: "m-water", name: "Mineral Water", nameHindi: "पानी", price: 20, category: "Beverages", imageUrl: "🍼", isVegetarian: true, isAvailable: true }
-    ];
-
-    const defaultRecipes = [
-      {
-        menuItemId: "m-thali",
-        ingredients: [
-          { ingredientId: "i-paneer", quantity: 100 },
-          { ingredientId: "i-butter", quantity: 20 },
-          { ingredientId: "i-rice", quantity: 120 },
-          { ingredientId: "i-tomato", quantity: 40 },
-          { ingredientId: "i-onion", quantity: 40 }
-        ]
-      },
-      {
-        menuItemId: "m-paneer-butter",
-        ingredients: [
-          { ingredientId: "i-paneer", quantity: 200 },
-          { ingredientId: "i-butter", quantity: 50 },
-          { ingredientId: "i-tomato", quantity: 80 },
-          { ingredientId: "i-onion", quantity: 50 }
-        ]
-      },
-      {
-        menuItemId: "m-paneer-tikka",
-        ingredients: [
-          { ingredientId: "i-paneer", quantity: 180 },
-          { ingredientId: "i-onion", quantity: 40 },
-          { ingredientId: "i-tomato", quantity: 30 }
-        ]
-      },
-      {
-        menuItemId: "m-manchurian",
-        ingredients: [
-          { ingredientId: "i-maida", quantity: 50 },
-          { ingredientId: "i-onion", quantity: 60 },
-          { ingredientId: "i-garlic", quantity: 20 }
-        ]
-      },
-      {
-        menuItemId: "m-crispy-corn",
-        ingredients: [
-          { ingredientId: "i-maida", quantity: 40 },
-          { ingredientId: "i-butter", quantity: 20 },
-          { ingredientId: "i-onion", quantity: 30 }
-        ]
-      },
-      {
-        menuItemId: "m-hara-bhara",
-        ingredients: [
-          { ingredientId: "i-paneer", quantity: 60 },
-          { ingredientId: "i-onion", quantity: 30 },
-          { ingredientId: "i-maida", quantity: 30 }
-        ]
-      },
-      {
-        menuItemId: "m-dal-makhani",
-        ingredients: [
-          { ingredientId: "i-butter", quantity: 40 },
-          { ingredientId: "i-tomato", quantity: 50 },
-          { ingredientId: "i-onion", quantity: 30 },
-          { ingredientId: "i-milk", quantity: 30 }
-        ]
-      },
-      {
-        menuItemId: "m-dal-tadka",
-        ingredients: [
-          { ingredientId: "i-butter", quantity: 25 },
-          { ingredientId: "i-tomato", quantity: 40 },
-          { ingredientId: "i-onion", quantity: 30 },
-          { ingredientId: "i-garlic", quantity: 15 }
-        ]
-      },
-      {
-        menuItemId: "m-kadhai-paneer",
-        ingredients: [
-          { ingredientId: "i-paneer", quantity: 180 },
-          { ingredientId: "i-butter", quantity: 35 },
-          { ingredientId: "i-tomato", quantity: 60 },
-          { ingredientId: "i-onion", quantity: 50 }
-        ]
-      },
-      {
-        menuItemId: "m-veg-biryani",
-        ingredients: [
-          { ingredientId: "i-rice", quantity: 180 },
-          { ingredientId: "i-onion", quantity: 50 },
-          { ingredientId: "i-tomato", quantity: 30 },
-          { ingredientId: "i-paneer", quantity: 30 }
-        ]
-      },
-      {
-        menuItemId: "m-jeera-rice",
-        ingredients: [
-          { ingredientId: "i-rice", quantity: 160 },
-          { ingredientId: "i-butter", quantity: 20 }
-        ]
-      },
-      {
-        menuItemId: "m-butter-naan",
-        ingredients: [
-          { ingredientId: "i-maida", quantity: 100 },
-          { ingredientId: "i-butter", quantity: 15 }
-        ]
-      },
-      {
-        menuItemId: "m-tandoori-roti",
-        ingredients: [
-          { ingredientId: "i-maida", quantity: 80 }
-        ]
-      },
-      {
-        menuItemId: "m-gulab-jamun",
-        ingredients: [
-          { ingredientId: "i-maida", quantity: 50 },
-          { ingredientId: "i-sugar", quantity: 40 },
-          { ingredientId: "i-butter", quantity: 15 }
-        ]
-      },
-      {
-        menuItemId: "m-vanilla-ice",
-        ingredients: [
-          { ingredientId: "i-milk", quantity: 120 },
-          { ingredientId: "i-sugar", quantity: 25 }
-        ]
-      },
-      {
-        menuItemId: "m-soda",
-        ingredients: [
-          { ingredientId: "i-lemon", quantity: 1 },
-          { ingredientId: "i-sugar", quantity: 30 }
-        ]
-      }
-    ];
-
-    const defaultCustomers = [
-      { id: "c-1", name: "Amit Kumar", phone: "9876543210", email: "amit@gmail.com", loyaltyPoints: 120, tier: "Silver", totalSpent: 12400 },
-      { id: "c-2", name: "Priya Sharma", phone: "9123456789", email: "priya@yahoo.com", loyaltyPoints: 340, tier: "Gold", totalSpent: 34800 }
-    ];
-
-    await ingredientRepo.saveAll(tenantId, defaultIngredients);
-    await menuRepo.saveAll(tenantId, defaultMenuItems);
-    await recipeRepo.saveAll(tenantId, defaultRecipes);
-    await customerRepo.saveAll(tenantId, defaultCustomers as any[]);
-    await orderRepo.saveAll(tenantId, []);
-    await purchaseRepo.saveAll(tenantId, []);
-    await shiftRepo.saveAll(tenantId, []);
-
-    // Add directly to global tenants list
-    const list = await getGlobalTenantsList();
-    const newTenantRecord = {
-      id: `t-${Date.now()}`,
-      name: businessName,
-      tenantId,
-      status: "active" as const,
-      created: new Date().toISOString().slice(0, 10),
-      region: region || "North India / Delhi",
-      ownerName,
-      email,
-      ownerPhone: ownerPhone || "",
-      ownerPin: hashedPin
-    };
-    list.push(newTenantRecord);
-    await saveGlobalTenantsList(list);
-
-    await auditLogService.log(
-      tenantId,
-      "TENANT_INIT",
-      "SYSTEM",
-      `SaaS Owner registered new tenant "${businessName}" successfully.`
-    );
-
-    // Return sanitized tenant object without sensitive credentials
-    const { ownerPin: _omitPin, ...publicTenant } = newTenantRecord;
-
-    res.json({
-      success: true,
-      tenantId,
-      tenant: publicTenant,
-      message: `Tenant "${businessName}" successfully registered by Super-Admin.`
+    const result = await Database.getInstance().registerAdminRestaurantAtomic({
+      tenantId, ownerId:newOwnerId, businessName:businessName.trim(), ownerName:ownerName.trim(),
+      ownerPhone:ownerPhone.trim(), email:email.trim(), region:region.trim(), hashedPin
     });
+    return res.json({ success: true, tenantId, tenant: result, message: "Restaurant successfully registered." });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
+    const conflict = error?.code === "23505" || /already registered|already initialized/i.test(String(error?.message || ""));
+    return res.status(conflict ? 409 : 500).json({success:false,error:conflict?"Restaurant already registered.":(error?.code || "REGISTRATION_FAILED")});
   }
 });
 
@@ -764,41 +230,6 @@ export interface WalkthroughLeadRecord {
   internalNotes?: string;
 }
 
-const DEFAULT_SAMPLE_LEADS: WalkthroughLeadRecord[] = [
-  {
-    id: "lead-sample-1",
-    fullName: "Vikram Malhotra",
-    email: "vikram@urbanbistro.in",
-    phone: "9820198201",
-    restaurantName: "Urban Bistro & Brews",
-    address: "Shop 14, High Street Mall, Senapati Bapat Road, Pune, Maharashtra - 411016",
-    format: "casual-dine",
-    outletCount: "2-4",
-    primaryGoal: "Recipe BOM stock & ingredient leakage control",
-    preferredDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-    preferredTime: "morning",
-    notes: "Facing inventory wastage issue across 2 locations.",
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    status: "new"
-  },
-  {
-    id: "lead-sample-2",
-    fullName: "Pooja Singhania",
-    email: "pooja@chaico.com",
-    phone: "9811234567",
-    restaurantName: "Chai & Conversations Cafe",
-    address: "Ground Floor, Cyber Hub, DLF Phase 2, Gurugram, Haryana - 122002",
-    format: "cafe-bakery",
-    outletCount: "5-10",
-    primaryGoal: "Fast PIN billing & speed at register",
-    preferredDate: new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10),
-    preferredTime: "afternoon",
-    notes: "Opening 2 more quick-service outlets next month, need fast counter setup.",
-    createdAt: new Date(Date.now() - 3600000 * 18).toISOString(),
-    status: "contacted",
-    internalNotes: "Spoke with manager on WhatsApp. Walkthrough call scheduled."
-  }
-];
 
 // 1. Public Endpoint: Book Walkthrough from Marketing Website
 router.post("/leads/walkthrough", async (req, res) => {
@@ -827,13 +258,15 @@ router.post("/leads/walkthrough", async (req, res) => {
     const db = Database.getInstance();
     let existingLeads = await db.getObject<WalkthroughLeadRecord[]>("system-tenant", "walkthrough_leads");
     if (!existingLeads || !Array.isArray(existingLeads)) {
-      existingLeads = [...DEFAULT_SAMPLE_LEADS];
+      existingLeads = [];
     }
 
     const cleanPhone = String(phone).replace(/[^0-9]/g, "");
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    const existingIndex = existingLeads.findIndex((l) => {
+    const existingIndex = -1;
+    /* Existing leads may only be edited through authenticated administration.
+    const unused = existingLeads.findIndex((l) => {
       const p1 = l.phone.replace(/[^0-9]/g, "");
       const isSamePhone = cleanPhone && p1 && (p1 === cleanPhone || p1.endsWith(cleanPhone) || cleanPhone.endsWith(p1));
       const isSameEmail = email && l.email && l.email.toLowerCase().trim() === String(email).toLowerCase().trim();
@@ -841,6 +274,7 @@ router.post("/leads/walkthrough", async (req, res) => {
       return isSamePhone || isSameEmail || (isSameRest && l.fullName.toLowerCase().trim() === String(fullName).toLowerCase().trim());
     });
 
+    */
     let targetLead: WalkthroughLeadRecord;
     let isRescheduled = false;
 
@@ -892,7 +326,7 @@ router.post("/leads/walkthrough", async (req, res) => {
 
     // Also push notification to in-app notification center for all tenants/SaaS owner
     try {
-      const currentNotifications = (await db.getObject<any[]>("veg-main-001", "system_notifications")) || [];
+      const currentNotifications = (await db.getObject<any[]>("saas-admin", "system_notifications")) || [];
       const newNotification = {
         id: `notify-lead-${Date.now()}`,
         title: isRescheduled ? "🔄 Walkthrough Re-scheduled" : "🌟 Walkthrough Schedule Confirmed",
@@ -902,7 +336,7 @@ router.post("/leads/walkthrough", async (req, res) => {
         severity: "info"
       };
       currentNotifications.unshift(newNotification);
-      await db.saveObject("veg-main-001", "system_notifications", currentNotifications.slice(0, 50));
+      await db.saveObject("saas-admin", "system_notifications", currentNotifications.slice(0, 50));
     } catch (notifErr) {
       console.warn("Could not append lead to system_notifications:", notifErr);
     }
@@ -927,13 +361,12 @@ router.post("/leads/walkthrough", async (req, res) => {
 });
 
 // 2. Admin Endpoint: List all Walkthrough Leads
-router.get("/leads/walkthrough", async (req, res) => {
+router.get("/leads/walkthrough", adminAuthMiddleware, async (req, res) => {
   try {
     const db = Database.getInstance();
     let leads = await db.getObject<WalkthroughLeadRecord[]>("system-tenant", "walkthrough_leads");
-    if (!leads || !Array.isArray(leads) || leads.length === 0) {
-      leads = [...DEFAULT_SAMPLE_LEADS];
-      await db.saveObject("system-tenant", "walkthrough_leads", leads);
+    if (!leads || !Array.isArray(leads)) {
+      leads = [];
     }
 
     res.json({
@@ -946,7 +379,7 @@ router.get("/leads/walkthrough", async (req, res) => {
 });
 
 // 3. Admin Endpoint: Update Lead Status / Notes
-router.patch("/leads/walkthrough/:id", async (req, res) => {
+router.patch("/leads/walkthrough/:id", adminAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { status, internalNotes } = req.body;
@@ -954,7 +387,7 @@ router.patch("/leads/walkthrough/:id", async (req, res) => {
     const db = Database.getInstance();
     let leads = await db.getObject<WalkthroughLeadRecord[]>("system-tenant", "walkthrough_leads");
     if (!leads || !Array.isArray(leads)) {
-      leads = [...DEFAULT_SAMPLE_LEADS];
+      leads = [];
     }
 
     const index = leads.findIndex((l) => l.id === id);
@@ -978,7 +411,7 @@ router.patch("/leads/walkthrough/:id", async (req, res) => {
 });
 
 // 4. Admin Endpoint: Delete a Lead
-router.delete("/leads/walkthrough/:id", async (req, res) => {
+router.delete("/leads/walkthrough/:id", adminAuthMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const db = Database.getInstance();

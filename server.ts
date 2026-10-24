@@ -1,8 +1,10 @@
+import "dotenv/config";
 import express from "express";
 import http from "http";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import dotenv from "dotenv";
+import {validateStartup} from "./server-startup-validation";
+import {mountStaticClient} from "./server/static-client";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -24,8 +26,9 @@ import adminRouter from "./routes/admin.routes";
 import posRouter from "./routes/pos.routes";
 import sharedRouter from "./routes/shared.routes";
 
-dotenv.config();
 
+// The browser needs only the public Supabase Auth origin, never server keys.
+const supabaseAuthOrigin = (() => {try {const u=new URL(process.env.SUPABASE_URL || '');return u.protocol==='https:' ? [u.origin] : [];} catch {return [];}})();
 const app = express();
 app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT) || 3000;
@@ -33,7 +36,7 @@ const PORT = Number(process.env.PORT) || 3000;
 // Enable Helmet middleware with iframe-friendly parameters
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: process.env.NODE_ENV === "production" ? {directives:{defaultSrc:["'self'"],scriptSrc:["'self'","https://accounts.google.com"],styleSrc:["'self'","'unsafe-inline'","https://fonts.googleapis.com"],imgSrc:["'self'","data:","blob:","https:"],fontSrc:["'self'","data:","https://fonts.gstatic.com"],connectSrc:["'self'","wss:",...supabaseAuthOrigin],frameSrc:["https://accounts.google.com"],frameAncestors:["'self'","https://*.ai.studio"]}} : false,
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: false,
     frameguard: false,
@@ -119,6 +122,7 @@ app.use("/api", apiLimiter);
 
 // Setup Request Parsing Middleware with safe limits (2MB global, isolated 10MB for bulk sync)
 app.use(cookieParser());
+app.use("/api/webhooks/cashfree", express.raw({type:"application/json",limit:"1mb"}));
 app.use("/api/sync", express.json({ limit: "10mb" }));
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ limit: "2mb", extended: true }));
@@ -145,18 +149,24 @@ app.use((req, res, next) => {
         path: req.path,
         status,
         ip: req.ip || req.headers["x-forwarded-for"] || "127.0.0.1",
-        query: req.query
+        // Query strings can contain tokens or customer data; do not record them.
+        requestId: res.getHeader("x-request-id")
       },
       duration
-    );
+    ).catch(()=>console.warn("Telemetry persistence is temporarily unavailable."));
   });
 
   next();
 });
 
 // Health check endpoint
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", time: new Date().toISOString() });
+app.get("/api/health", async (_req,res)=>{
+  try {
+    const db=Database.getInstance(),client=db.getSupabaseClient();
+    if(db.isDatabaseStopped() || (!client && isProductionEnv)) throw new Error("Database not ready");
+    if(client) {const {data,error}=await client.rpc("deployment_schema_version");if(error || Number(data)<9) throw new Error("Schema not ready");}
+    res.json({status:"ok",database:client?"connected":"development",schemaVersion:9,commit:process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || null,time:new Date().toISOString()});
+  }catch {res.status(503).json({status:"not_ready",message:"Database connection or migrations require attention."});}
 });
 
 // Mount Route Groups under /api
@@ -168,7 +178,7 @@ app.use("/api", posRouter);
 app.use("/api", sharedRouter);
 
 // Global Error Handler (catches 503 DATABASE_UNAVAILABLE and other unhandled route errors)
-import { handleApiError } from "./server/features/shared/database";
+import { Database,handleApiError } from "./server/features/shared/database";
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   handleApiError(res, err);
 });
@@ -201,6 +211,7 @@ process.on("unhandledRejection", (reason, promise) => {
 });
 
 async function startServer() {
+  await validateStartup();
   // Initialize and register all EventBus subscribers (loose coupling)
   initializeEventSubscribers();
 
@@ -215,11 +226,8 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    const distPath = path.join(process.cwd(), 'dist', 'client');
+    mountStaticClient(app, distPath);
   }
 
   const httpServer = http.createServer(app);
@@ -233,7 +241,7 @@ async function startServer() {
 }
 
 if (!process.env.VITEST) {
-  startServer();
+  startServer().catch(error=>{console.error("Server startup blocked:",error.message);process.exitCode=1;});
 }
 
 export { app };

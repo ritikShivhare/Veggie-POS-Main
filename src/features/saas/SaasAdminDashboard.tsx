@@ -53,15 +53,6 @@ interface SaasAdminDashboardProps {
   currentSessionId?: string | null;
 }
 
-interface SyncLog {
-  id: string;
-  timestamp: string;
-  tenantName: string;
-  tenantId: string;
-  eventType: string;
-  syncStatus: "SUCCESS" | "PENDING" | "FAILED";
-  recordsCount: number;
-}
 
 export default function SaasAdminDashboard({
   tenants,
@@ -91,12 +82,39 @@ export default function SaasAdminDashboard({
   const [regError, setRegError] = useState("");
   const [regSuccess, setRegSuccess] = useState("");
 
-  // Live Sync Log generation
-  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
-  const [isSyncingAll, setIsSyncingAll] = useState(false);
-
   // Sub-tab switcher: "tenants" | "leads" | "syncLogs"
-  const [activeAdminTab, setActiveAdminTab] = useState<"tenants" | "leads" | "syncLogs">("tenants");
+  const [activeAdminTab, setActiveAdminTab] = useState<"overview" | "tenants" | "leads" | "syncLogs" | "billing" | "activity" | "support" | "analytics" | "security">("overview");
+
+  const [inspectedTenantId, setInspectedTenantId] = useState<string | null>(null);
+  const [platformAudit, setPlatformAudit] = useState<Array<{id:string;timestamp:string;eventType:string;actor:string;description:string}>>([]);
+  const [auditLoading,setAuditLoading] = useState(false);
+  const [auditError,setAuditError] = useState<string | null>(null);
+  const [securitySummary,setSecuritySummary] = useState<{activeSessionCount:number;sessions:Array<{createdAt:string;lastActivityAt:string;expiresAt:string;deviceType:string}>}|null>(null);
+  const [securityLoading,setSecurityLoading]=useState(false);
+  const [securityError,setSecurityError]=useState<string|null>(null);
+  useEffect(()=>{
+    if(activeAdminTab!=="security" || !currentSessionId)return;
+    let mounted=true;setSecurityLoading(true);setSecurityError(null);
+    fetch("/api/admin/security/summary",{credentials:"include",headers:{"x-session-id":currentSessionId,"x-tenant-id":"saas-admin"}})
+      .then(async response=>{if(!response.ok)throw new Error("SECURITY_SUMMARY_UNAVAILABLE");return response.json();})
+      .then(data=>{if(mounted){if(!data.success)throw Error("SECURITY_SUMMARY_UNAVAILABLE");setSecuritySummary(data);}})
+      .catch(()=>{if(mounted)setSecurityError("Could not load administrator security summary.");})
+      .finally(()=>{if(mounted)setSecurityLoading(false);});
+    return ()=>{mounted=false;};
+  },[activeAdminTab,currentSessionId]);
+
+
+  useEffect(()=>{
+    if(activeAdminTab!=="activity") return;
+    let active=true;
+    setAuditLoading(true);setAuditError(null);
+    fetch("/api/admin/audit",{credentials:"include",headers:{"x-session-id":currentSessionId || "","x-tenant-id":"saas-admin"}})
+      .then(async response=>{if(!response.ok)throw new Error("Audit API unavailable");return response.json();})
+      .then(result=>{if(active){if(!result.success)throw new Error("Audit data unavailable");setPlatformAudit(Array.isArray(result.logs)?result.logs:[]);}})
+      .catch(()=>{if(active)setAuditError("Could not load platform audit history.");})
+      .finally(()=>{if(active)setAuditLoading(false);});
+    return ()=>{active=false;};
+  },[activeAdminTab,currentSessionId]);
 
   // Walkthrough Leads states (Option 1 & Address feature)
   const [leads, setLeads] = useState<WalkthroughLead[]>([]);
@@ -196,95 +214,10 @@ export default function SaasAdminDashboard({
     fetchTenants();
   }, [currentSessionId, tenants]);
 
-  // Generate initial mock sync log stream
-  useEffect(() => {
-    const initialLogs: SyncLog[] = [
-      {
-        id: "log-1029",
-        timestamp: new Date(Date.now() - 1000 * 60 * 2).toLocaleTimeString(),
-        tenantName: "The Green Kitchen",
-        tenantId: "veg-main-001",
-        eventType: "POS_BILL_DEDUCT_STOCK",
-        syncStatus: "SUCCESS",
-        recordsCount: 3
-      },
-      {
-        id: "log-1028",
-        timestamp: new Date(Date.now() - 1000 * 60 * 8).toLocaleTimeString(),
-        tenantName: "Organic Bites",
-        tenantId: "org-bites-02",
-        eventType: "BATCH_INVENTORY_RESTOCK",
-        syncStatus: "SUCCESS",
-        recordsCount: 12
-      },
-      {
-        id: "log-1027",
-        timestamp: new Date(Date.now() - 1000 * 60 * 15).toLocaleTimeString(),
-        tenantName: "The Green Kitchen",
-        tenantId: "veg-main-001",
-        eventType: "SHIFT_CLOCK_OUT_SYNC",
-        syncStatus: "SUCCESS",
-        recordsCount: 1
-      },
-      {
-        id: "log-1026",
-        timestamp: new Date(Date.now() - 1000 * 60 * 24).toLocaleTimeString(),
-        tenantName: "Organic Bites",
-        tenantId: "org-bites-02",
-        eventType: "CUSTOMER_DISCOUNT_REDEEM",
-        syncStatus: "SUCCESS",
-        recordsCount: 1
-      }
-    ];
-    setSyncLogs(initialLogs);
-
-    // Stream random simulated live database sync events
-    const interval = setInterval(() => {
-      if (localTenants.length === 0) return;
-      const randomTenant = localTenants[Math.floor(Math.random() * localTenants.length)];
-      const events = [
-        "POS_BILL_DEDUCT_STOCK",
-        "SYNC_INGREDIENT_LEDGER",
-        "CRM_CUSTOMER_REGISTER",
-        "AI_REPORT_QUERY",
-        "SHIFT_CLOCK_IN_SYNC",
-        "ZOMATO_API_POLL"
-      ];
-      const randomEvent = events[Math.floor(Math.random() * events.length)];
-      const randomCount = Math.floor(Math.random() * 8) + 1;
-
-      const newLog: SyncLog = {
-        id: `log-${Math.floor(2000 + Math.random() * 8000)}`,
-        timestamp: new Date().toLocaleTimeString(),
-        tenantName: randomTenant.name,
-        tenantId: randomTenant.tenantId,
-        eventType: randomEvent,
-        syncStatus: Math.random() > 0.05 ? "SUCCESS" : "PENDING",
-        recordsCount: randomCount
-      };
-
-      setSyncLogs((prev) => [newLog, ...prev.slice(0, 9)]);
-    }, 12000);
-
-    return () => clearInterval(interval);
-  }, [localTenants]);
-
-  const handleForceSync = () => {
-    setIsSyncingAll(true);
-    setTimeout(() => {
-      setIsSyncingAll(false);
-      // Add a fresh success log
-      const newLog: SyncLog = {
-        id: `log-${Math.floor(9000 + Math.random() * 1000)}`,
-        timestamp: new Date().toLocaleTimeString(),
-        tenantName: "GLOBAL SAAS SYSTEM",
-        tenantId: "all-tenants",
-        eventType: "FORCE_RE_SYNC_ALL_STORES",
-        syncStatus: "SUCCESS",
-        recordsCount: localTenants.length
-      };
-      setSyncLogs((prev) => [newLog, ...prev]);
-    }, 1500);
+  const handleResolveReview=async(tenantId:string,kind:'trial'|'financial')=>{
+    const reason=window.prompt(kind==='trial'?'Reason for approving trial eligibility (minimum 10 characters):':'Reason for closing Financial Review (access remains Free; minimum 10 characters):');
+    if(!reason || reason.trim().length<10)return;
+    try{const response=await fetch('/api/admin/subscription/resolve-review',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','x-session-id':currentSessionId || ''},body:JSON.stringify({tenantId,kind,reason})});const result=await response.json();if(!response.ok || !result.success)throw new Error(result.error || 'Review failed');await fetchTenants();}catch(error:any){alert(error.message);}
   };
 
   const handleSuspendTenant = async (tenantId: string) => {
@@ -377,9 +310,9 @@ export default function SaasAdminDashboard({
         });
         const data = await res.json();
         if (data.success) {
-          setRegSuccess(`Restaurant "${businessName}" successfully registered & database schema initialized!`);
+          setRegSuccess(`Restaurant "${businessName}" successfully registered in the database.`);
           fetchTenants();
-          
+
           // Trigger the App.tsx prop logic too to keep client collections in sync if needed
           onRegisterBusiness({
             businessName,
@@ -389,7 +322,7 @@ export default function SaasAdminDashboard({
             region,
             pin
           }, data.tenant);
-          
+
           // Reset fields
           setBusinessName("");
           setOwnerName("");
@@ -407,26 +340,7 @@ export default function SaasAdminDashboard({
         setRegError(err.message || "Connection error.");
       }
     } else {
-      // Fallback fallback
-      onRegisterBusiness({
-        businessName,
-        ownerName,
-        ownerPhone,
-        email,
-        region,
-        pin
-      });
-      setRegSuccess(`Restaurant "${businessName}" successfully registered locally!`);
-      // Reset fields
-      setBusinessName("");
-      setOwnerName("");
-      setOwnerPhone("");
-      setEmail("");
-      setPin("");
-      setTimeout(() => {
-        setShowQuickRegister(false);
-        setRegSuccess("");
-      }, 3000);
+      setRegError("Super Admin session is required. Sign in with MFA before registering a restaurant.");
     }
   };
 
@@ -464,17 +378,100 @@ export default function SaasAdminDashboard({
 
   return (
     <div className="h-full p-6 flex flex-col gap-6 overflow-y-auto bg-[#fafbfd] font-sans">
-      
+
+      <nav aria-label="SaaS Owner Control Center navigation" className="flex flex-wrap gap-2 rounded-2xl bg-white border border-slate-200 p-3">
+        {([
+          ["overview","Overview"],["leads","Walkthrough Leads"],["tenants","Restaurants"],["billing","Billing & Subscriptions"],
+          ["activity","Activity & Audit"],["support","Support"],["analytics","Analytics"],["security","Settings & Security"],["syncLogs","Sync Logs"]
+        ] as const).map(([id,label])=><button key={id} type="button"
+          onClick={()=>{setActiveAdminTab(id);setInspectedTenantId(null);}}
+          aria-current={activeAdminTab===id?"page":undefined}
+          className={`px-3 py-2 rounded-lg text-xs font-bold transition ${activeAdminTab===id?"bg-slate-900 text-white":"bg-slate-50 text-slate-600 hover:bg-slate-100"}`}>
+          {label}
+        </button>)}
+      </nav>
+      {activeAdminTab === "billing" && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4" aria-label="Billing and Subscriptions">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 className="font-bold text-base text-slate-900">Billing &amp; Subscriptions</h2>
+              <p className="text-xs text-slate-600 mt-1">Read-only status from the authenticated restaurant registry. Payments and invoices are not available in this view.</p></div>
+            <button type="button" onClick={fetchTenants} disabled={isLoading}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold disabled:opacity-50">Refresh subscription data</button>
+          </div>
+          {error && <p role="alert" className="text-sm text-rose-700">Unable to refresh restaurant data: {error}</p>}
+          {localTenants.length === 0 ? <p className="text-sm text-slate-500">No registered restaurants to display.</p> :
+            <div className="overflow-x-auto"><table className="min-w-full text-left text-xs">
+              <thead><tr className="border-b border-slate-200 text-slate-600">
+                <th className="p-3">Restaurant</th><th className="p-3">Plan</th><th className="p-3">Subscription status</th>
+                <th className="p-3">Trial ends</th><th className="p-3">Cycle orders</th><th className="p-3">Staff</th>
+              </tr></thead>
+              <tbody>{localTenants.map(t => <tr key={t.tenantId} className="border-b border-slate-100">
+                <td className="p-3 font-semibold">{t.name}</td>
+                <td className="p-3">{t.plan || "Not available"}</td>
+                <td className="p-3">{t.planStatus || "Not available"}</td>
+                <td className="p-3">{(t as any).subscription?.trialEndsAt || "—"}</td>
+                <td className="p-3">{t.usage?.monthlyOrders ?? "—"}</td>
+                <td className="p-3">{t.usage?.staffCount ?? "—"}</td>
+              </tr>)}</tbody>
+            </table></div>}
+        </section>
+      )}
+      {activeAdminTab === "analytics" && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4" aria-label="Restaurant Analytics">
+          <h2 className="font-bold text-base text-slate-900">Restaurant Analytics</h2>
+          <p className="text-xs text-slate-600">Registry overview only. Revenue, payment conversion, retention and historical trends require a separate verified analytics API.</p>
+          {error && <p role="alert" className="text-sm text-rose-700">Restaurant data refresh issue: {error}</p>}
+          <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl bg-slate-50 p-4"><dt className="text-xs text-slate-500">Registered restaurants</dt>
+              <dd className="text-xl font-bold">{localTenants.length}</dd></div>
+            <div className="rounded-xl bg-slate-50 p-4"><dt className="text-xs text-slate-500">Active workspaces</dt>
+              <dd className="text-xl font-bold">{localTenants.filter(t => t.status === "active").length}</dd></div>
+            <div className="rounded-xl bg-slate-50 p-4"><dt className="text-xs text-slate-500">Suspended workspaces</dt>
+              <dd className="text-xl font-bold">{localTenants.filter(t => t.status === "suspended").length}</dd></div>
+          </dl>
+        </section>
+      )}
+      {activeAdminTab==="activity" && (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3" aria-label="Platform Activity and Audit">
+          <h2 className="font-bold text-base">Activity &amp; Audit</h2>
+          <p className="text-xs text-slate-500">Read-only SaaS administration events. Restaurant-level records are not included.</p>
+          {auditLoading ? <p role="status">Loading audit events…</p> : auditError ? <p role="alert" className="text-red-700">{auditError}</p> :
+           platformAudit.length===0 ? <p className="text-sm text-slate-500">No administrator audit events recorded.</p> :
+           <div className="overflow-x-auto"><table className="min-w-full text-xs text-left">
+             <thead><tr><th className="p-2">Time</th><th className="p-2">Action</th><th className="p-2">Actor</th><th className="p-2">Description</th></tr></thead>
+             <tbody>{platformAudit.map(event=><tr key={event.id} className="border-t border-slate-100"><td className="p-2">{event.timestamp}</td><td className="p-2">{event.eventType}</td><td className="p-2">{event.actor}</td><td className="p-2">{event.description}</td></tr>)}</tbody>
+           </table></div>}
+        </section>
+      )}
+      {activeAdminTab==="support" && <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4" aria-label="Support workspace triage">
+        <h2 className="text-base font-bold">Support — Workspace Triage</h2>
+        <p className="text-xs text-slate-600">Read-only restaurant status overview. There is no support ticket inbox connected yet; do not treat walkthrough leads as support tickets.</p>
+        {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+        <p className="text-sm">{localTenants.filter(t=>t.status==="suspended").length} suspended workspace(s) · {localTenants.length} registered restaurant(s)</p>
+        <button type="button" onClick={()=>{setActiveAdminTab("tenants");setStatusFilter("suspended");}} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold">Review suspended restaurants</button>
+      </section>}
+      {activeAdminTab==="security" && <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4" aria-label="SaaS Owner Security">
+        <h2 className="text-base font-bold">Settings &amp; Security</h2>
+        <p className="text-xs text-slate-600">Read-only SaaS administrator session summary. MFA enrollment, credentials, session revocation and identity changes are intentionally not offered in this dashboard.</p>
+        {securityLoading ? <p role="status">Loading security summary…</p> : securityError ? <p role="alert" className="text-rose-700">{securityError}</p> :
+        securitySummary ? <>
+          <p className="font-semibold text-sm">Active administrator sessions: {securitySummary.activeSessionCount}</p>
+          <div className="overflow-x-auto"><table className="min-w-full text-xs text-left">
+            <thead><tr><th className="p-2">Device type</th><th className="p-2">Created</th><th className="p-2">Last activity</th><th className="p-2">Expires</th></tr></thead>
+            <tbody>{securitySummary.sessions.map((session,i)=><tr key={i} className="border-t border-slate-100"><td className="p-2">{session.deviceType}</td><td className="p-2">{session.createdAt}</td><td className="p-2">{session.lastActivityAt}</td><td className="p-2">{session.expiresAt}</td></tr>)}</tbody>
+          </table></div>
+        </> : <p className="text-sm text-slate-500">Session summary not loaded.</p>}
+      </section>}
       {/* 1. TOP HEADER BANNER - SEAMLESS DYNAMIC INFOGRAPHIC */}
       <div className="bg-gradient-to-r from-pink-500 via-rose-500 to-indigo-600 p-6 md:p-8 rounded-3xl text-white shadow-lg relative overflow-hidden">
         <div className="absolute right-0 bottom-0 top-0 w-1/3 opacity-10 pointer-events-none flex items-center justify-center">
           <Crown className="w-64 h-64" />
         </div>
-        
+
         <div className="relative z-10 max-w-4xl space-y-2">
           <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider">
             <Crown className="w-3.5 h-3.5 text-amber-350" />
-            <span>VeggiePOS SaaS Master Command Center</span>
+            <span>Aatmyam POS SaaS Master Command Center</span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
             SaaS Owner Dashboard (सॉस एडमिन पैनल)
@@ -485,9 +482,10 @@ export default function SaasAdminDashboard({
         </div>
       </div>
 
+      {(activeAdminTab==="overview" || activeAdminTab==="tenants" || activeAdminTab==="leads") && <>
       {/* 2. STATS OVERVIEW CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        
+
         {/* Card 1: Registered Restaurants */}
         <div className="bg-white p-5 border border-slate-100 rounded-2xl shadow-[0_2px_8px_-3px_rgba(0,0,0,0.04)] flex flex-col justify-between hover:shadow-md transition">
           <div className="flex items-center justify-between">
@@ -498,10 +496,10 @@ export default function SaasAdminDashboard({
           </div>
           <div className="mt-4">
             <h3 className="text-3xl font-black text-slate-800 tracking-tight leading-none">
-              {tenants.length} <span className="text-xs text-slate-400 font-medium">registered</span>
+              {localTenants.length} <span className="text-xs text-slate-400 font-medium">registered</span>
             </h3>
             <p className="text-[10px] text-slate-500 mt-2 font-medium">
-              Active: {tenants.filter(t => t.status === 'active').length} | Pending: {tenants.filter(t => t.status === 'pending').length}
+              Active: {localTenants.filter(t => t.status === 'active').length} | Pending: {localTenants.filter(t => t.status === 'pending').length}
             </p>
           </div>
         </div>
@@ -578,8 +576,9 @@ export default function SaasAdminDashboard({
 
       </div>
 
+      </>}
       {/* SUB-TAB CONTROLS BAR */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
+      {(activeAdminTab==="tenants" || activeAdminTab==="leads" || activeAdminTab==="syncLogs") && <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-2 overflow-x-auto">
           <button
             onClick={() => setActiveAdminTab("tenants")}
@@ -627,7 +626,7 @@ export default function SaasAdminDashboard({
             }`}
           >
             <Activity className="w-4 h-4" />
-            <span>Live Cloud Sync Logs ({syncLogs.length})</span>
+            <span>Sync Logs</span>
           </button>
         </div>
 
@@ -645,10 +644,32 @@ export default function SaasAdminDashboard({
         </div>
       </div>
 
+      }
+      {inspectedTenantId && activeAdminTab==="tenants" && (() => {
+        const t=localTenants.find(item=>item.tenantId===inspectedTenantId);
+        if(!t)return <p role="status">Restaurant record is no longer available.</p>;
+        return <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3" aria-label="Restaurant Tenant Detail">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-bold text-lg">{t.name} — Tenant Detail</h2>
+            <button type="button" onClick={()=>setInspectedTenantId(null)} className="text-sm underline">Close</button>
+          </div>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div><dt className="text-slate-500">Tenant ID</dt><dd className="break-all font-mono">{t.tenantId}</dd></div>
+            <div><dt className="text-slate-500">Status</dt><dd>{t.status || "Unknown"}</dd></div>
+            <div><dt className="text-slate-500">Owner</dt><dd>{t.ownerName || "Not provided"}</dd></div>
+            <div><dt className="text-slate-500">Region</dt><dd>{t.region || "Not provided"}</dd></div>
+            <div><dt className="text-slate-500">Plan</dt><dd>{t.plan || "Free"}</dd></div>
+            <div><dt className="text-slate-500">Monthly orders</dt><dd>{t.usage?.monthlyOrders ?? "Not available"}</dd></div>
+            <div><dt className="text-slate-500">Staff count</dt><dd>{t.usage?.staffCount ?? "Not available"}</dd></div>
+            <div><dt className="text-slate-500">Trial ends</dt><dd>{(t as any).subscription?.trialEndsAt || "Not available"}</dd></div>
+          </dl>
+          <p className="text-xs text-slate-500">Read-only details from registered tenant data. No PINs or payment credentials are displayed.</p>
+        </section>;
+      })()}
       {/* 3. BUSINESSES TABLE WITH WORKSPACE SELECTOR */}
       {activeAdminTab === "tenants" && (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden">
-        
+
         {/* Table Filters Header */}
         <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
           <div className="space-y-1">
@@ -667,14 +688,6 @@ export default function SaasAdminDashboard({
             >
               <Plus className="w-4 h-4" />
               <span>Register New Restaurant</span>
-            </button>
-            <button
-              onClick={handleForceSync}
-              disabled={isSyncingAll}
-              className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-750 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingAll ? "animate-spin text-pink-600" : ""}`} />
-              <span>{isSyncingAll ? "Syncing..." : "Force Database Re-Sync"}</span>
             </button>
           </div>
         </div>
@@ -860,7 +873,7 @@ export default function SaasAdminDashboard({
                 filteredTenants.map((t) => {
                   const isActiveWorkspace = activeTenant.tenantId === t.tenantId;
                   const isSuspended = t.status === "suspended";
-                  
+
                   return (
                     <tr
                       key={t.id}
@@ -874,7 +887,7 @@ export default function SaasAdminDashboard({
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm ${
                             isSuspended
                               ? "bg-red-100 text-red-700"
-                              : isActiveWorkspace 
+                              : isActiveWorkspace
                                 ? "bg-indigo-100 text-indigo-700"
                                 : "bg-pink-50 text-pink-600"
                           }`}>
@@ -905,16 +918,12 @@ export default function SaasAdminDashboard({
                       <td className="p-4 space-y-1">
                         <div className="font-semibold text-slate-700 flex items-center gap-1">
                           <Users className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{t.ownerName || "SaaS Demo Partner"}</span>
+                          <span>{t.ownerName || "Not provided"}</span>
                         </div>
                         <div className="text-[10px] text-slate-500 flex flex-col gap-0.5">
-                          <span className="flex items-center gap-1"><Mail className="w-3 h-3 text-slate-350" /> {t.email || "demo@veggiepos.com"}</span>
-                          <span className="flex items-center gap-1"><Phone className="w-3 h-3 text-slate-350" /> {t.ownerPhone || "9876543210"}</span>
-                          {t.ownerPin && (
-                            <span className="flex items-center gap-1 text-[10px] font-bold font-mono text-indigo-700 bg-indigo-50/70 border border-indigo-100 px-1.5 py-0.5 rounded-md mt-1 w-max">
-                              🔑 Owner PIN: {t.ownerPin}
-                            </span>
-                          )}
+                          <span className="flex items-center gap-1"><Mail className="w-3 h-3 text-slate-350" /> {t.email || "Not provided"}</span>
+                          <span className="flex items-center gap-1"><Phone className="w-3 h-3 text-slate-350" /> {t.ownerPhone || "Not provided"}</span>
+
                         </div>
                       </td>
 
@@ -922,7 +931,7 @@ export default function SaasAdminDashboard({
                       <td className="p-4">
                         <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 rounded-lg text-slate-700 font-medium">
                           <MapPin className="w-3 h-3 text-pink-500" />
-                          <span>{t.region || "Delhi / National Capital"}</span>
+                          <span>{t.region || "Not provided"}</span>
                         </div>
                       </td>
 
@@ -937,26 +946,32 @@ export default function SaasAdminDashboard({
                           <div className="flex items-center gap-1.5">
                             <span className={`w-2 h-2 rounded-full ${isSuspended ? "bg-red-500" : "bg-emerald-500"}`} />
                             <span className="font-bold capitalize text-slate-700">
-                              {t.plan || "pro"} Plan
+                              {(t as any).subscription?.trialEndsAt ? "Trial" : t.plan || "free"} Plan
                             </span>
                           </div>
                           <p className="text-[9px] text-slate-400 font-mono">
                             Status: <span className={isSuspended ? "text-red-600 font-bold" : "text-emerald-600 font-bold"}>{isSuspended ? "Suspended" : "Active"}</span>
                           </p>
+                          {(t as any).subscription?.financialReview && <div className="text-rose-700 text-xs">Financial Review <button className="underline" onClick={()=>handleResolveReview(t.tenantId,'financial')}>Resolve</button></div>}
+                          {(t as any).subscription?.reviewRequired && <div className="text-amber-700 text-xs">Trial Review Required <button className="underline" onClick={()=>handleResolveReview(t.tenantId,'trial')}>Approve trial</button></div>}
                         </div>
                       </td>
 
                       {/* Usage Stats */}
                       <td className="p-4">
                         <div className="text-[11px] text-slate-600 space-y-0.5">
-                          <div>Staff: <span className="font-mono font-bold text-slate-800">{t.usage?.staffCount ?? 1}</span></div>
-                          <div>Monthly Orders: <span className="font-mono font-bold text-slate-800">{t.usage?.monthlyOrders ?? 0}</span></div>
+                          <div>Staff (Owner extra): <span className="font-mono font-bold text-slate-800">{t.usage?.staffCount ?? 1}</span></div>
+                          <div>Cycle Orders: <span className="font-mono font-bold text-slate-800">{t.usage?.monthlyOrders ?? 0}</span></div>
                         </div>
                       </td>
 
                       {/* Actions */}
                       <td className="p-4">
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                          <button type="button" onClick={()=>setInspectedTenantId(t.tenantId)}
+                            className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700 text-[10px] font-bold hover:bg-slate-100">
+                            View details
+                          </button>
                           {/* Workspace select button */}
                           {isActiveWorkspace ? (
                             <div className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold border border-indigo-200">
@@ -1013,7 +1028,7 @@ export default function SaasAdminDashboard({
       {/* WALKTHROUGH LEADS & DEMO PIPELINE DASHBOARD (Option 1 & 3 with Address Column) */}
       {activeAdminTab === "leads" && (
         <div className="bg-white border border-slate-200 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col overflow-hidden space-y-4 animate-in fade-in-50 duration-150">
-          
+
           {/* Header & Filter Controls */}
           <div className="p-5 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50/50">
             <div>
@@ -1112,7 +1127,7 @@ export default function SaasAdminDashboard({
 
                     return (
                       <tr key={lead.id} className="hover:bg-slate-50/70 transition">
-                        
+
                         {/* Restaurant Name & Format */}
                         <td className="py-3 px-3">
                           <div className="space-y-1">
@@ -1235,7 +1250,7 @@ export default function SaasAdminDashboard({
                             {/* WhatsApp Button (Option 3 & 1) */}
                             <a
                               href={`https://wa.me/${whatsappPhone}?text=${encodeURIComponent(
-                                `Hello ${lead.fullName}, I am reaching out from Veggie POS regarding your 15-minute walkthrough request for "${lead.restaurantName}" (Address: ${lead.address || "your outlet"}). Are you available for a demonstration call?`
+                                `Hello ${lead.fullName}, I am reaching out from Aatmyam POS regarding your 15-minute walkthrough request for "${lead.restaurantName}" (Address: ${lead.address || "your outlet"}). Are you available for a demonstration call?`
                               )}`}
                               target="_blank"
                               rel="noopener noreferrer"
@@ -1285,65 +1300,18 @@ export default function SaasAdminDashboard({
         </div>
       )}
 
-      {/* 4. REAL-TIME SQL & CLOUD SYNC LIVE STREAM */}
+      {/* No sync-event API has been wired yet. Never invent database activity. */}
       {(activeAdminTab === "syncLogs" || activeAdminTab === "tenants") && (
-        <div className="bg-white border border-slate-250 rounded-2xl p-5 shadow-sm space-y-4">
-        <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2">
-            <h3 className="font-extrabold text-sm text-slate-900 tracking-tight flex items-center gap-1.5 font-display">
-              <Database className="w-4 h-4 text-pink-600" />
-              Restaurant database Sync logs (डेटाबेस रीयल-टाइम लाइव स्ट्रीम)
-            </h3>
-            <span className="px-2 py-0.5 bg-pink-100 border border-pink-200 text-pink-600 rounded text-[9px] font-mono font-bold animate-pulse">LIVE STREAM</span>
-          </div>
-          <span className="text-[10px] text-slate-400 font-mono">Simulated master syncing protocol active</span>
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+          <h3 className="font-extrabold text-sm text-slate-900 tracking-tight flex items-center gap-1.5 font-display">
+            <Database className="w-4 h-4 text-pink-600" />
+            Restaurant Database Sync Logs (डेटाबेस सिंक लॉग)
+          </h3>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            No synchronization activity recorded yet. Live sync-event logging is not connected to this dashboard.
+            Restaurant registration and billing data are managed separately.
+          </p>
         </div>
-
-        <p className="text-xs text-slate-500 leading-relaxed">
-          SaaS प्लेटफॉर्म का बैकएंड लगातार प्रत्येक स्टोर से जुड़कर नए बिल, बदलती हुई इन्वेंट्री सामग्री और स्टाफ़ की जानकारी को सर्वर पर सिंक करता रहता है। नीचे सिंक डेटा की रीयल-टाइम स्थिति देखें:
-        </p>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse">
-            <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider font-mono text-[9px]">
-              <tr>
-                <th className="p-3">Log ID</th>
-                <th className="p-3">Timestamp</th>
-                <th className="p-3">Restaurant Name</th>
-                <th className="p-3">Sync Event Type</th>
-                <th className="p-3">Records Size</th>
-                <th className="p-3">Sync Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-150 font-mono text-[11px] text-slate-650">
-              {syncLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="p-3 text-pink-600 font-bold">#{log.id}</td>
-                  <td className="p-3 text-slate-400">{log.timestamp}</td>
-                  <td className="p-3 font-sans font-semibold text-slate-700">{log.tenantName}</td>
-                  <td className="p-3">
-                    <span className="bg-slate-100 border border-slate-200 text-slate-850 px-1.5 py-0.5 rounded text-[9.5px]">
-                      {log.eventType}
-                    </span>
-                  </td>
-                  <td className="p-3 text-slate-500">{log.recordsCount} items</td>
-                  <td className="p-3">
-                    {log.syncStatus === "SUCCESS" ? (
-                      <span className="px-2 py-0.5 bg-emerald-50 border border-emerald-100 text-emerald-700 font-bold rounded-full text-[9px] font-sans">
-                        SUCCESS
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 bg-amber-50 border border-amber-100 text-amber-700 font-bold rounded-full text-[9px] font-sans animate-pulse">
-                        PENDING
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
       )}
 
     </div>

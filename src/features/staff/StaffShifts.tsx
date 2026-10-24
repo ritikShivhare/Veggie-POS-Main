@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import { isActiveStaff } from "../shared/staffStatus";
+import React, { useState, useEffect } from "react";
 import { Shift, StaffMember, StaffRole, RestaurantTenant } from "../shared/types";
 import { Clock, Play, LogOut, CheckCircle2, UserCheck, Eye, UserPlus, AlertCircle, ShieldAlert, Trash2, UserMinus, Zap, QrCode, Smartphone, Share2 } from "lucide-react";
 import { ApiClient } from "../shared/services/api";
@@ -25,10 +26,14 @@ export default function StaffShifts({
   activeTenant,
   setActiveTab
 }: StaffShiftsProps) {
-  const isManagerOrOwner = currentStaff.role === "Owner" || currentStaff.role === "Manager";
-  const planName = activeTenant?.plan || "free";
-  const planCapacity = planName === "pro" ? 10 : planName === "enterprise" ? 100000 : 3;
-  const hasReachedLimit = staffList.length >= planCapacity;
+  const isOwner = currentStaff.role === "Owner";
+  const isManagerOrOwner = isOwner || currentStaff.role === "Manager";
+  const [billingPlan,setBillingPlan]=useState<any>(null);
+  useEffect(()=>{if(!activeTenant?.tenantId)return;let active=true;fetch(`/api/billing/subscription?tenantId=${encodeURIComponent(activeTenant?.tenantId || "")}`,{credentials:"include",headers:{"x-session-id":ApiClient.getSessionId() || ""}}).then(r=>r.json()).then(data=>{if(active && data.success)setBillingPlan(data);}).catch(()=>{});return ()=>{active=false;};},[activeTenant?.tenantId]);
+  const planName = billingPlan?.subscription?.plan || activeTenant?.plan || "free";
+  const planCapacity = billingPlan?.limits?.staffCount ?? (planName === "pro" ? 10 : planName === "enterprise" ? 25 : 3);
+  const activeStaff = staffList.filter(s=>s.role!=="Owner" && isActiveStaff(s));
+  const hasReachedLimit = activeStaff.length >= planCapacity;
   const [activeSubTab, setActiveSubTab] = useState<"duty" | "logs">("duty");
   const [localDeleteId, setLocalDeleteId] = useState<string | null>(null);
   const [showStaffQrModal, setShowStaffQrModal] = useState<boolean>(false);
@@ -80,11 +85,6 @@ export default function StaffShifts({
       });
 
       const data = await res.json();
-      if (!res.ok || !data.success) {
-        setBlindError(data.message || data.error || "Shift closing failed.");
-        return;
-      }
-
       if (data.requireManagerOverride) {
         setBlindStep("override");
         setVarianceInfo({
@@ -93,6 +93,11 @@ export default function StaffShifts({
           variance: data.variance
         });
         setBlindError(data.message);
+        return;
+      }
+
+      if (!res.ok || !data.success) {
+        setBlindError(data.message || data.error || "Shift closing failed.");
         return;
       }
 
@@ -113,10 +118,10 @@ export default function StaffShifts({
     const end = endTime ? new Date(endTime) : new Date();
     const start = new Date(startTime);
     const diffMs = end.getTime() - start.getTime();
-    
+
     const diffHrs = Math.floor(diffMs / 3600000);
     const diffMins = Math.floor((diffMs % 3600000) / 60000);
-    
+
     if (diffHrs < 1) return `${diffMins} min${diffMins > 1 ? "s" : ""}`;
     return `${diffHrs}h ${diffMins}m`;
   };
@@ -130,11 +135,12 @@ export default function StaffShifts({
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
 
   const handleRoleChange = (role: "Owner" | "Manager" | "Cashier" | "Waiter" | "Chef" | "Custom") => {
     setNewRole(role);
     if (role === "Owner") {
-      setNewPerms(["billing", "inventory", "reports", "settings"]);
+      setNewPerms(["billing", "inventory", "reports"]);
     } else if (role === "Manager") {
       setNewPerms(["billing", "inventory", "reports"]);
     } else if (role === "Chef") {
@@ -156,12 +162,13 @@ export default function StaffShifts({
 
   const handleRegisterStaff = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isOwner || isSaving || needsRefresh) return;
     setFormError("");
     setFormSuccess("");
 
-    const activePlan = activeTenant?.plan || "free";
-    const capacity = activePlan === "pro" ? 10 : activePlan === "enterprise" ? 100000 : 3;
-    if (staffList.length >= capacity) {
+    const activePlan = planName;
+    const capacity = planCapacity;
+    if (activeStaff.length >= capacity) {
       setFormError(`Plan Limit Reached: Your current ${activePlan.toUpperCase()} Plan only supports up to ${capacity} staff members. Please upgrade your plan to add more team members.`);
       return;
     }
@@ -182,7 +189,7 @@ export default function StaffShifts({
     }
 
     // Ensure PIN code is unique
-    const pinConflict = staffList.find((s) => s.pin === newPin);
+    const pinConflict = activeStaff.find((s) => s.pin === newPin);
     if (pinConflict) {
       setFormError(`PIN conflict: ${pinConflict.name} is already using this PIN.`);
       return;
@@ -195,62 +202,41 @@ export default function StaffShifts({
       name: newName.trim(),
       role: finalRoleTitle as StaffRole,
       pin: newPin,
-      permissions: (newPerms.length > 0 ? newPerms : ["billing"]) as any
+      status: "active",
+      permissions: (newPerms.filter(p => p !== "settings").length > 0 ? newPerms.filter(p => p !== "settings") : ["billing"]) as any
     };
 
     setIsSaving(true);
-    const updatedList = [...staffList, newStaff];
-    onUpdateStaffList(updatedList);
 
-    // Instant Backend Sync
+    // Publish UI state only after the server confirms the mutation.
+
     try {
-      const sessId = ApiClient.getSessionId() || "";
-      const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || activeTenant?.tenantId || "";
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (sessId) headers["x-session-id"] = sessId;
-      if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
-
-      await fetch("/api/pos/staff", {
-        method: "POST",
-        headers,
-        credentials: "include",
-        body: JSON.stringify(newStaff)
-      });
-    } catch (syncErr) {
-      console.warn("Backend direct staff sync error:", syncErr);
-    } finally {
-      setIsSaving(false);
-    }
-
-    setFormSuccess(`Successfully registered ${newName.trim()} (${finalRoleTitle})! Synced instantly to backend.`);
-    setNewName("");
-    setNewPin("");
-    setCustomRoleTitle("");
-    setNewRole("Cashier");
-    setNewPerms(["billing"]);
+      const response=await ApiClient.authenticatedFetch("/api/staff",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(newStaff)});
+      const data=await response.json();if(!response.ok || !data.success) throw new Error(data.message || data.error || "Staff save failed.");
+      setNewPin("");
+      try { await refreshStaffList(); }
+      catch { setNeedsRefresh(true); throw new Error("Staff was created, but the staff list could not refresh. Reload before creating another member."); }
+      setFormSuccess(`Registered ${newName.trim()}.`);setNewName("");setNewPin("");setCustomRoleTitle("");setNewRole("Cashier");setNewPerms(["billing"]);
+    }catch(error:any){setFormError(error.message);}finally{setIsSaving(false);}
   };
 
-  const handleDeleteStaffMember = async (staffId: string) => {
-    const updatedList = staffList.filter((s) => s.id !== staffId);
-    onUpdateStaffList(updatedList);
-    setLocalDeleteId(null);
+  const refreshStaffList = async () => {
+    const response = await ApiClient.authenticatedFetch("/api/staff");
+    const result = await response.json();
+    if (!response.ok || !result.success || !Array.isArray(result.data)) throw new Error("Staff list refresh failed.");
+    onUpdateStaffList(result.data.filter(isActiveStaff));
+  };
 
-    // Instant Backend Sync Delete
+  const handleDeleteStaffMember=async(staffId:string)=>{
+    if (!isOwner || isSaving || needsRefresh) return;
+    setFormError(""); setFormSuccess(""); setIsSaving(true);
     try {
-      const sessId = ApiClient.getSessionId() || "";
-      const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || activeTenant?.tenantId || "";
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (sessId) headers["x-session-id"] = sessId;
-      if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
-
-      await fetch(`/api/pos/staff/${staffId}`, {
-        method: "DELETE",
-        headers,
-        credentials: "include"
-      });
-    } catch (syncErr) {
-      console.warn("Backend direct staff delete error:", syncErr);
-    }
+      const response=await ApiClient.authenticatedFetch(`/api/staff/${encodeURIComponent(staffId)}`,{method:"DELETE"});const data=await response.json();
+      if(!response.ok || !data.success) throw new Error(data.message || data.error || "Staff removal failed.");
+      try { await refreshStaffList(); }
+      catch { setNeedsRefresh(true); throw new Error("Staff was deactivated, but the staff list could not refresh. Reload to confirm the current list."); }
+      setLocalDeleteId(null);
+    }catch(error:any){setFormError(error.message || "Staff removal failed.");}finally{setIsSaving(false);}
   };
 
   return (
@@ -385,10 +371,10 @@ export default function StaffShifts({
                 </button>
               </div>
 
-              {/* Add Staff Member (Owner / Manager only) */}
-              {isManagerOrOwner && (
+              {/* Team membership and staff credentials are Owner-only; managers keep shift oversight. */}
+              {isOwner && (
                 <div className="space-y-6">
-                  {/* Staff Login QR Code Banner for Owner/Manager */}
+                  {/* Staff Login QR Code Banner for Owner */}
                   {activeTenant && (
                     <div className="bg-gradient-to-r from-emerald-950/40 via-slate-900 to-indigo-950/40 border border-emerald-500/30 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                       <div className="flex items-start gap-3.5">
@@ -508,7 +494,6 @@ export default function StaffShifts({
                             { id: "billing", label: "POS & Billing", desc: "Orders & Tables" },
                             { id: "inventory", label: "Inventory & Stock", desc: "Stock & Recipes" },
                             { id: "reports", label: "Reports & Insights", desc: "Sales & Analytics" },
-                            { id: "settings", label: "Settings & Setup", desc: "Printer & Config" }
                           ].map((perm) => {
                             const active = newPerms.includes(perm.id);
                             return (
@@ -559,15 +544,15 @@ export default function StaffShifts({
                             <div className="space-y-1">
                               <p className="font-bold text-white">Upgrade Plan Suggestion</p>
                               <p className="text-[11px] leading-relaxed text-slate-300">
-                                Your current <span className="uppercase text-amber-400 font-bold font-mono">{planName}</span> plan only supports up to <span className="font-bold text-white">{planCapacity} staff members</span>. 
-                                You currently have <span className="font-bold text-white">{staffList.length} members</span>.
+                                Your current <span className="uppercase text-amber-400 font-bold font-mono">{planName}</span> plan only supports up to <span className="font-bold text-white">{planCapacity} staff members</span>.
+                                You currently have <span className="font-bold text-white">{activeStaff.length} members</span>.
                               </p>
                             </div>
                           </div>
                           {setActiveTab && (
                             <button
                               type="button"
-                              onClick={() => setActiveTab("settings")}
+                              onClick={() => setActiveTab("shifts")}
                               className="w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-xs rounded-xl transition duration-150 shadow-md flex items-center justify-center gap-1.5 select-none cursor-pointer"
                             >
                               <Zap className="w-3.5 h-3.5 fill-slate-950" />
@@ -579,9 +564,9 @@ export default function StaffShifts({
 
                       <button
                         type="submit"
-                        disabled={hasReachedLimit || isSaving}
+                        disabled={hasReachedLimit || isSaving || needsRefresh}
                         className={`w-full py-2.5 font-bold text-xs rounded-xl transition duration-150 shadow-md cursor-pointer ${
-                          hasReachedLimit 
+                          hasReachedLimit
                             ? "bg-slate-800 text-slate-500 cursor-not-allowed shadow-none"
                             : isSaving
                               ? "bg-emerald-600 text-slate-950 opacity-80 cursor-wait"
@@ -601,7 +586,7 @@ export default function StaffShifts({
                         <span>Manage Registered Staff</span>
                       </div>
                       <span className="text-xs font-mono font-medium text-slate-400 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded-full">
-                        {staffList.length} / {planCapacity} Limit
+                        {activeStaff.length} / {planCapacity} Limit
                       </span>
                     </h2>
 
@@ -610,7 +595,7 @@ export default function StaffShifts({
                     </p>
 
                     <div className="space-y-3 pt-2 max-h-[350px] overflow-y-auto pr-1">
-                      {staffList.map((staff) => (
+                      {activeStaff.map((staff) => (
                         <div key={staff.id} className="bg-slate-950 border border-slate-800/60 rounded-2xl p-3.5 flex items-center justify-between hover:border-slate-800 transition">
                           <div className="flex items-center space-x-3 min-w-0">
                             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center font-bold text-emerald-400 text-xs shrink-0 border border-slate-800 uppercase">
@@ -644,6 +629,7 @@ export default function StaffShifts({
                                   <span className="text-[9px] text-rose-300 font-bold px-1 select-none">Sure?</span>
                                   <button
                                     type="button"
+                                    disabled={isSaving || needsRefresh}
                                     onClick={() => handleDeleteStaffMember(staff.id)}
                                     className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[9px] font-bold uppercase transition cursor-pointer"
                                   >
@@ -660,6 +646,7 @@ export default function StaffShifts({
                               ) : (
                                 <button
                                   type="button"
+                                  disabled={isSaving || needsRefresh}
                                   onClick={() => setLocalDeleteId(staff.id)}
                                   className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg border border-rose-500/20 transition cursor-pointer"
                                   title="Delete Staff Member"

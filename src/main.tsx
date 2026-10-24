@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
@@ -68,7 +69,7 @@ try {
 // Client-Side Centralized Sentry-like Telemetry listeners
 window.addEventListener("error", (event) => {
   if (event.filename && (event.filename.includes("report-error") || event.filename.includes("telemetry"))) return;
-  
+
   const message = event.message || "";
   const stack = event.error?.stack || "";
   if (
@@ -173,3 +174,7 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>,
 );
+
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(error=>console.warn('Offline app shell unavailable:',error));});
+}

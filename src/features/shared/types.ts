@@ -61,7 +61,8 @@ export interface StaffMember {
   pin: string; // 4 to 6 digit PIN
   permissions: ('billing' | 'inventory' | 'reports' | 'settings' | string)[];
   phone?: string;
-  status?: string;
+  // Lowercase persisted values; title-case values supported for legacy records.
+  status?: 'active' | 'inactive' | 'suspended' | 'Active' | 'Inactive' | 'Suspended' | null;
   version?: number;
   created_at?: string;
   updated_at?: string;
@@ -104,6 +105,8 @@ export interface Order {
   discount?: number;
   total: number;
   status: OrderStatus;
+  servedAt?: string;
+  servedBy?: string;
   paymentMethod?: 'Cash' | 'UPI';
   paidAt?: string;
   cashierId: string;
@@ -207,6 +210,8 @@ export interface RestaurantTenant {
 }
 
 export interface InventorySettings {
+  version?:number;
+  updated_at?:string;
   autoDeductStock: boolean;
   blockOrdersIfInsufficient: boolean;
   managerCanAddPurchases: boolean;
@@ -220,6 +225,7 @@ export interface InventorySettings {
   gstPercentage?: number;
   maxDiscountPercentage?: number;
   gstin?: string;
+  fssaiNumber?: string;
   upiVpa?: string;
   upiMerchantName?: string;
 }

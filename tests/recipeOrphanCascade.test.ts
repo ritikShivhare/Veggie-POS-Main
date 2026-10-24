@@ -11,10 +11,11 @@ describe("Raw Material Deletion & Recipe Orphan Cascade Protection", () => {
 
   const testTenant = "test-tenant-orphan-protection";
 
-  beforeEach(() => {
+  beforeEach(async () => {
     db = Database.getInstance();
     (db as any).tablesByTenant[testTenant] = {};
     (db as any).objectsByTenant[testTenant] = {};
+    await db.saveObject(testTenant,"subscription_v1",{plan:"pro",status:"active",isReadOnly:false,inventoryFrozen:false});
 
     ingredientRepo = new IngredientRepository();
     recipeRepo = new RecipeRepository();

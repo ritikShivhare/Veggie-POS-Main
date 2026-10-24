@@ -1,3 +1,5 @@
+import {startVisiblePolling} from '../utils/visiblePolling';
+import { ApiClient } from "../services/api";
 import React, { useState, useEffect } from "react";
 import {
   Shield,
@@ -26,7 +28,8 @@ import {
 } from "lucide-react";
 
 interface UserSession {
-  sessionId: string;
+  managementId: string;
+  isCurrent: boolean;
   userId: string;
   userName: string;
   role: string;
@@ -90,7 +93,7 @@ export default function SessionManagementDashboard({
   const [activeTab, setActiveTab] = useState<"active" | "history" | "security">("active");
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "success" | "failed">("all");
-  
+
   // Settings Form state
   const [formTimeout, setFormTimeout] = useState(60);
   const [formMaxAttempts, setFormMaxAttempts] = useState(3);
@@ -101,13 +104,13 @@ export default function SessionManagementDashboard({
   const fetchSessionData = async (silent = false) => {
     if (!silent) setSyncing(true);
     try {
-      const res = await fetch("/api/auth/sessions-data", { credentials: "include" });
+      const res = await ApiClient.authenticatedFetch("/api/auth/sessions-data", { credentials: "include" });
       const data = await res.json();
       if (data.success) {
         setActiveSessions(data.activeSessions || []);
         setLoginHistory(data.loginHistory || []);
         setSettings(data.securitySettings);
-        
+
         // Update form states on first load/sync
         setFormTimeout(data.securitySettings.sessionTimeoutMinutes);
         setFormMaxAttempts(data.securitySettings.maxFailedAttempts);
@@ -123,32 +126,30 @@ export default function SessionManagementDashboard({
   };
 
   useEffect(() => {
-    fetchSessionData();
-    const interval = setInterval(() => fetchSessionData(true), 12000);
-    return () => clearInterval(interval);
+    return startVisiblePolling(fetchSessionData, 12000);
   }, []);
 
   const handleRevokeSession = async (sessionId: string) => {
-    const isCurrent = sessionId === currentSessionId;
-    const confirmMsg = isCurrent 
+    const isCurrent = activeSessions.find(s=>s.managementId===sessionId)?.isCurrent;
+    const confirmMsg = isCurrent
       ? "Are you sure you want to terminate your current session? You will be logged out."
       : "Are you sure you want to remotely terminate this active device session?";
-    
+
     if (!window.confirm(confirmMsg)) return;
 
     try {
-      const res = await fetch("/api/auth/sessions/revoke", {
+      const res = await ApiClient.authenticatedFetch("/api/auth/sessions/revoke", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ sessionId })
+        body: JSON.stringify({ managementId:sessionId })
       });
       const data = await res.json();
       if (data.success) {
         if (isCurrent) {
           onSessionTerminated();
         } else {
-          setActiveSessions(prev => prev.filter(s => s.sessionId !== sessionId));
+          setActiveSessions(prev => prev.filter(s => s.managementId !== sessionId));
           fetchSessionData(true);
         }
       }
@@ -160,7 +161,7 @@ export default function SessionManagementDashboard({
   const handleRevokeAllOthers = async () => {
     if (!window.confirm("Terminate all other active sessions and force-logout all other connected devices?")) return;
     try {
-      const res = await fetch("/api/auth/sessions/revoke-all", {
+      const res = await ApiClient.authenticatedFetch("/api/auth/sessions/revoke-all", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -169,7 +170,7 @@ export default function SessionManagementDashboard({
       const data = await res.json();
       if (data.success) {
         if (currentSessionId) {
-          setActiveSessions(prev => prev.filter(s => s.sessionId === currentSessionId));
+          setActiveSessions(prev => prev.filter(s => s.isCurrent));
         } else {
           setActiveSessions([]);
         }
@@ -183,7 +184,7 @@ export default function SessionManagementDashboard({
   const handleClearHistory = async () => {
     if (!window.confirm("Are you sure you want to completely purge the audit logs of authentication attempts?")) return;
     try {
-      const res = await fetch("/api/auth/history/clear", { method: "POST", credentials: "include" });
+      const res = await ApiClient.authenticatedFetch("/api/auth/history/clear", { method: "POST", credentials: "include" });
       const data = await res.json();
       if (data.success) {
         setLoginHistory([]);
@@ -197,7 +198,7 @@ export default function SessionManagementDashboard({
     e.preventDefault();
     setSaveSuccess(false);
     try {
-      const res = await fetch("/api/auth/settings/update", {
+      const res = await ApiClient.authenticatedFetch("/api/auth/settings/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -232,11 +233,11 @@ export default function SessionManagementDashboard({
 
   // Filter login histories
   const filteredHistory = loginHistory.filter(h => {
-    const matchesSearch = 
+    const matchesSearch =
       h.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       h.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
       h.ipAddress.includes(searchTerm);
-    
+
     if (statusFilter === "all") return matchesSearch;
     return matchesSearch && h.status === statusFilter;
   });
@@ -258,7 +259,7 @@ export default function SessionManagementDashboard({
 
   return (
     <div className="h-full p-4 sm:p-6 bg-[#f8fafc] overflow-y-auto space-y-6">
-      
+
       {/* HEADER BAR */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -285,7 +286,7 @@ export default function SessionManagementDashboard({
 
       {/* METRIC CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
+
         {/* Metric 1 */}
         <div className="bg-white p-4 rounded-xl border border-slate-150 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
@@ -352,7 +353,7 @@ export default function SessionManagementDashboard({
           <Monitor className="w-4 h-4 text-indigo-600" />
           Device Sessions ({activeCount})
         </button>
-        
+
         <button
           onClick={() => setActiveTab("history")}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
@@ -376,7 +377,7 @@ export default function SessionManagementDashboard({
 
       {/* BOTTOM SEGMENTED CONTENT PANEL */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        
+
         {/* VIEW 1: ACTIVE DEVICES & SESSIONS */}
         {activeTab === "active" && (
           <div className="p-6 space-y-6">
@@ -410,14 +411,14 @@ export default function SessionManagementDashboard({
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {activeSessions.map((session) => {
-                  const isCurrent = session.sessionId === currentSessionId;
-                  
+                  const isCurrent = session.isCurrent;
+
                   return (
                     <div
-                      key={session.sessionId}
+                      key={session.managementId}
                       className={`p-4 rounded-xl border transition flex flex-col justify-between gap-4 ${
-                        isCurrent 
-                          ? "bg-indigo-50/40 border-indigo-200 ring-1 ring-indigo-200" 
+                        isCurrent
+                          ? "bg-indigo-50/40 border-indigo-200 ring-1 ring-indigo-200"
                           : "bg-white border-slate-200 hover:border-slate-300"
                       }`}
                     >
@@ -461,11 +462,11 @@ export default function SessionManagementDashboard({
 
                       <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-4">
                         <span className="text-[9.5px] font-mono text-slate-400 truncate">
-                          ID: {session.sessionId}
+                          ID: {session.managementId}
                         </span>
 
                         <button
-                          onClick={() => handleRevokeSession(session.sessionId)}
+                          onClick={() => handleRevokeSession(session.managementId)}
                           className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
                             isCurrent
                               ? "bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200"
@@ -491,7 +492,7 @@ export default function SessionManagementDashboard({
               <div>
                 <h3 className="text-sm font-bold text-slate-800">Login Audits & Authentication Events</h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Compliance and security tracking audit trail. This records every authentication action taken on VeggiePOS servers.
+                  Compliance and security tracking audit trail. This records every authentication action taken on Aatmyam POS servers.
                 </p>
               </div>
 
@@ -636,7 +637,7 @@ export default function SessionManagementDashboard({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
+
               {/* Option 1 */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">

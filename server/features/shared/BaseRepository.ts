@@ -1,3 +1,4 @@
+import {assertInventoryWritable} from '../billing/SubscriptionLifecycle';
 import { Database, OptimisticLockConflictError, DatabaseTransaction, TransactionRollbackError, NotFoundError } from "./database";
 export { OptimisticLockConflictError, TransactionRollbackError, NotFoundError };
 export type { DatabaseTransaction };
@@ -16,6 +17,8 @@ export abstract class BaseRepository<T, KeyType = string> {
   }
 
   async saveAll(tenantId: string, items: T[], trx?: DatabaseTransaction): Promise<void> {
+    if (!trx) return this.db.runTransaction(tenantId,tx=>this.saveAll(tenantId,items,tx));
+    if (["ingredients","recipes","purchases","inventoryMovements"].includes(this.sliceKey)) await assertInventoryWritable(tenantId);
     if (trx) {
       await trx.saveSlice<T>(this.sliceKey, items);
     } else {
@@ -43,7 +46,9 @@ export abstract class BaseRepository<T, KeyType = string> {
   }
 
   async add(tenantId: string, item: T, trx?: DatabaseTransaction): Promise<void> {
+    if (!trx) return this.db.runTransaction(tenantId, tx => this.add(tenantId,item,tx));
     const existing = (await this.getAll(tenantId)) || [];
+    if (existing.some(i => i[this.idKey] === item[this.idKey])) throw new OptimisticLockConflictError("Record already exists.", {entityId:String(item[this.idKey])});
     const items = [...existing];
     const record = { ...item } as any;
     if (record.version === undefined) {
@@ -63,6 +68,8 @@ export abstract class BaseRepository<T, KeyType = string> {
    * Increments version on confirmed update.
    */
   async update(tenantId: string, item: T, expectedVersion?: number, trx?: DatabaseTransaction): Promise<T> {
+    if (!trx) return this.db.runTransaction(tenantId,tx=>this.update(tenantId,item,expectedVersion,tx));
+    if (["ingredients","recipes","purchases","inventoryMovements"].includes(this.sliceKey)) await assertInventoryWritable(tenantId);
     if (trx) {
       const existing = (await this.getAll(tenantId)) || [];
       const items = [...existing];
@@ -80,6 +87,7 @@ export abstract class BaseRepository<T, KeyType = string> {
         );
       }
       const updatedRecord = {
+        ...items[index],
         ...item,
         version: currentVer + 1,
         updated_at: new Date().toISOString()
@@ -104,6 +112,7 @@ export abstract class BaseRepository<T, KeyType = string> {
   }
 
   async delete(tenantId: string, id: KeyType, trx?: DatabaseTransaction): Promise<void> {
+    if (!trx) return this.db.runTransaction(tenantId, tx => this.delete(tenantId,id,tx));
     const existing = (await this.getAll(tenantId)) || [];
     const exists = existing.some(i => (i[this.idKey] as any) === id);
     if (!exists) {

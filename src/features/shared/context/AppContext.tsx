@@ -42,6 +42,7 @@ export interface AppContextType {
   shifts: Shift[];
   setShifts: (shifts: Shift[]) => void;
   isInitialSyncLoading: boolean;
+  isTenantDataReady: boolean;
   setIsInitialSyncLoading: (loading: boolean) => void;
   settings: InventorySettings;
   setSettings: React.Dispatch<React.SetStateAction<InventorySettings>>;
@@ -89,20 +90,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppContextProvider({ children }: { children: React.ReactNode }) {
   const tenant = useTenantData();
 
-  const [currentStaff, setCurrentStaff] = React.useState<StaffMember | null>(() => {
-    const saved = localStorage.getItem("veggiepos_current_staff");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.name) {
-          return parsed;
-        }
-      } catch (e) {
-        return null;
-      }
-    }
-    return null;
-  });
+  const [currentStaff,setCurrentStaff]=React.useState<StaffMember|null>(null);
 
   // Strictly in-memory session identifier (CWE-312 / CWE-922: Never stored in localStorage)
   const [currentSessionId, setCurrentSessionId] = React.useState<string | null>(null);

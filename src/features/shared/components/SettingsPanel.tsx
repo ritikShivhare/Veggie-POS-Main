@@ -1,4 +1,12 @@
+import NotificationRoutingSettings from './NotificationRoutingSettings';
+import OwnerAuditReadOnly from './OwnerAuditReadOnly';
+import SessionManagementDashboard from './SessionManagementDashboard';
+import { getReceiptPaperSize, saveReceiptPaperSize, type ReceiptPaperSize } from '../utils/receiptPaperSize';
+import StaffAccessEditor from "../../staff/StaffAccessEditor";
+import { ApiClient } from "../services/api";
+import { offlineRepository } from "../services/offline";
 import React, { useState, useEffect } from "react";
+import FssaiRegistration, { isFssaiNumber } from "./FssaiRegistration";
 import { Settings, ShieldCheck, RefreshCw, UserMinus, AlertTriangle, CheckCircle2, Bell, Mail, Activity, Lock, Globe, Percent, Receipt, QrCode, Smartphone, Copy, Check, Info, IndianRupee, Sparkles, ExternalLink } from "lucide-react";
 import QRCode from "qrcode";
 import { BillingSettings } from "./BillingSettings";
@@ -13,7 +21,7 @@ interface SettingsPanelProps {
   setToastMessage: (msg: { type: "success" | "error"; text: string } | null) => void;
   currentStaff: StaffMember | null;
   staffList: StaffMember[];
-  setStaffList: (list: StaffMember[]) => void;
+  setStaffList: React.Dispatch<React.SetStateAction<StaffMember[]>>;
   menuItems: MenuItem[];
   ingredients: Ingredient[];
   recipes: Recipe[];
@@ -23,6 +31,7 @@ interface SettingsPanelProps {
   purchases: Purchase[];
   shifts: Shift[];
   handleLogout: () => void;
+  currentSessionId: string | null;
   tenants: RestaurantTenant[];
   setTenants: (list: RestaurantTenant[]) => void;
 }
@@ -46,15 +55,19 @@ export default function SettingsPanel({
   purchases,
   shifts,
   handleLogout,
+  currentSessionId,
   tenants,
   setTenants
 }: SettingsPanelProps) {
+  const [receiptPaperSize, setReceiptPaperSize] = useState<ReceiptPaperSize>(getReceiptPaperSize);
   const [testingSlack, setTestingSlack] = useState(false);
+  // Keep partially typed discount values out of the 500ms autosave pipeline.
+  const [discountDraft, setDiscountDraft] = useState<string | null>(null);
   const [testingSentry, setTestingSentry] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  const [subTab, setSubTab] = useState<"general" | "password" | "language">("general");
+  const [subTab, setSubTab] = useState<"general" | "billing" | "operations" | "staff" | "notifications" | "advanced">("general");
+  const [generalPane,setGeneralPane] = useState<"password"|"language">("language");
   const [currentLang, setCurrentLang] = useState<string>(() => {
     return localStorage.getItem("veggiepos_language") || "en";
   });
@@ -68,6 +81,7 @@ export default function SettingsPanel({
 
   // GSTIN & UPI QR Payment states
   const [gstinInput, setGstinInput] = useState<string>(() => settings.gstin || activeTenant.gstin || "");
+  const [fssaiInput, setFssaiInput] = useState(() => settings.fssaiNumber || "");
   const [upiInputVpa, setUpiInputVpa] = useState<string>(() => settings.upiVpa || activeTenant.vpa || "");
   const [upiMerchantInput, setUpiMerchantInput] = useState<string>(() => settings.upiMerchantName || activeTenant.upiMerchantName || activeTenant.name || "");
   const [testAmount, setTestAmount] = useState<string>("1.00");
@@ -76,6 +90,10 @@ export default function SettingsPanel({
   const [isSavingTaxPayment, setIsSavingTaxPayment] = useState<boolean>(false);
 
   // Sync inputs if activeTenant or settings change externally
+  useEffect(() => {
+    setFssaiInput(settings.fssaiNumber || "");
+  }, [settings.fssaiNumber, activeTenant.tenantId]);
+
   useEffect(() => {
     setGstinInput(settings.gstin || activeTenant.gstin || "");
   }, [settings.gstin, activeTenant.gstin]);
@@ -91,8 +109,9 @@ export default function SettingsPanel({
   // Live UPI QR code generation preview
   useEffect(() => {
     const rawVpa = (upiInputVpa || activeTenant.vpa || "").trim();
-    const vpa = rawVpa || "veggiepos@upi";
-    const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Veggie POS").trim());
+    if(!rawVpa) {setQrPreviewUrl(null);return;}
+    const vpa = rawVpa;
+    const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam POS").trim());
     const amt = parseFloat(testAmount) > 0 ? parseFloat(testAmount).toFixed(2) : "1.00";
     const note = encodeURIComponent(`Test QR - ${activeTenant.name}`);
     const uri = `upi://pay?pa=${vpa}&pn=${name}&am=${amt}&cu=INR&tn=${note}`;
@@ -131,56 +150,61 @@ export default function SettingsPanel({
     const statePrefix = clean.length >= 2 ? clean.substring(0, 2) : "";
     const stateName = INDIAN_STATE_CODES[statePrefix];
     const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    
+
     if (clean.length === 15) {
       if (gstinRegex.test(clean)) {
-        return { 
-          isOptionalEmpty: false, 
-          text: `Valid GSTIN: ${stateName ? `${stateName} (${statePrefix})` : "Format OK"}`, 
-          color: "text-emerald-700 font-bold", 
-          valid: true 
+        return {
+          isOptionalEmpty: false,
+          text: `Valid GSTIN: ${stateName ? `${stateName} (${statePrefix})` : "Format OK"}`,
+          color: "text-emerald-700 font-bold",
+          valid: true
         };
       }
-      return { 
-        isOptionalEmpty: false, 
-        text: "15 characters entered, but does not match standard 22AAAAA0000A1Z5 pattern.", 
-        color: "text-amber-600 font-medium", 
-        valid: false 
+      return {
+        isOptionalEmpty: false,
+        text: "15 characters entered, but does not match standard 22AAAAA0000A1Z5 pattern.",
+        color: "text-amber-600 font-medium",
+        valid: false
       };
     }
-    return { 
-      isOptionalEmpty: false, 
-      text: `${clean.length}/15 chars. ${stateName ? `State: ${stateName}. ` : ""}Standard: 2 state + 10 PAN + 1 entity + Z + 1 check`, 
-      color: "text-blue-600 font-medium", 
-      valid: false 
+    return {
+      isOptionalEmpty: false,
+      text: `${clean.length}/15 chars. ${stateName ? `State: ${stateName}. ` : ""}Standard: 2 state + 10 PAN + 1 entity + Z + 1 check`,
+      color: "text-blue-600 font-medium",
+      valid: false
     };
   };
 
   const getUpiStatus = (val: string) => {
     const clean = val.trim();
     if (!clean || clean === "veggiepos@upi") {
-      return { 
-        isConfigured: false, 
-        text: "Unconfigured: Customer payment apps will show 'Invalid UPI ID'. Please enter your real UPI ID.", 
-        color: "text-amber-800 bg-amber-50 border-amber-200" 
+      return {
+        isConfigured: false,
+        text: "Unconfigured: Customer payment apps will show 'Invalid UPI ID'. Please enter your real UPI ID.",
+        color: "text-amber-800 bg-amber-50 border-amber-200"
       };
     }
     const upiRegex = /^[a-zA-Z0-9.\-_]{2,256}@[a-zA-Z0-9.\-_]{2,64}$/;
     if (upiRegex.test(clean)) {
-      return { 
-        isConfigured: true, 
-        text: "Valid UPI VPA: Ready for real-time customer payments to your bank account.", 
-        color: "text-emerald-800 bg-emerald-50 border-emerald-200" 
+      return {
+        isConfigured: true,
+        text: "Valid UPI VPA: Ready for real-time customer payments to your bank account.",
+        color: "text-emerald-800 bg-emerald-50 border-emerald-200"
       };
     }
-    return { 
-      isConfigured: false, 
-      text: "Invalid UPI format. Expected format: username@bank (e.g. restaurant@okhdfcbank or 9876543210@paytm).", 
-      color: "text-rose-800 bg-rose-50 border-rose-200" 
+    return {
+      isConfigured: false,
+      text: "Invalid UPI format. Expected format: username@bank (e.g. restaurant@okhdfcbank or 9876543210@paytm).",
+      color: "text-rose-800 bg-rose-50 border-rose-200"
     };
   };
 
   const handleSaveTaxAndPaymentSettings = () => {
+    const cleanedFssai = fssaiInput.trim();
+    if (cleanedFssai && !isFssaiNumber(cleanedFssai)) {
+      setToastMessage({ type: "error", text: "Enter a 14-digit FSSAI number, or leave it blank to hide it on receipts." });
+      return;
+    }
     setIsSavingTaxPayment(true);
     const cleanedGstin = gstinInput.trim().toUpperCase();
     const cleanedVpa = upiInputVpa.trim();
@@ -190,6 +214,7 @@ export default function SettingsPanel({
     const updatedSettings: InventorySettings = {
       ...settings,
       gstin: cleanedGstin,
+      fssaiNumber: cleanedFssai,
       upiVpa: cleanedVpa,
       upiMerchantName: cleanedMerchant
     };
@@ -221,7 +246,7 @@ export default function SettingsPanel({
       setIsSavingTaxPayment(false);
       setToastMessage({
         type: "success",
-        text: "GSTIN and UPI QR payment settings saved and synced successfully!"
+        text: "Receipt registration and UPI payment settings saved."
       });
     }, 200);
   };
@@ -232,7 +257,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Production Monitoring & Alerting",
       gdprPrivacy: "GDPR Privacy & Data Portability",
       staffCredentials: "Staff Credentials & Permissions Control",
-      settingsTitle: "VeggiePOS Administration Settings",
+      settingsTitle: "Aatmyam POS Administration Settings",
       generalTab: "General Settings",
       passwordTab: "Change PIN / Password",
       languageTab: "Language Change",
@@ -266,7 +291,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Monitoreo de Producción y Alertas",
       gdprPrivacy: "Privacidad GDPR y Portabilidad de Datos",
       staffCredentials: "Credenciales de Personal y Control de Permisos",
-      settingsTitle: "Configuración Administrativa de VeggiePOS",
+      settingsTitle: "Configuración Administrativa de Aatmyam POS",
       generalTab: "Configuración General",
       passwordTab: "Cambiar PIN / Contraseña",
       languageTab: "Cambiar Idioma",
@@ -283,7 +308,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Surveillance de Production et Alertes",
       gdprPrivacy: "Confidentialité GDPR et Portabilité des Données",
       staffCredentials: "Identifiants du Personnel et Contrôle des Permissions",
-      settingsTitle: "Paramètres d'Administration VeggiePOS",
+      settingsTitle: "Paramètres d'Administration Aatmyam POS",
       generalTab: "Paramètres Généraux",
       passwordTab: "Modifier le PIN / Mot de passe",
       languageTab: "Changer de Langue",
@@ -301,78 +326,14 @@ export default function SettingsPanel({
     return translations[currentLang]?.[key] || translations["en"]?.[key] || key;
   };
 
-  const handlePasswordChange = (e: React.FormEvent) => {
-    e.preventDefault();
-    setPwError("");
-    setPwSuccess("");
-
-    if (!currentStaff) {
-      setPwError(currentLang === "hi" ? "पासवर्ड/पिन बदलने के लिए कोई स्टाफ सदस्य लॉग इन नहीं है।" : "No staff member logged in to change password/PIN.");
-      return;
-    }
-
-    if (currentPinInput !== currentStaff.pin) {
-      setPwError(currentLang === "hi" ? "वर्तमान पिन गलत है।" : "Current PIN is incorrect.");
-      return;
-    }
-
-    if (!/^\d{4,6}$/.test(newPinInput)) {
-      setPwError(currentLang === "hi" ? "नया पिन 4 से 6 अंकों का होना चाहिए।" : "New PIN must be 4 to 6 digits.");
-      return;
-    }
-
-    if (newPinInput !== confirmPinInput) {
-      setPwError(currentLang === "hi" ? "पुष्टि पिन नए पिन से मेल नहीं खाता है।" : "Confirm PIN does not match the New PIN.");
-      return;
-    }
-
-    // Check if another staff uses this PIN
-    const pinExists = staffList.some(s => s.id !== currentStaff.id && s.pin === newPinInput);
-    if (pinExists) {
-      setPwError(currentLang === "hi" ? "यह पिन पहले से ही किसी अन्य स्टाफ सदस्य द्वारा उपयोग में है। कृपया एक अद्वितीय पिन चुनें।" : "This PIN is already in use by another staff member. Please select a unique PIN.");
-      return;
-    }
-
+  const handlePasswordChange=async(e:React.FormEvent)=>{
+    e.preventDefault();setPwError("");setPwSuccess("");
+    if(!/^\d{4,6}$/.test(newPinInput) || newPinInput!==confirmPinInput) {setPwError("Enter matching 4–6 digit PINs.");return;}
     try {
-      // Update staffList
-      const updatedList = staffList.map((s) =>
-        s.id === currentStaff.id ? { ...s, pin: newPinInput } : s
-      );
-      setStaffList(updatedList);
-
-      // Save updated staff list to localStorage
-      localStorage.setItem(`veggiepos_staff_list_${activeTenant.tenantId}`, JSON.stringify(updatedList));
-
-      // Update currentStaff in localStorage
-      const updatedCurrent = { ...currentStaff, pin: newPinInput };
-      localStorage.setItem("veggiepos_current_staff", JSON.stringify(updatedCurrent));
-
-      // Synchronize owner PIN on tenant if current staff is Owner
-      if (currentStaff.role === "Owner" && setActiveTenant) {
-        const updatedTenant: RestaurantTenant = { ...activeTenant, ownerPin: newPinInput };
-        setActiveTenant(updatedTenant);
-        const updatedTenants = tenants.map((t) =>
-          t.tenantId === activeTenant.tenantId ? updatedTenant : t
-        );
-        setTenants(updatedTenants);
-        try {
-          localStorage.setItem("veggiepos_tenants", JSON.stringify(updatedTenants));
-        } catch (e) {}
-      }
-
-      // Set Success message
-      setPwSuccess(currentLang === "hi" ? "आपका सुरक्षा पिन सफलतापूर्वक बदल दिया गया है!" : "Your security PIN has been successfully changed!");
-      setCurrentPinInput("");
-      setNewPinInput("");
-      setConfirmPinInput("");
-
-      setToastMessage({
-        type: "success",
-        text: currentLang === "hi" ? "पिन सफलतापूर्वक बदला गया!" : "PIN successfully changed!"
-      });
-    } catch (err: any) {
-      setPwError(err.message || "Failed to change PIN.");
-    }
+      const data=await (await ApiClient.authenticatedFetch("/api/auth/change-pin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({currentPin:currentPinInput,newPin:newPinInput})})).json();
+      if(!data.success) throw new Error(data.message || data.error || "PIN change failed.");
+      setCurrentPinInput("");setNewPinInput("");setConfirmPinInput("");setPwSuccess("PIN changed. Log in again.");handleLogout();
+    }catch(error:any){setPwError(error.message);}
   };
 
   const handleLanguageSelect = (lang: string) => {
@@ -438,63 +399,22 @@ export default function SettingsPanel({
 
   return (
     <div className="h-full p-6 bg-[#f8fafc] overflow-y-auto space-y-6">
-      <div className="max-w-6xl mx-auto">
-        <BillingSettings tenantId={activeTenant.tenantId} />
-      </div>
-
-      {/* Sub-Tabs Selector */}
-      <div className="max-w-6xl mx-auto bg-white border border-slate-200 rounded-xl p-1.5 flex gap-2 shadow-sm">
-        <button
-          onClick={() => setSubTab("general")}
-          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
-            subTab === "general"
-              ? "bg-blue-600 text-white shadow-sm shadow-blue-500/10"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-          }`}
-        >
-          <Settings className="w-4 h-4" />
-          <span>{t("generalTab")}</span>
-        </button>
-
-        <button
-          onClick={() => setSubTab("password")}
-          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
-            subTab === "password"
-              ? "bg-blue-600 text-white shadow-sm shadow-blue-500/10"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-          }`}
-        >
-          <Lock className="w-4 h-4" />
-          <span>{t("passwordTab")}</span>
-        </button>
-
-        <button
-          onClick={() => setSubTab("language")}
-          className={`flex-1 py-2 px-4 rounded-lg font-bold text-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
-            subTab === "language"
-              ? "bg-blue-600 text-white shadow-sm shadow-blue-500/10"
-              : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-          }`}
-        >
-          <Globe className="w-4 h-4" />
-          <span>{t("languageTab")}</span>
-        </button>
-      </div>
-
-      {subTab === "general" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-6xl mx-auto animate-fadeIn">
-        
-        <div className="lg:col-span-5 flex flex-col gap-6 w-full">
+      {/* The subscription panel is mounted only on Billing & Payments; other controls stay unchanged. */}
+      {subTab === "billing" && (
+        <div className="max-w-6xl mx-auto">
+          <BillingSettings tenantId={activeTenant.tenantId} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5 items-start">
+            <div className="space-y-5">
           {/* Restaurant Tax Rate & GSTIN (Optional) Configuration Card */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-5" id="settings-gst-config-card">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                   <Receipt className="w-5 h-5 text-emerald-600" />
-                  <span>Tax Rate & GSTIN Invoicing</span>
+                  <span>Tax Rate & Receipt Registration</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Configure GST percentage and your optional 15-character GSTIN number for customer receipts and legal tax invoices.
+                  Configure GST percentage and optional GSTIN and FSSAI details for customer receipts.
                 </p>
               </div>
               <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 font-mono font-bold text-xs rounded-full shrink-0 shadow-xs">
@@ -597,6 +517,26 @@ export default function SettingsPanel({
                 </span>
               </div>
 
+              <div className="border-t border-slate-100 pt-3 space-y-1.5">
+                <label htmlFor="settings-fssai-input" className="block text-xs font-bold text-slate-800">
+                  Restaurant FSSAI Number <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <input
+                  id="settings-fssai-input"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={14}
+                  value={fssaiInput}
+                  onChange={(e) => setFssaiInput(e.target.value)}
+                  placeholder="Enter your restaurant's 14-digit number"
+                  aria-describedby="settings-fssai-help"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono text-slate-800 focus:outline-none focus:border-emerald-500"
+                />
+                <p id="settings-fssai-help" className="text-[11px] text-slate-500">
+                  Leave blank to omit FSSAI from both dashboard invoices and thermal receipts.
+                </p>
+              </div>
+
               {/* Live Receipt Header Preview */}
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-[11px] font-mono text-slate-600 space-y-1">
                 <div className="flex items-center justify-between text-[10px] text-slate-400 font-sans font-bold uppercase tracking-wider">
@@ -607,6 +547,7 @@ export default function SettingsPanel({
                 </div>
                 <div className="bg-white p-2 rounded border border-dashed border-slate-300 text-center space-y-0.5">
                   <div className="font-bold text-slate-800 text-xs">{activeTenant.name}</div>
+                  <FssaiRegistration number={fssaiInput} />
                   {gstinInput.trim() ? (
                     <>
                       <div className="text-emerald-700 font-bold">GSTIN: {gstinInput.trim().toUpperCase()}</div>
@@ -747,7 +688,7 @@ export default function SettingsPanel({
                     type="button"
                     onClick={() => {
                       const vpa = (upiInputVpa || activeTenant.vpa || "veggiepos@upi").trim();
-                      const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Veggie POS").trim());
+                      const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam POS").trim());
                       const amt = parseFloat(testAmount) > 0 ? parseFloat(testAmount).toFixed(2) : "1.00";
                       const uri = `upi://pay?pa=${vpa}&pn=${name}&am=${amt}&cu=INR&tn=TestQR`;
                       navigator.clipboard?.writeText(uri);
@@ -789,13 +730,199 @@ export default function SettingsPanel({
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Save & Apply GSTIN and UPI Payment Settings</span>
+                    <span>Save Receipt & Payment Settings</span>
                   </>
                 )}
               </button>
             </div>
           </div>
 
+
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xl p-5 text-xs text-slate-600 space-y-2">
+              <h3 className="font-bold text-slate-900">Receipt &amp; Printer</h3>
+              <p>GST, optional GSTIN/FSSAI and manual UPI settings are managed here.</p>
+              <label htmlFor="receipt-paper-size" className="block font-semibold text-slate-800">Thermal receipt paper width</label>
+              <select id="receipt-paper-size" value={receiptPaperSize}
+                onChange={e => {
+                  const size = e.target.value as ReceiptPaperSize;
+                  saveReceiptPaperSize(size);
+                  setReceiptPaperSize(size);
+                }}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900">
+                <option value="80mm">80mm receipt roll (default)</option>
+                <option value="58mm">58mm receipt roll</option>
+              </select>
+              <p>Saved on this device for browser receipt printing. In the print dialog, select the matching printer and paper size. This does not pair or configure the printer itself.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <nav aria-label="Owner Settings categories" className="max-w-6xl mx-auto grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+<button type="button" onClick={() => setSubTab("general")} aria-current={subTab === "general" ? "page" : undefined} className={`flex gap-2 items-center justify-center rounded-lg px-3 py-3 text-xs font-bold transition ${subTab === "general"?"bg-blue-600 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}><Settings className="w-4 h-4 shrink-0"/>General</button>
+<button type="button" onClick={() => setSubTab("billing")} aria-current={subTab === "billing" ? "page" : undefined} className={`flex gap-2 items-center justify-center rounded-lg px-3 py-3 text-xs font-bold transition ${subTab === "billing"?"bg-blue-600 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}><Receipt className="w-4 h-4 shrink-0"/>Billing &amp; Payments</button>
+<button type="button" onClick={() => setSubTab("operations")} aria-current={subTab === "operations" ? "page" : undefined} className={`flex gap-2 items-center justify-center rounded-lg px-3 py-3 text-xs font-bold transition ${subTab === "operations"?"bg-blue-600 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}><Settings className="w-4 h-4 shrink-0"/>Operations</button>
+<button type="button" onClick={() => setSubTab("staff")} aria-current={subTab === "staff" ? "page" : undefined} className={`flex gap-2 items-center justify-center rounded-lg px-3 py-3 text-xs font-bold transition ${subTab === "staff"?"bg-blue-600 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}><ShieldCheck className="w-4 h-4 shrink-0"/>Staff &amp; Permissions</button>
+<button type="button" onClick={() => setSubTab("notifications")} aria-current={subTab === "notifications" ? "page" : undefined} className={`flex gap-2 items-center justify-center rounded-lg px-3 py-3 text-xs font-bold transition ${subTab === "notifications"?"bg-blue-600 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}><Bell className="w-4 h-4 shrink-0"/>Notifications</button>
+<button type="button" onClick={() => setSubTab("advanced")} aria-current={subTab === "advanced" ? "page" : undefined} className={`flex gap-2 items-center justify-center rounded-lg px-3 py-3 text-xs font-bold transition ${subTab === "advanced"?"bg-blue-600 text-white shadow":"text-slate-600 hover:bg-slate-50"}`}><Lock className="w-4 h-4 shrink-0"/>Advanced &amp; Security</button>
+      </nav>
+      {subTab === "general" && <div className="max-w-6xl mx-auto space-y-5">
+        <div className="rounded-xl bg-white border border-slate-200 p-4">
+          <h2 className="text-sm font-bold mb-3">Account &amp; Language</h2>
+          <div className="flex gap-2">
+            <button type="button" onClick={()=>setGeneralPane("password")} className={`text-xs px-3 py-2 rounded ${generalPane==="password"?"bg-blue-600 text-white":"bg-slate-100 text-slate-700"}`}>Owner PIN / Password</button>
+            <button type="button" onClick={()=>setGeneralPane("language")} className={`text-xs px-3 py-2 rounded ${generalPane==="language"?"bg-blue-600 text-white":"bg-slate-100 text-slate-700"}`}>Language</button>
+          </div>
+        </div>
+        {generalPane==="password" && (
+        <div className="max-w-xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6 animate-fadeIn">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <Lock className="w-5 h-5 text-blue-600" />
+              <span>{t("passwordTab")}</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+              {currentLang === "hi"
+                ? "सुरक्षा कारणों से, सुनिश्चित करें कि आपका नया पिन मजबूत है और केवल आपके पास ही सुरक्षित है।"
+                : "For security, ensure your terminal pin is confidential and only known to authorized users."}
+            </p>
+          </div>
+
+          {pwError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
+              {pwError}
+            </div>
+          )}
+
+          {pwSuccess && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl font-medium">
+              {pwSuccess}
+            </div>
+          )}
+
+          <form onSubmit={handlePasswordChange} className="space-y-4 text-xs">
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 block">{t("currentPin")}</label>
+              <input
+                type="password"
+                maxLength={6}
+                value={currentPinInput}
+                onChange={(e) => setCurrentPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="••••••"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-center text-sm focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700 tracking-widest"
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 block">{t("newPin")}</label>
+              <input
+                type="password"
+                maxLength={6}
+                value={newPinInput}
+                onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="••••••"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-center text-sm focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700 tracking-widest"
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 block">{t("confirmPin")}</label>
+              <input
+                type="password"
+                maxLength={6}
+                value={confirmPinInput}
+                onChange={(e) => setConfirmPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="••••••"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-center text-sm focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700 tracking-widest"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-500/10 active:scale-95 transition duration-150 cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Lock className="w-4 h-4" />
+              <span>{t("saveChanges")}</span>
+            </button>
+          </form>
+
+          {/* Hindi description as requested */}
+          <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-[11px] text-blue-800 leading-relaxed space-y-2">
+            <h4 className="font-bold flex items-center gap-1 text-blue-900">
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+              <span>पिन/पासवर्ड बदलने से होने वाले प्रभाव (Effects of changing PIN/Password):</span>
+            </h4>
+            <ul className="list-disc pl-4 space-y-1 text-blue-700">
+              <li><b>तत्काल प्रभाव (Instant Effect):</b> पिन बदलते ही टर्मिनल लॉक स्क्रीन पर लॉग इन करने के लिए नए पिन का उपयोग करना अनिवार्य हो जाएगा। पुराना पिन तुरंत काम करना बंद कर देगा।</li>
+              <li><b>सुरक्षा (Enhanced Security):</b> यदि आपका पिन लीक हो गया था, तो नया पिन सेट करने से अनधिकृत व्यक्ति आपकी बिलिंग या डेटा तक नहीं पहुँच पाएंगे।</li>
+              <li><b>उदाहरण (Example):</b> यदि आपका पुराना पिन <code>1111</code> था और आपने इसे बदलकर <code>5678</code> किया, तो अब लॉक स्क्रीन को केवल <code>5678</code> द्वारा ही खोला जा सकेगा। पुराना पिन अब काम नहीं करेगा।</li>
+            </ul>
+          </div>
+        </div>
+      )}
+        {generalPane==="language" && (
+        <div className="max-w-xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6 animate-fadeIn">
+          <div className="border-b border-slate-100 pb-4">
+            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <Globe className="w-5 h-5 text-blue-600" />
+              <span>{t("selectLanguage")}</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+              {currentLang === "hi"
+                ? "अपनी पसंदीदा भाषा चुनें। यह भाषा इस एडमिनिस्ट्रेशन सेटिंग्स पैनल में तत्परता से लागू होगी।"
+                : "Choose your preferred system language. This will dynamically update the system administration interface."}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {[
+              { code: "en", label: "English", native: "English", flag: "🇺🇸" },
+              { code: "hi", label: "Hindi", native: "हिन्दी", flag: "🇮🇳" },
+              { code: "es", label: "Spanish", native: "Español", flag: "🇪🇸" },
+              { code: "fr", label: "French", native: "Français", flag: "🇫🇷" }
+            ].map((lang) => {
+              const isSelected = currentLang === lang.code;
+              return (
+                <button
+                  key={lang.code}
+                  onClick={() => handleLanguageSelect(lang.code)}
+                  className={`p-4 rounded-xl border text-left flex items-center justify-between transition cursor-pointer ${
+                    isSelected
+                      ? "border-blue-600 bg-blue-50/50"
+                      : "border-slate-200 bg-slate-50 hover:bg-slate-100"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl select-none">{lang.flag}</span>
+                    <div>
+                      <h3 className="font-bold text-slate-800 text-xs">{lang.label}</h3>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{lang.native}</p>
+                    </div>
+                  </div>
+                  {isSelected && (
+                    <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl text-slate-500 text-[11px] leading-relaxed">
+            <span className="font-bold text-slate-700">{t("activeLang")}:</span>{" "}
+            <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-800 uppercase font-bold">
+              {currentLang}
+            </span>
+          </div>
+        </div>
+      )}
+      </div>}
+      {subTab === "operations" && <div className="max-w-6xl mx-auto space-y-5">
           {/* Terminal & Operational Rules */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
             <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
@@ -804,7 +931,7 @@ export default function SettingsPanel({
             </h2>
 
             <div className="space-y-4 divide-y divide-slate-100 text-slate-700 text-xs">
-              
+
               <div className="flex items-center justify-between py-3">
                 <div>
                   <h3 className="font-bold text-slate-800 text-sm">Auto-Deduct Stock on POS Orders</h3>
@@ -881,14 +1008,22 @@ export default function SettingsPanel({
                     min="0"
                     max="100"
                     step="1"
-                    value={settings.maxDiscountPercentage ?? ""}
+                    value={discountDraft ?? (settings.maxDiscountPercentage ?? "")}
                     placeholder="None"
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      setSettings({
-                        ...settings,
-                        maxDiscountPercentage: isNaN(val) ? undefined : Math.max(0, Math.min(100, val))
-                      });
+                    onChange={(e) => setDiscountDraft(e.target.value)}
+                    onBlur={() => {
+                      if (discountDraft === null) return;
+                      const raw = discountDraft.trim();
+                      const numeric = raw === "" ? undefined : Number(raw);
+                      if (numeric === undefined || (Number.isInteger(numeric) && numeric >= 0 && numeric <= 100)) {
+                        setSettings({ ...settings, maxDiscountPercentage: numeric });
+                      } else {
+                        setToastMessage({ type: "error", text: "Enter a whole-number discount limit between 0 and 100." });
+                      }
+                      setDiscountDraft(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
                     }}
                     className="w-20 px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-bold text-slate-800 text-right focus:outline-none focus:border-purple-500 focus:bg-white"
                     id="settings-max-discount-percentage-input"
@@ -904,6 +1039,51 @@ export default function SettingsPanel({
             </div>
           </div>
 
+
+      </div>}
+      {subTab === "staff" && <div className="max-w-6xl mx-auto space-y-5">
+        {/* Staff Credentials Control */}
+        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6 w-full">
+          <div>
+            <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-blue-600" />
+              {t("staffCredentials")}
+            </h2>
+
+            {(!currentStaff || currentStaff.role !== "Owner") ? (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 flex items-start gap-2.5 mt-4">
+                <AlertTriangle className="w-4.5 h-4.5 shrink-0 mt-0.5 text-amber-600" />
+                <div>
+                  <span className="font-bold">Access Restricted:</span> Only the Restaurant Owner has authority to modify staff PINs and update view permissions.
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6 mt-4">
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  As the <b>Restaurant Owner</b>, you have the administrative privilege to manage the 4 to 6 digit numeric PIN codes and module permissions for your team.
+                </p>
+
+                <StaffAccessEditor key={activeTenant.tenantId} tenantId={activeTenant.tenantId} staffList={staffList} currentStaffId={currentStaff.id}
+                  onSaved={saved=>setStaffList(previous=>previous.map(staff=>staff.id===saved.id?saved:staff))}
+                  onDeleted={id=>setStaffList(previous=>previous.filter(staff=>staff.id!==id))}
+                  onOwnChange={handleLogout}/>
+
+                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-start gap-2.5 text-xs text-blue-700">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-blue-600" />
+                  <div>
+                    <p className="font-bold">Save each staff member separately:</p>
+                    <p className="text-blue-600/90 mt-0.5">Typing does not save changes. Select Save changes after entering a complete PIN or reviewing permissions.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+
+      </div>}
+      {subTab === "notifications" && <div className="max-w-6xl mx-auto space-y-5">
+        {currentStaff?.role === "Owner" && <NotificationRoutingSettings key={activeTenant.tenantId+":"+currentStaff.id}/>}
           {/* Sentry & Slack Alerting Configuration */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-5" id="settings-monitoring-alerts-card">
             <div>
@@ -912,7 +1092,7 @@ export default function SettingsPanel({
                 {t("monitoringAlerting")}
               </h2>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                Configure direct integrations to forward VeggiePOS application crashes and database errors to Slack channels, Sentry telemetry, or your operations email address.
+                Configure direct integrations to forward Aatmyam POS application crashes and database errors to Slack channels, Sentry telemetry, or your operations email address.
               </p>
             </div>
 
@@ -1019,6 +1199,11 @@ export default function SettingsPanel({
             </div>
           </div>
 
+
+      </div>}
+      {subTab === "advanced" && <div className="max-w-6xl mx-auto space-y-5">
+        <OwnerAuditReadOnly owner={currentStaff?.role === "Owner"} tenantKey={activeTenant.tenantId}/>
+        <SessionManagementDashboard currentSessionId={currentSessionId} onSessionTerminated={handleLogout} />
           {/* GDPR Privacy & Data Portability */}
           <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
             <div>
@@ -1027,7 +1212,7 @@ export default function SettingsPanel({
                 {t("gdprPrivacy")}
               </h2>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                In accordance with the General Data Protection Regulation (GDPR), VeggiePOS empowers you with direct control over your business data assets.
+                In accordance with the General Data Protection Regulation (GDPR), Aatmyam POS empowers you with direct control over your business data assets.
               </p>
             </div>
 
@@ -1036,50 +1221,21 @@ export default function SettingsPanel({
               <div className="p-3.5 bg-slate-50 border border-slate-150 rounded-xl space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h4 className="font-bold text-slate-800 text-xs">Right to Portability (Export)</h4>
+                    <h4 className="font-bold text-slate-800 text-xs">Export server data</h4>
                     <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
                       Download a comprehensive JSON data matrix containing all ingredients, menus, transaction histories, staff lists, and CRM records under your Tenant ID.
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={() => {
+                  onClick={async()=>{
                     try {
-                      const exportData = {
-                        exportDate: new Date().toISOString(),
-                        tenantId: activeTenant.tenantId,
-                        restaurantName: activeTenant.name,
-                        schemaVersion: "1.2",
-                        complianceStatus: "GDPR Compliant",
-                        records: {
-                          tenant: activeTenant,
-                          menuItems: menuItems,
-                          ingredients: ingredients,
-                          recipes: recipes,
-                          staffList: staffList,
-                          orders: orders,
-                          customers: customers,
-                          purchases: purchases,
-                          shifts: shifts,
-                          settings: settings
-                        }
-                      };
-
-                      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
-                      const downloadAnchor = document.createElement('a');
-                      downloadAnchor.setAttribute("href", dataStr);
-                      downloadAnchor.setAttribute("download", `veggiepos_data_export_${activeTenant.tenantId}.json`);
-                      document.body.appendChild(downloadAnchor);
-                      downloadAnchor.click();
-                      downloadAnchor.remove();
-
-                      setToastMessage({
-                        type: "success",
-                        text: "GDPR Data Portability export compiled and downloaded successfully!"
-                      });
-                    } catch (err: any) {
-                      alert("Failed to export data: " + err.message);
-                    }
+                      const response=await ApiClient.authenticatedFetch("/api/privacy/export");const result=await response.json();
+                      if(!response.ok || !result.success) throw new Error(result.message || "Export failed.");
+                      const url=URL.createObjectURL(new Blob([JSON.stringify(result.data,null,2)],{type:"application/json"}));
+                      const anchor=document.createElement("a");anchor.href=url;anchor.download=`aatmyam-export-${activeTenant.tenantId}.json`;anchor.click();URL.revokeObjectURL(url);
+                      setToastMessage({type:"success",text:"Server data export downloaded."});
+                    }catch(error:any){setToastMessage({type:"error",text:error.message});}
                   }}
                   className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-lg transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   id="settings-export-data-btn"
@@ -1093,334 +1249,37 @@ export default function SettingsPanel({
               <div className="p-3.5 bg-rose-50/50 border border-rose-100 rounded-xl space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h4 className="font-bold text-rose-800 text-xs">Right to Erasure (Delete Account)</h4>
+                    <h4 className="font-bold text-rose-800 text-xs">Clear data on this device</h4>
                     <p className="text-[10px] text-rose-600/80 mt-0.5 leading-relaxed">
-                      Permanently and irreversibly delete your restaurant profile and purge all inventory logs, transaction tables, and shift rosters from VeggiePOS system storage.
+                      Clear this browser’s saved restaurant data. Cloud records remain available. Account deletion requires contacting the service owner.
                     </p>
                   </div>
                 </div>
 
                 {(!currentStaff || currentStaff.role !== "Owner") ? (
                   <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[10px] text-amber-700 font-medium">
-                    Only the Restaurant Owner can delete this establishment.
+                    Only the Restaurant Owner can clear cached restaurant data.
                   </div>
                 ) : (
                   <button
-                    onClick={() => {
-                      const prompt1 = window.confirm(
-                        "WARNING: You are requesting permanent deletion of this restaurant profile and all associated logs in accordance with GDPR Article 17 (Right to Erasure).\n\nThis action is completely irreversible. All orders, inventory databases, and staff accounts will be immediately deleted. Do you wish to proceed?"
-                      );
-                      if (!prompt1) return;
-
-                      const prompt2 = window.prompt(
-                        `To confirm deletion of your establishment, please type the exact restaurant name "${activeTenant.name}" below:`
-                      );
-                      if (prompt2 !== activeTenant.name) {
-                        alert("Verification failed. Restaurant name did not match. Deletion aborted.");
-                        return;
-                      }
-
-                      try {
-                        const updatedTenants = tenants.filter(t => t.tenantId !== activeTenant.tenantId);
-                        setTenants(updatedTenants);
-                        localStorage.setItem("veggiepos_tenants", JSON.stringify(updatedTenants));
-
-                        handleLogout();
-
-                        alert(`Establishment "${activeTenant.name}" has been permanently deleted, and all local and cloud resources have been scrubbed.`);
-                      } catch (err: any) {
-                        alert("Failed to complete account deletion: " + err.message);
-                      }
+                    onClick={async()=>{
+                      const pending=(await offlineRepository.getAllOutbox(activeTenant.tenantId)).filter(o=>!["SYNCED","completed"].includes(o.status));
+                      if(pending.length) {setToastMessage({type:"error",text:`Sync or resolve ${pending.length} pending operations before clearing this device.`});return;}
+                      if(!window.confirm("Clear cached restaurant data on this device? Cloud records remain available.")) return;
+                      try {await offlineRepository.clearTenantOfflineData(activeTenant.tenantId);for(const key of Object.keys(localStorage)) if(key.includes(activeTenant.tenantId)) localStorage.removeItem(key);handleLogout();setToastMessage({type:"success",text:"This device’s cached data was cleared."});}catch(error:any){setToastMessage({type:"error",text:error.message});}
                     }}
                     className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg transition duration-150 flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                     id="settings-delete-account-btn"
                   >
                     <UserMinus className="w-3.5 h-3.5" />
-                    <span>Delete my account & purge data</span>
+                    <span>Clear this device</span>
                   </button>
                 )}
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Staff Credentials Control */}
-        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6 w-full">
-          <div>
-            <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-blue-600" />
-              {t("staffCredentials")}
-            </h2>
-            
-            {(!currentStaff || currentStaff.role !== "Owner") ? (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 flex items-start gap-2.5 mt-4">
-                <AlertTriangle className="w-4.5 h-4.5 shrink-0 mt-0.5 text-amber-600" />
-                <div>
-                  <span className="font-bold">Access Restricted:</span> Only the Restaurant Owner has authority to modify staff PINs and update view permissions.
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-6 mt-4">
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  As the <b>Restaurant Owner</b>, you have the administrative privilege to manage the 4 to 6 digit numeric PIN codes and module permissions for your team.
-                </p>
-
-                <div className="space-y-4 divide-y divide-slate-100">
-                  {staffList.map((staff) => (
-                    <div key={staff.id} className="pt-4 first:pt-0 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-bold text-slate-800 text-sm">{staff.name}</h4>
-                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{staff.role}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-slate-500">PIN:</span>
-                            <input
-                              type="text"
-                              maxLength={6}
-                              placeholder="PIN"
-                              value={staff.pin}
-                              onChange={(e) => {
-                                const val = e.target.value.replace(/\D/g, "").slice(0, 6);
-                                const updatedList = staffList.map((s) =>
-                                  s.id === staff.id ? { ...s, pin: val } : s
-                                );
-                                setStaffList(updatedList);
-                              }}
-                              className="w-20 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-center font-mono font-bold text-slate-700 focus:outline-none focus:border-blue-500 focus:bg-white text-xs"
-                            />
-                          </div>
-                          {staff.role !== "Owner" && (
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {deleteConfirmId === staff.id ? (
-                                <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 p-1 rounded-xl animate-fadeIn">
-                                  <span className="text-[10px] text-rose-750 font-bold px-1 select-none">Sure?</span>
-                                  <button
-                                    onClick={() => {
-                                      const updatedList = staffList.filter((s) => s.id !== staff.id);
-                                      setStaffList(updatedList);
-                                      setDeleteConfirmId(null);
-                                    }}
-                                    className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-[10px] font-bold uppercase transition cursor-pointer"
-                                  >
-                                    Delete
-                                  </button>
-                                  <button
-                                    onClick={() => setDeleteConfirmId(null)}
-                                    className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[10px] font-semibold transition cursor-pointer"
-                                  >
-                                    No
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => setDeleteConfirmId(staff.id)}
-                                  className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200/50 transition cursor-pointer"
-                                  title="Delete Staff Member"
-                                >
-                                  <UserMinus className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">View Permissions</p>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                          {(["billing", "inventory", "reports", "settings"] as const).map((perm) => {
-                            const hasPerm = staff.permissions.includes(perm);
-                            return (
-                              <label key={perm} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 p-2 rounded-lg border border-slate-200/60 cursor-pointer transition select-none">
-                                <input
-                                  type="checkbox"
-                                  checked={hasPerm}
-                                  onChange={(e) => {
-                                    const newPerms = e.target.checked
-                                      ? [...staff.permissions, perm]
-                                      : staff.permissions.filter((p) => p !== perm);
-                                    const updatedList = staffList.map((s) =>
-                                      s.id === staff.id ? { ...s, permissions: newPerms } : s
-                                    );
-                                    setStaffList(updatedList);
-                                  }}
-                                  className="w-3.5 h-3.5 accent-blue-600 rounded cursor-pointer"
-                                />
-                                <span className="capitalize text-slate-600 font-medium text-[11px]">{perm}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-start gap-2.5 text-xs text-blue-700">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-blue-600" />
-                  <div>
-                    <p className="font-bold">Real-time update active:</p>
-                    <p className="text-blue-600/90 mt-0.5">Any adjustments made above are instantly applied to the live terminal system state.</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        </div>
-      )}
-
-      {subTab === "password" && (
-        <div className="max-w-xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6 animate-fadeIn">
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <Lock className="w-5 h-5 text-blue-600" />
-              <span>{t("passwordTab")}</span>
-            </h2>
-            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-              {currentLang === "hi" 
-                ? "सुरक्षा कारणों से, सुनिश्चित करें कि आपका नया पिन मजबूत है और केवल आपके पास ही सुरक्षित है।"
-                : "For security, ensure your terminal pin is confidential and only known to authorized users."}
-            </p>
-          </div>
-
-          {pwError && (
-            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl font-medium">
-              {pwError}
-            </div>
-          )}
-
-          {pwSuccess && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl font-medium">
-              {pwSuccess}
-            </div>
-          )}
-
-          <form onSubmit={handlePasswordChange} className="space-y-4 text-xs">
-            <div className="space-y-1.5">
-              <label className="font-bold text-slate-700 block">{t("currentPin")}</label>
-              <input
-                type="password"
-                maxLength={6}
-                value={currentPinInput}
-                onChange={(e) => setCurrentPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="••••••"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-center text-sm focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700 tracking-widest"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-bold text-slate-700 block">{t("newPin")}</label>
-              <input
-                type="password"
-                maxLength={6}
-                value={newPinInput}
-                onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="••••••"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-center text-sm focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700 tracking-widest"
-                required
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="font-bold text-slate-700 block">{t("confirmPin")}</label>
-              <input
-                type="password"
-                maxLength={6}
-                value={confirmPinInput}
-                onChange={(e) => setConfirmPinInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="••••••"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-mono text-center text-sm focus:outline-none focus:border-blue-500 focus:bg-white text-slate-700 tracking-widest"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-500/10 active:scale-95 transition duration-150 cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <Lock className="w-4 h-4" />
-              <span>{t("saveChanges")}</span>
-            </button>
-          </form>
-
-          {/* Hindi description as requested */}
-          <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-[11px] text-blue-800 leading-relaxed space-y-2">
-            <h4 className="font-bold flex items-center gap-1 text-blue-900">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-              <span>पिन/पासवर्ड बदलने से होने वाले प्रभाव (Effects of changing PIN/Password):</span>
-            </h4>
-            <ul className="list-disc pl-4 space-y-1 text-blue-700">
-              <li><b>तत्काल प्रभाव (Instant Effect):</b> पिन बदलते ही टर्मिनल लॉक स्क्रीन पर लॉग इन करने के लिए नए पिन का उपयोग करना अनिवार्य हो जाएगा। पुराना पिन तुरंत काम करना बंद कर देगा।</li>
-              <li><b>सुरक्षा (Enhanced Security):</b> यदि आपका पिन लीक हो गया था, तो नया पिन सेट करने से अनधिकृत व्यक्ति आपकी बिलिंग या डेटा तक नहीं पहुँच पाएंगे।</li>
-              <li><b>उदाहरण (Example):</b> यदि आपका पुराना पिन <code>1111</code> था और आपने इसे बदलकर <code>5678</code> किया, तो अब लॉक स्क्रीन को केवल <code>5678</code> द्वारा ही खोला जा सकेगा। पुराना पिन अब काम नहीं करेगा।</li>
-            </ul>
-          </div>
-        </div>
-      )}
-
-      {subTab === "language" && (
-        <div className="max-w-xl mx-auto bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6 animate-fadeIn">
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-              <Globe className="w-5 h-5 text-blue-600" />
-              <span>{t("selectLanguage")}</span>
-            </h2>
-            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-              {currentLang === "hi"
-                ? "अपनी पसंदीदा भाषा चुनें। यह भाषा इस एडमिनिस्ट्रेशन सेटिंग्स पैनल में तत्परता से लागू होगी।"
-                : "Choose your preferred system language. This will dynamically update the system administration interface."}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {[
-              { code: "en", label: "English", native: "English", flag: "🇺🇸" },
-              { code: "hi", label: "Hindi", native: "हिन्दी", flag: "🇮🇳" },
-              { code: "es", label: "Spanish", native: "Español", flag: "🇪🇸" },
-              { code: "fr", label: "French", native: "Français", flag: "🇫🇷" }
-            ].map((lang) => {
-              const isSelected = currentLang === lang.code;
-              return (
-                <button
-                  key={lang.code}
-                  onClick={() => handleLanguageSelect(lang.code)}
-                  className={`p-4 rounded-xl border text-left flex items-center justify-between transition cursor-pointer ${
-                    isSelected
-                      ? "border-blue-600 bg-blue-50/50"
-                      : "border-slate-200 bg-slate-50 hover:bg-slate-100"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl select-none">{lang.flag}</span>
-                    <div>
-                      <h3 className="font-bold text-slate-800 text-xs">{lang.label}</h3>
-                      <p className="text-[10px] text-slate-500 mt-0.5">{lang.native}</p>
-                    </div>
-                  </div>
-                  {isSelected && (
-                    <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="p-4 bg-slate-50 border border-slate-150 rounded-xl text-slate-500 text-[11px] leading-relaxed">
-            <span className="font-bold text-slate-700">{t("activeLang")}:</span>{" "}
-            <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-800 uppercase font-bold">
-              {currentLang}
-            </span>
-          </div>
-        </div>
-      )}
-
+      </div>}
     </div>
   );
 }

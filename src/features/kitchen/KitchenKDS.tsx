@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import {ApiClient} from '../shared/services/api';
+import React, { useState, useEffect, useRef } from "react";
 import { Order, OrderStatus } from "../shared/types";
-import { ChefHat, Play, CheckCircle, Flame, Trash2, Clock, AlertTriangle } from "lucide-react";
+import { ChefHat, Play, CheckCircle, Flame, Clock, AlertTriangle } from "lucide-react";
 
 interface KitchenKDSProps {
   orders: Order[];
@@ -9,12 +10,80 @@ interface KitchenKDSProps {
 }
 
 export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts }: KitchenKDSProps) {
+  const [servedIds,setServedIds]=useState<string[]>([]),[servingId,setServingId]=useState<string|null>(null),[serveError,setServeError]=useState('');
+  const [soundMessage, setSoundMessage] = useState('');
+  const seenPendingIdsRef = useRef<Set<string> | null>(null);
+  const pendingAnnouncementIdsRef = useRef<Set<string>>(new Set());
+  const speak = (message: string) => {
+    if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+      setSoundMessage('This browser does not support spoken alerts.');
+      return;
+    }
+    try {
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.rate = 1.05;
+      utterance.onstart = () => setSoundMessage('Sound playing');
+      utterance.onerror = () => setSoundMessage('Browser blocked speech. Tap Test Sound to enable audio.');
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      setSoundMessage('Unable to play sound on this device.');
+    }
+  };
+  // Establish a baseline from the first loaded order list: do not announce old tickets on login.
+  // Later Pending IDs are announced once per mounted Kitchen display.
+  useEffect(() => {
+    const ids = new Set(orders.filter(o => o.status === 'Pending' && !o.servedAt).map(o => o.id));
+    if (!seenPendingIdsRef.current) {
+      seenPendingIdsRef.current = ids;
+      return;
+    }
+    const newcomers = [...ids].filter(id => !seenPendingIdsRef.current!.has(id));
+    ids.forEach(id => seenPendingIdsRef.current!.add(id));
+    if (!kdsSoundAlerts) {
+      pendingAnnouncementIdsRef.current.clear();
+      return;
+    }
+    newcomers.forEach(id => pendingAnnouncementIdsRef.current.add(id));
+    // Drop tickets already taken into preparation while this tab was hidden.
+    for (const id of pendingAnnouncementIdsRef.current) {
+      if (!ids.has(id)) pendingAnnouncementIdsRef.current.delete(id);
+    }
+    if (document.visibilityState === 'visible' && pendingAnnouncementIdsRef.current.size) {
+      const count = pendingAnnouncementIdsRef.current.size;
+      pendingAnnouncementIdsRef.current.clear();
+      speak(count === 1 ? 'New kitchen order received' : `${count} new kitchen orders received`);
+    }
+  }, [orders, kdsSoundAlerts]);
+
+  // If orders arrived while the Kitchen tab was hidden, announce still-pending
+  // tickets once when the staff returns, instead of silently losing the alert.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || !kdsSoundAlerts) return;
+      const active = new Set(orders.filter(o => o.status === 'Pending' && !o.servedAt).map(o => o.id));
+      for (const id of pendingAnnouncementIdsRef.current) {
+        if (!active.has(id)) pendingAnnouncementIdsRef.current.delete(id);
+      }
+      const count = pendingAnnouncementIdsRef.current.size;
+      if (!count) return;
+      pendingAnnouncementIdsRef.current.clear();
+      speak(count === 1 ? 'New kitchen order received' : `${count} new kitchen orders received`);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [orders, kdsSoundAlerts]);
+  const markServed=async(order:Order)=>{
+    if(servingId)return;setServingId(order.id);setServeError('');
+    try {const res=await ApiClient.authenticatedFetch(`/api/orders/${encodeURIComponent(order.id)}/serve`,{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':ApiClient.generateIdempotencyKey('serve')},body:JSON.stringify({version:order.version || 1})});const data=await res.json();if(!res.ok || !data.success)throw new Error(data.message || 'Order was not marked served.');setServedIds(ids=>[...ids,order.id]);}
+    catch(e:any){setServeError(e.message);}finally{setServingId(null);}
+  };
   // Local sub-tab state under Kitchen KDS
   const [kdsTab, setKdsTab] = useState<"pending" | "preparing" | "ready">("pending");
 
   // Filter active kitchen orders
   const activeOrders = orders.filter(
-    (o) => o.status === "Pending" || o.status === "Preparing" || o.status === "Ready"
+    (o) => !o.servedAt && !servedIds.includes(o.id) && (o.status === "Pending" || o.status === "Preparing" || o.status === "Ready")
   );
 
   const pendingOrders = activeOrders.filter((o) => o.status === "Pending");
@@ -39,7 +108,7 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
   const getTimerColorClass = (isoString: string, status: string): string => {
     const diffMs = Date.now() - new Date(isoString).getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (status === "Ready") return "text-emerald-600 font-semibold";
     if (diffMins > 15) return "text-rose-500 animate-pulse font-bold";
     if (diffMins > 8) return "text-amber-500 font-semibold";
@@ -56,17 +125,19 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
       setKdsTab("ready");
     }
 
-    // Simulating system alert audio if setting enabled
-    if (kdsSoundAlerts && "speechSynthesis" in window) {
-      const speech = new SpeechSynthesisUtterance();
-      speech.text = `Order ${order.orderNumber} status updated to ${nextStatus}`;
-      speech.rate = 1.1;
-      window.speechSynthesis.speak(speech);
-    }
+    // Prefer the table identifier for dine-in orders; other orders retain their order number.
+    const identifier = order.tableNo ? `Table ${order.tableNo}` : `Order ${order.orderNumber}`;
+    if (kdsSoundAlerts) speak(`${identifier} ${nextStatus === "Preparing" ? "preparing started" : nextStatus === "Ready" ? "is ready to serve" : `status updated to ${nextStatus}`}`);
   };
 
   return (
     <div className="h-full bg-[#f8fafc] flex flex-col p-4 sm:p-6 font-sans text-slate-800 overflow-hidden">
+      {serveError && <p role="alert" className="text-red-700">{serveError}</p>}
+      <div className="flex items-center gap-2">
+        <button type="button" id="kds-test-sound-btn" onClick={() => speak('Kitchen sound test. New order received.')}
+          className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white">Test Sound</button>
+        <span role="status" className="text-xs text-slate-600">{soundMessage}</span>
+      </div>
       {/* Title & Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 shrink-0 border-b border-slate-200 pb-4">
         <div className="flex items-center space-x-3">
@@ -257,14 +328,7 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
                   )}
 
                   {order.status === "Ready" && (
-                    <button
-                      onClick={() => handleActionClick(order, "Completed")}
-                      className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center space-x-2 border border-slate-200 transition duration-150 active:scale-[0.98]"
-                      id={`kds-clear-btn-${order.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      <span>Clear Order</span>
-                    </button>
+                    <button type="button" disabled={servingId!==null} onClick={()=>markServed(order)} className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl text-xs disabled:opacity-50">{servingId===order.id?'Saving…':'Mark Served to Customer'}</button>
                   )}
                 </div>
               </div>

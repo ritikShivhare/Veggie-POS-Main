@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Sparkles,
   RefreshCw,
@@ -58,16 +58,10 @@ export default function AIReportsView({
   const [selectedLanguage, setSelectedLanguage] = useState<ReportLanguage>("hindi");
   const [viewMode, setViewMode] = useState<"cards" | "full">("cards");
 
-  // Trigger initial report in default Hindi if no report has been generated yet
-  useEffect(() => {
-    if (!aiReport && !isGeneratingReport && !reportError) {
-      handleGenerateAIReport(selectedLanguage);
-    }
-  }, []);
-
+  // Manual-only reports: opening the page or changing language must not
+  // consume an AI report request. Only the Generate button invokes the API.
   const handleLanguageChange = (lang: ReportLanguage) => {
     setSelectedLanguage(lang);
-    handleGenerateAIReport(lang);
   };
 
   // Safe fallback metrics calculation
@@ -86,7 +80,7 @@ export default function AIReportsView({
   return (
     <div className="h-full p-4 sm:p-6 flex flex-col gap-6 overflow-y-auto bg-slate-50 font-sans">
       <div className="max-w-6xl mx-auto w-full space-y-6">
-        
+
         {/* Top Header & Language Selector Bar (OPTION 1) */}
         <div className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           <div className="space-y-1">
@@ -242,10 +236,10 @@ export default function AIReportsView({
         ) : viewMode === "cards" ? (
           /* OPTION 3: 4 STRUCTURED HIGHLIGHT CARDS IN HINDI / HINGLISH */
           <div className="space-y-6 animate-fade-in">
-            
+
             {/* Top Row: 2 Primary Diagnostic Cards */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
+
               {/* CARD 1: 🟢 कमाई व बिक्री विश्लेषण (Sales & Revenue Performance) */}
               <div className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col justify-between hover:border-emerald-200 transition-all">
                 <div>
@@ -439,7 +433,7 @@ export default function AIReportsView({
 
             {/* Bottom Row: Staffing & Profit Playbook Cards */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              
+
               {/* CARD 3: 🔵 स्टाफ व शिफ्ट स्थिति (Staff Shifts & Coverage) */}
               <div className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col justify-between hover:border-indigo-200 transition-all">
                 <div>

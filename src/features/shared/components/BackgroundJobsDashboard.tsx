@@ -1,3 +1,5 @@
+import {startVisiblePolling} from '../utils/visiblePolling';
+import { ApiClient } from "../services/api";
 import React, { useState, useEffect } from "react";
 import {
   Cpu,
@@ -53,7 +55,7 @@ export default function BackgroundJobsDashboard() {
   const fetchJobsAndLogs = async (showPulse = false) => {
     if (showPulse) setRefreshing(true);
     try {
-      const res = await fetch("/api/jobs");
+      const res = await ApiClient.authenticatedFetch("/api/jobs");
       const data = await res.json();
       if (data.success) {
         setJobs(data.jobs || []);
@@ -68,16 +70,13 @@ export default function BackgroundJobsDashboard() {
   };
 
   useEffect(() => {
-    fetchJobsAndLogs();
-    // Auto-refresh every 10 seconds for real-time live monitoring feel
-    const interval = setInterval(() => fetchJobsAndLogs(), 10000);
-    return () => clearInterval(interval);
+    return startVisiblePolling(() => fetchJobsAndLogs(), 10000);
   }, []);
 
   const handleTriggerJob = async (jobId: string) => {
     setTriggeringJobId(jobId);
     try {
-      const res = await fetch("/api/jobs/trigger", {
+      const res = await ApiClient.authenticatedFetch("/api/jobs/trigger", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jobId }),
@@ -98,7 +97,7 @@ export default function BackgroundJobsDashboard() {
 
   const handleToggleJob = async (jobId: string, currentEnabled: boolean) => {
     try {
-      const res = await fetch("/api/jobs/toggle", {
+      const res = await ApiClient.authenticatedFetch("/api/jobs/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ jobId, enabled: !currentEnabled }),
@@ -116,7 +115,7 @@ export default function BackgroundJobsDashboard() {
   const handleClearLogs = async () => {
     if (!window.confirm("Are you sure you want to clear all background execution logs?")) return;
     try {
-      const res = await fetch("/api/jobs/clear-logs", { method: "POST" });
+      const res = await ApiClient.authenticatedFetch("/api/jobs/clear-logs", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         setLogs([]);
@@ -148,7 +147,7 @@ export default function BackgroundJobsDashboard() {
 
   return (
     <div className="h-full p-4 sm:p-6 bg-[#f8fafc] overflow-y-auto space-y-6">
-      
+
       {/* TITLE & METRICS ROW */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -160,7 +159,7 @@ export default function BackgroundJobsDashboard() {
             Real-time scheduler interface for micro-services, automated compliance, and background customer campaigns.
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <button
             onClick={() => fetchJobsAndLogs(true)}
@@ -175,7 +174,7 @@ export default function BackgroundJobsDashboard() {
 
       {/* OVERVIEW METRIC CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
+
         <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-pink-50 text-pink-600 rounded-lg">
             <Cpu className="w-5 h-5 animate-pulse" />
@@ -263,7 +262,7 @@ export default function BackgroundJobsDashboard() {
                     )}
                   </div>
                   <p className="text-xs text-slate-500">{job.description}</p>
-                  
+
                   <div className="flex flex-wrap items-center gap-y-1.5 gap-x-4 pt-1 text-[11px] font-semibold text-slate-400">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-slate-300" />
@@ -317,7 +316,7 @@ export default function BackgroundJobsDashboard() {
 
       {/* AUDIT TRACE LOGS SECTION */}
       <div className="bg-white border border-slate-200/85 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-        
+
         {/* Header with Log Controls */}
         <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>

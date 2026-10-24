@@ -1,3 +1,5 @@
+import { ApiClient } from "../shared/services/api";
+import { offlineRepository,OutboxProcessor } from "../shared/services/offline";
 import React, { useState } from "react";
 import { Customer } from "../shared/types";
 import {
@@ -50,7 +52,7 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
       c.phone.includes(searchQuery)
   );
 
-  const handleAddGuestSubmit = (e: React.FormEvent) => {
+  const handleAddGuestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGuest.name || !newGuest.phone) {
       alert("Name and Phone Number are required!");
@@ -74,6 +76,7 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
       minBillAmount: 0
     };
 
+    try {await offlineRepository.recordCustomerOffline(localStorage.getItem("veggiepos_active_tenant_id") || "",createdGuest);await OutboxProcessor.triggerDrain();}catch(error:any){alert(`Customer was not saved: ${error.message}`);return;}
     const updated = [...customers, createdGuest];
     setCustomers(updated);
     setSelectedCustomerId(createdGuest.id);
@@ -89,24 +92,13 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
     });
   };
 
-  const handlePointsAdjustmentSubmit = () => {
-    const amt = parseInt(pointsAdjustment);
-    if (isNaN(amt) || amt <= 0) return;
-
-    const updated = customers.map((c) => {
-      if (c.id === selectedCustomer.id) {
-        const change = adjustmentType === "add" ? amt : -amt;
-        const newPoints = Math.max(0, c.loyaltyPoints + change);
-        return {
-          ...c,
-          loyaltyPoints: newPoints
-        };
-      }
-      return c;
-    });
-
-    setCustomers(updated);
-    setPointsAdjustment("");
+  const handlePointsAdjustmentSubmit=async()=>{
+    const amount=Number(pointsAdjustment);if(!Number.isInteger(amount) || amount<=0 || !selectedCustomer) return;
+    const reason=window.prompt("Reason for points adjustment:");if(!reason?.trim()) return;
+    try {
+      const response=await ApiClient.authenticatedFetch(`/api/customers/${encodeURIComponent(selectedCustomer.id)}/points`,{method:"POST",headers:{"Content-Type":"application/json","Idempotency-Key":ApiClient.generateIdempotencyKey("points")},body:JSON.stringify({delta:adjustmentType==="add"?amount:-amount,reason,version:selectedCustomer.version})});const data=await response.json();
+      if(!response.ok || !data.success) throw new Error(data.message || data.error || "Adjustment failed.");setCustomers(customers.map(c=>c.id===data.data.id?data.data:c));setPointsAdjustment("");
+    }catch(error:any){alert(error.message);}
   };
 
   // Format date helper
@@ -125,7 +117,7 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
 
   return (
     <div className="h-full flex flex-col lg:flex-row overflow-hidden bg-slate-50" id="crm-loyalty-tab-view">
-      
+
       {/* LEFT COLUMN: GUEST LIST */}
       <div className="w-full lg:w-96 border-r border-slate-200 flex flex-col bg-white shrink-0">
         <div className="p-4 border-b border-slate-100 flex flex-col gap-3">
@@ -197,7 +189,7 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
       <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 bg-slate-50">
         {selectedCustomer ? (
           <div className="max-w-4xl w-full mx-auto space-y-6">
-            
+
             {/* TOP HEADER: GUEST BRAND BANNER */}
             <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex items-center gap-4">
@@ -228,7 +220,7 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
 
             {/* BENTO GRID SECTIONS: GUEST PROFILE & METRICS */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
+
               {/* SECTION A: GUEST INFORMATION */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
                 <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center gap-1.5 text-blue-600">
