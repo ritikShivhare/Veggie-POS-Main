@@ -13,6 +13,7 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
   const [servedIds,setServedIds]=useState<string[]>([]),[servingId,setServingId]=useState<string|null>(null),[serveError,setServeError]=useState('');
   const [soundMessage, setSoundMessage] = useState('');
   const seenPendingIdsRef = useRef<Set<string> | null>(null);
+  const pendingAnnouncementIdsRef = useRef<Set<string>>(new Set());
   const speak = (message: string) => {
     if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
       setSoundMessage('This browser does not support spoken alerts.');
@@ -39,9 +40,38 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
     }
     const newcomers = [...ids].filter(id => !seenPendingIdsRef.current!.has(id));
     ids.forEach(id => seenPendingIdsRef.current!.add(id));
-    if (newcomers.length && kdsSoundAlerts && document.visibilityState === 'visible') {
-      speak(newcomers.length === 1 ? 'New kitchen order received' : `${newcomers.length} new kitchen orders received`);
+    if (!kdsSoundAlerts) {
+      pendingAnnouncementIdsRef.current.clear();
+      return;
     }
+    newcomers.forEach(id => pendingAnnouncementIdsRef.current.add(id));
+    // Drop tickets already taken into preparation while this tab was hidden.
+    for (const id of pendingAnnouncementIdsRef.current) {
+      if (!ids.has(id)) pendingAnnouncementIdsRef.current.delete(id);
+    }
+    if (document.visibilityState === 'visible' && pendingAnnouncementIdsRef.current.size) {
+      const count = pendingAnnouncementIdsRef.current.size;
+      pendingAnnouncementIdsRef.current.clear();
+      speak(count === 1 ? 'New kitchen order received' : `${count} new kitchen orders received`);
+    }
+  }, [orders, kdsSoundAlerts]);
+
+  // If orders arrived while the Kitchen tab was hidden, announce still-pending
+  // tickets once when the staff returns, instead of silently losing the alert.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible' || !kdsSoundAlerts) return;
+      const active = new Set(orders.filter(o => o.status === 'Pending' && !o.servedAt).map(o => o.id));
+      for (const id of pendingAnnouncementIdsRef.current) {
+        if (!active.has(id)) pendingAnnouncementIdsRef.current.delete(id);
+      }
+      const count = pendingAnnouncementIdsRef.current.size;
+      if (!count) return;
+      pendingAnnouncementIdsRef.current.clear();
+      speak(count === 1 ? 'New kitchen order received' : `${count} new kitchen orders received`);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [orders, kdsSoundAlerts]);
   const markServed=async(order:Order)=>{
     if(servingId)return;setServingId(order.id);setServeError('');
