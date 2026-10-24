@@ -220,11 +220,29 @@ export function useAuthSession({
   };
 
   // Clock In / Clock Out shift actions
+  const shiftStartInFlightRef = useRef(false);
   const handleShiftAction=async()=>{
-    if(!currentStaff) return;
-    if(activeShift) {alert("Close the shift using the cash-count form in Staff & Shifts.");return;}
-    const shift:Shift={id:crypto.randomUUID(),staffId:currentStaff.id,staffName:currentStaff.name,role:currentStaff.role,startTime:new Date().toISOString(),status:"Active"};
-    try {await offlineRepository.recordShiftOffline(activeTenantId,shift);setShifts([...shifts,shift]);await OutboxProcessor.triggerDrain(activeTenantId);}catch(error:any){alert(`Shift was not saved: ${error.message}`);}
+    if(!currentStaff || shiftStartInFlightRef.current) return;
+    if(activeShift || shifts.some(s => s.staffId === currentStaff.id && s.status === "Active" && !s.endTime)) {
+      alert("This staff member already has an active shift. Refresh duty logs before starting another.");
+      return;
+    }
+    shiftStartInFlightRef.current = true;
+    try {
+      const existing = await offlineRepository.getShifts(activeTenantId);
+      if(existing.some(s => s.staffId === currentStaff.id && s.status === "Active" && !s.endTime)) {
+        alert("An active duty shift is already saved on this device.");
+        return;
+      }
+      const shift:Shift={id:crypto.randomUUID(),staffId:currentStaff.id,staffName:currentStaff.name,role:currentStaff.role,startTime:new Date().toISOString(),status:"Active"};
+      await offlineRepository.recordShiftOffline(activeTenantId,shift);
+      setShifts(previous => [...previous,shift]);
+      await OutboxProcessor.triggerDrain(activeTenantId);
+    } catch(error:any) {
+      alert(`Shift was not saved: ${error.message}`);
+    } finally {
+      shiftStartInFlightRef.current = false;
+    }
   };
 
   return {
