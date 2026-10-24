@@ -484,9 +484,11 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   useEffect(()=>{
     const onSync=(e:any)=>{if(e.detail?.tenantId!==activeTenantId) return;offlineRepository.getOrders(activeTenantId).then(rows=>setOrders(rows as Order[]));};
     const onError=(e:any)=>{if(e.detail?.item?.tenantId===activeTenantId) setToastMessage({type:"error",text:`Order sync needs attention: ${e.detail.errorMsg}`});};
+    const onBlocked=(e:any)=>{if(e.detail?.tenantId===activeTenantId) setToastMessage({type:"error",text:`Order ${e.detail.entityId} is waiting for a rejected earlier operation. Review sync errors before retrying.`});};
     window.addEventListener("veggiepos_realtime_event",onSync);
+    window.addEventListener("veggiepos_sync_blocked",onBlocked);
     for(const event of ["veggiepos_reconcile_conflict","veggiepos_validation_failed","veggiepos_forbidden_error"]) window.addEventListener(event,onError);
-    return()=>{window.removeEventListener("veggiepos_realtime_event",onSync);for(const event of ["veggiepos_reconcile_conflict","veggiepos_validation_failed","veggiepos_forbidden_error"]) window.removeEventListener(event,onError);};
+    return()=>{window.removeEventListener("veggiepos_sync_blocked",onBlocked);window.removeEventListener("veggiepos_realtime_event",onSync);for(const event of ["veggiepos_reconcile_conflict","veggiepos_validation_failed","veggiepos_forbidden_error"]) window.removeEventListener(event,onError);};
   },[activeTenantId]);
 
   // Global order creation handler
