@@ -513,7 +513,9 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
       await offlineRepository.putOrder(activeTenantId,result.data);setOrders(prev=>prev.map(o=>o.id===orderId?result.data:o));return;
     }
     await offlineRepository.recordPaymentOffline(activeTenantId,orderId,{status,paymentMethod,paidAt});
-    setOrders(prev=>prev.map(o=>o.id===orderId?{...o,status,...(paymentMethod?{paymentMethod,paidAt}: {})}:o));
+    // Payment is queued, not settled: do not mark Paid in React state until
+    // the canonical server response arrives via the offline sync event.
+    if (!paymentMethod) setOrders(prev=>prev.map(o=>o.id===orderId?{...o,status}:o));
     OutboxProcessor.triggerDrain(activeTenantId).catch(console.warn);
   };
 
