@@ -68,12 +68,12 @@ export class BackgroundJobsService {
         type: "daily_report_gen",
         name: "Daily Sales Auto-Report Generator",
         description: "Calculates total orders, UPI/Cash split, and compiling analytics dashboards.",
-        schedule: "Every 2 minutes",
+        schedule: "Disabled — Owner reports are generated on demand",
         intervalMs: 2 * 60 * 1000,
         lastRun: null,
         nextRun: new Date(now + 2 * 60 * 1000).toISOString(),
         status: "idle",
-        enabled: true,
+        enabled: false,
       },
       {
         id: "job-3",
@@ -129,7 +129,8 @@ export class BackgroundJobsService {
         this.jobs.forEach((j, i) => {
           j.lastRun = persistedJobs[i].lastRun;
           j.status = persistedJobs[i].status === "running" ? "idle" : persistedJobs[i].status;
-          j.enabled = persistedJobs[i].enabled;
+          // A previously persisted enabled flag must not reactivate legacy report spam.
+          j.enabled = j.type === "daily_report_gen" ? false : persistedJobs[i].enabled;
         });
       }
 
@@ -176,7 +177,7 @@ export class BackgroundJobsService {
    */
   public async runJob(jobId: string): Promise<boolean> {
     const job = this.jobs.find((j) => j.id === jobId);
-    if (!job) return false;
+    if (!job || job.type === "daily_report_gen") return false;
 
     if (job.status === "running") {
       console.log(`Job ${job.name} is already executing.`);
@@ -238,7 +239,7 @@ export class BackgroundJobsService {
    */
   public toggleJobEnabled(jobId: string, enabled: boolean): boolean {
     const job = this.jobs.find((j) => j.id === jobId);
-    if (!job) return false;
+    if (!job || job.type === "daily_report_gen") return false;
     job.enabled = enabled;
     if (enabled) {
       job.nextRun = new Date(Date.now() + job.intervalMs).toISOString();
