@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Sparkles,
   RefreshCw,
@@ -58,16 +58,10 @@ export default function AIReportsView({
   const [selectedLanguage, setSelectedLanguage] = useState<ReportLanguage>("hindi");
   const [viewMode, setViewMode] = useState<"cards" | "full">("cards");
 
-  // Trigger initial report in default Hindi if no report has been generated yet
-  useEffect(() => {
-    if (!aiReport && !isGeneratingReport && !reportError) {
-      handleGenerateAIReport(selectedLanguage);
-    }
-  }, []);
-
+  // Manual-only reports: opening the page or changing language must not
+  // consume an AI report request. Only the Generate button invokes the API.
   const handleLanguageChange = (lang: ReportLanguage) => {
     setSelectedLanguage(lang);
-    handleGenerateAIReport(lang);
   };
 
   // Safe fallback metrics calculation
