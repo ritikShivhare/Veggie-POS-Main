@@ -95,7 +95,9 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
       setKdsTab("ready");
     }
 
-    if (kdsSoundAlerts) speak(`Order ${order.orderNumber} status updated to ${nextStatus}`);
+    // Prefer the table identifier for dine-in orders; other orders retain their order number.
+    const identifier = order.tableNo ? `Table ${order.tableNo}` : `Order ${order.orderNumber}`;
+    if (kdsSoundAlerts) speak(`${identifier} ${nextStatus === "Preparing" ? "preparing started" : nextStatus === "Ready" ? "is ready to serve" : `status updated to ${nextStatus}`}`);
   };
 
   return (
