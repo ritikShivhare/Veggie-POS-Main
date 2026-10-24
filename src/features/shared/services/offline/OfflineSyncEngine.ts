@@ -160,7 +160,17 @@ export class OfflineSyncEngine {
         }
 
         const dependencies=(await repo.getAllOutbox(effectiveTenantId)).filter(q=>q.id!==item.id && q.entityId===item.entityId && q.clientTimestamp<=item.clientTimestamp && !["SYNCED","completed"].includes(q.status));
-        if (dependencies.length) continue;
+        if (dependencies.length) {
+          // Preserve FIFO for this entity and explain why this operation is held.
+          // Never bypass rejected or unresolved commands to perform payment.
+          if (dependencies.some(d => ["conflict", "validation_error", "auth_error"].includes(d.status))) {
+            this.dispatchCustomEvent("veggiepos_sync_blocked", {
+              tenantId: item.tenantId, entityId: item.entityId,
+              operationId: item.id, blockedBy: dependencies.map(d => ({ id: d.id, status: d.status, lastError: d.lastError }))
+            });
+          }
+          continue;
+        }
         result.processed++;
         const itemResult = await this.processOperation(item, options);
 
