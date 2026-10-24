@@ -682,7 +682,9 @@ export class OfflineRepository {
     return this.db.transaction("rw",[this.db.orders,this.db.outbox],async()=>{
     // 1. Update in local IndexedDB
     const existing = await this.db.orders.get([tenantId,orderId] as any);
-    if (existing) {
+    if (existing && !updateData.paymentMethod) {
+      // Kitchen transitions may be shown optimistically; a payment must not
+      // become locally Paid before the authoritative server ledger commits.
       await this.db.orders.update([tenantId,orderId] as any, {
         ...updateData,
         updatedAt: new Date().toISOString()
