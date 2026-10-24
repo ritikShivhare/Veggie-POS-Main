@@ -437,6 +437,10 @@ router.post("/shifts", authMiddleware, idempotencyMiddleware, async (req, res) =
     if(req.body.staffId!==session.userId && !["Owner","Manager"].includes(session.role)) return res.status(403).json({success:false,error:"FORBIDDEN"});
     if(req.body.status!=="Active") return res.status(400).json({success:false,error:"INVALID_SHIFT"});
     finiteAmount(req.body.openingCash ?? 0,"Opening cash");
+    const existingShifts = await shiftRepo.getAll(tenantId);
+    if (existingShifts.some(s => s.staffId === req.body.staffId && s.status === "Active" && !s.endTime)) {
+      return res.status(409).json({success:false,error:"ACTIVE_SHIFT_EXISTS",message:"This staff member already has an active duty shift. Close it before starting another."});
+    }
     await shiftRepo.add(tenantId, {...req.body,status:"Active",startTime:new Date().toISOString(),staffName:session.userName,role:session.role});
     const savedShift = await shiftRepo.getById(tenantId, req.body.id);
     try {
