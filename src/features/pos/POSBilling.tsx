@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import QRCode from "qrcode";
+import { offlineRepository } from "../shared/services/offline/OfflineRepository";
 import ReceiptTotals from "../shared/components/ReceiptTotals";
 import { getReceiptPaperSize } from "../shared/utils/receiptPaperSize";
 import FssaiRegistration from "../shared/components/FssaiRegistration";
@@ -99,6 +100,26 @@ export default function POSBilling({
   const [kotModalOrder, setKotModalOrder] = useState<Order | null>(null);
   const [showFloorMap, setShowFloorMap] = useState<boolean>(false);
   const [billsFilter, setBillsFilter] = useState<"unpaid" | "settled" | "all">("unpaid");
+  const [paymentSync, setPaymentSync] = useState<Record<string, "pending" | "attention">>({});
+  useEffect(() => {
+    const tenantId = activeTenant?.tenantId;
+    if (!tenantId) { setPaymentSync({}); return; }
+    let mounted = true;
+    const refresh = async () => {
+      try {
+        const rows = await offlineRepository.getAllOutbox(tenantId);
+        const result: Record<string, "pending" | "attention"> = {};
+        for (const item of rows.sort((a,b) => (a.clientTimestamp || 0) - (b.clientTimestamp || 0))) {
+          if (item.entityType !== "payment" || ["SYNCED","completed"].includes(item.status)) continue;
+          result[item.entityId] = ["validation_error","conflict","auth_error"].includes(item.status) ? "attention" : "pending";
+        }
+        if (mounted) setPaymentSync(result);
+      } catch (error) { console.warn("Unable to inspect payment sync state", error); }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 2000);
+    return () => { mounted = false; window.clearInterval(timer); };
+  }, [activeTenant?.tenantId]);
 
   // Order Cancellation Modal State (Problem 1)
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
@@ -609,18 +630,12 @@ export default function POSBilling({
     if(selectedPayment==="UPI" && !settings.upiVpa && !activeTenant?.vpa) {setCheckoutError("Configure your UPI address in settings first.");return;}
     if(selectedPayment==="Cash" && actualReceived<orderAmount) {setCheckoutError("Cash received must cover the bill amount.");return;}
     const paidTimestamp = new Date().toISOString();
-    const completedOrder: Order = {
-      ...billingOrder,
-      status: "Completed",
-      paymentMethod: selectedPayment,
-      paidAt: paidTimestamp
-    };
 
     // Update existing order status to Completed and record payment details
     try {await onUpdateOrderStatus(billingOrder.id,"Completed",selectedPayment,paidTimestamp);}catch(error:any){setCheckoutError(`Payment was not saved: ${error.message}`);return;}
 
-    // Prompt immediate thermal receipt printing
-    setReceiptModalOrder(completedOrder);
+    // Settlement is queued; only a server-confirmed paid order may print a paid receipt.
+    // The Bills panel shows Pending Sync until the canonical server order arrives.
     setBillingOrder(null);
     setShowPaymentModal(false);
     setReceivedAmount("");
@@ -960,7 +975,8 @@ export default function POSBilling({
                       return true;
                     })
                     .map((order) => {
-                      const isPaid = Boolean(order.paidAt && order.paymentMethod);
+                      const syncState = paymentSync[order.id];
+                      const isPaid = !syncState && Boolean(order.paidAt && order.paymentMethod);
                       const isReady = order.status === "Ready" || order.status === "Completed";
                       return (
                         <div
@@ -994,6 +1010,10 @@ export default function POSBilling({
                                   <span className="text-[10px] bg-emerald-600 text-white font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
                                     <Check className="w-3 h-3" />
                                     <span>Paid ({order.paymentMethod})</span>
+                                  </span>
+                                ) : syncState ? (
+                                  <span role="status" className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${syncState === "attention" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"}`}>
+                                    {syncState === "attention" ? "Payment Needs Attention" : "Payment Pending Sync"}
                                   </span>
                                 ) : isReady ? (
                                   <span className="text-[10px] bg-emerald-500 text-white font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm animate-pulse">
@@ -1070,7 +1090,7 @@ export default function POSBilling({
                                 <span>KOT</span>
                               </button>
 
-                              {!isPaid ? (
+                              {!isPaid && !syncState ? (
                                 <>
                                   <button
                                     onClick={() => {
@@ -1103,7 +1123,7 @@ export default function POSBilling({
                                     <span>{isReady ? "Collect & Settle Bill" : "Pre-Settle"}</span>
                                   </button>
                                 </>
-                              ) : (
+                              ) : isPaid ? (
                                 <button
                                   onClick={() => setReceiptModalOrder(order)}
                                   className="flex-1 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98]"
@@ -1112,6 +1132,10 @@ export default function POSBilling({
                                   <Printer className="w-3.5 h-3.5" />
                                   <span>Print Thermal Receipt</span>
                                 </button>
+                              ) : (
+                                <span role="status" className="text-xs font-semibold text-amber-700">
+                                  {syncState === "attention" ? "Payment Needs Attention — check sync before retrying" : "Payment Pending Sync — receipt available after confirmation"}
+                                </span>
                               )}
                             </div>
                           </div>
