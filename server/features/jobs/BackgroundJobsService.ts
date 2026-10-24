@@ -201,11 +201,6 @@ export class BackgroundJobsService {
           resultMessage = stockResult.message;
           resultDetails = stockResult.details;
           break;
-        case "daily_report_gen":
-          const reportResult = await this.executeDailyReportGen();
-          resultMessage = reportResult.message;
-          resultDetails = reportResult.details;
-          break;
         case "subscription_reminder":
           const subResult = await this.executeSubscriptionReminderCheck();
           resultMessage = subResult.message;
