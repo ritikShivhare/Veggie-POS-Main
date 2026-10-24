@@ -1,5 +1,5 @@
 import {ApiClient} from '../shared/services/api';
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Order, OrderStatus } from "../shared/types";
 import { ChefHat, Play, CheckCircle, Flame, Clock, AlertTriangle } from "lucide-react";
 
@@ -11,6 +11,38 @@ interface KitchenKDSProps {
 
 export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts }: KitchenKDSProps) {
   const [servedIds,setServedIds]=useState<string[]>([]),[servingId,setServingId]=useState<string|null>(null),[serveError,setServeError]=useState('');
+  const [soundMessage, setSoundMessage] = useState('');
+  const seenPendingIdsRef = useRef<Set<string> | null>(null);
+  const speak = (message: string) => {
+    if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+      setSoundMessage('This browser does not support spoken alerts.');
+      return;
+    }
+    try {
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.rate = 1.05;
+      utterance.onstart = () => setSoundMessage('Sound playing');
+      utterance.onerror = () => setSoundMessage('Browser blocked speech. Tap Test Sound to enable audio.');
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      setSoundMessage('Unable to play sound on this device.');
+    }
+  };
+  // Establish a baseline from the first loaded order list: do not announce old tickets on login.
+  // Later Pending IDs are announced once per mounted Kitchen display.
+  useEffect(() => {
+    const ids = new Set(orders.filter(o => o.status === 'Pending' && !o.servedAt).map(o => o.id));
+    if (!seenPendingIdsRef.current) {
+      seenPendingIdsRef.current = ids;
+      return;
+    }
+    const newcomers = [...ids].filter(id => !seenPendingIdsRef.current!.has(id));
+    ids.forEach(id => seenPendingIdsRef.current!.add(id));
+    if (newcomers.length && kdsSoundAlerts && document.visibilityState === 'visible') {
+      speak(newcomers.length === 1 ? 'New kitchen order received' : `${newcomers.length} new kitchen orders received`);
+    }
+  }, [orders, kdsSoundAlerts]);
   const markServed=async(order:Order)=>{
     if(servingId)return;setServingId(order.id);setServeError('');
     try {const res=await ApiClient.authenticatedFetch(`/api/orders/${encodeURIComponent(order.id)}/serve`,{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':ApiClient.generateIdempotencyKey('serve')},body:JSON.stringify({version:order.version || 1})});const data=await res.json();if(!res.ok || !data.success)throw new Error(data.message || 'Order was not marked served.');setServedIds(ids=>[...ids,order.id]);}
@@ -63,18 +95,17 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
       setKdsTab("ready");
     }
 
-    // Simulating system alert audio if setting enabled
-    if (kdsSoundAlerts && "speechSynthesis" in window) {
-      const speech = new SpeechSynthesisUtterance();
-      speech.text = `Order ${order.orderNumber} status updated to ${nextStatus}`;
-      speech.rate = 1.1;
-      window.speechSynthesis.speak(speech);
-    }
+    if (kdsSoundAlerts) speak(`Order ${order.orderNumber} status updated to ${nextStatus}`);
   };
 
   return (
     <div className="h-full bg-[#f8fafc] flex flex-col p-4 sm:p-6 font-sans text-slate-800 overflow-hidden">
       {serveError && <p role="alert" className="text-red-700">{serveError}</p>}
+      <div className="flex items-center gap-2">
+        <button type="button" id="kds-test-sound-btn" onClick={() => speak('Kitchen sound test. New order received.')}
+          className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white">Test Sound</button>
+        <span role="status" className="text-xs text-slate-600">{soundMessage}</span>
+      </div>
       {/* Title & Header Section */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 shrink-0 border-b border-slate-200 pb-4">
         <div className="flex items-center space-x-3">
