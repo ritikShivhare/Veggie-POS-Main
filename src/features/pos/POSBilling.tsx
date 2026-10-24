@@ -90,6 +90,7 @@ export default function POSBilling({
 
   // Printing & Floor Map Modals
   const [receiptModalOrder, setReceiptModalOrder] = useState<Order | null>(null);
+  const [awaitingReceiptOrderId, setAwaitingReceiptOrderId] = useState<string | null>(null);
   const [receiptPaperSize, setReceiptPaperSize] = useState(getReceiptPaperSize);
   useEffect(() => {
     const syncPaperSize = () => setReceiptPaperSize(getReceiptPaperSize());
@@ -120,6 +121,17 @@ export default function POSBilling({
     const timer = window.setInterval(refresh, 2000);
     return () => { mounted = false; window.clearInterval(timer); };
   }, [activeTenant?.tenantId]);
+
+  // Only open a paid receipt for a settlement initiated on this screen,
+  // after the canonical server-confirmed order reaches React and the
+  // corresponding outbox item has been acknowledged.
+  useEffect(() => {
+    if (!awaitingReceiptOrderId || paymentSync[awaitingReceiptOrderId]) return;
+    const settled = orders.find(o => o.id === awaitingReceiptOrderId);
+    if (!settled || settled.status !== "Completed" || !settled.paidAt || !settled.paymentMethod) return;
+    setReceiptModalOrder(settled);
+    setAwaitingReceiptOrderId(null);
+  }, [awaitingReceiptOrderId, paymentSync, orders, activeTenant?.tenantId]);
 
   // Order Cancellation Modal State (Problem 1)
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
@@ -634,8 +646,9 @@ export default function POSBilling({
     // Update existing order status to Completed and record payment details
     try {await onUpdateOrderStatus(billingOrder.id,"Completed",selectedPayment,paidTimestamp);}catch(error:any){setCheckoutError(`Payment was not saved: ${error.message}`);return;}
 
-    // Settlement is queued; only a server-confirmed paid order may print a paid receipt.
-    // The Bills panel shows Pending Sync until the canonical server order arrives.
+    // Remember this checkout only. A confirmed canonical payment will open
+    // its receipt; a rejected/unconfirmed payment never prints as Paid.
+    setAwaitingReceiptOrderId(billingOrder.id);
     setBillingOrder(null);
     setShowPaymentModal(false);
     setReceivedAmount("");
