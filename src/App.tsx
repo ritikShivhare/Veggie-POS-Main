@@ -485,8 +485,8 @@ function AppContent() {
             {activeTab === "dashboard" && currentStaff.role === "Owner" && (
               <button
                 onClick={() => {
+                  // Navigate only. The Owner explicitly generates a report inside Reports.
                   setActiveTab("ai-reports");
-                  handleGenerateAIReport();
                 }}
                 className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-[11px] transition shadow-[0_2px_4px_rgba(0,0,0,0.05)] flex items-center gap-1.5 cursor-pointer"
                 id="header-audit-btn"
