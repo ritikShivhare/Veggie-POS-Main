@@ -396,7 +396,14 @@ export class OfflineRepository {
   }
   public async retryOperation(tenantId:string,id:string,payload?:any):Promise<void> {
     const item=await this.db.outbox.get([tenantId,id] as any);if(!item) throw new Error("Operation not found.");
-    await this.db.outbox.update([tenantId,id] as any,{status:"pending",nextRetryAt:0,lastError:undefined,...(payload?{payload,idempotencyKey:crypto.randomUUID()}: {})});
+    if (item.status === "SYNCED" || item.status === "completed") throw new Error("Already synchronized operations cannot be retried.");
+    // A changed payload represents a NEW business command and must first be
+    // reconciled against authoritative server state, not silently replayed.
+    if (payload !== undefined && JSON.stringify(payload) !== JSON.stringify(item.payload)) {
+      throw new Error("Changed operation requires server reconciliation before retry.");
+    }
+    // Preserve the original operationId and idempotency key for safe replay.
+    await this.db.outbox.update([tenantId,id] as any,{status:"pending",nextRetryAt:0,lastError:undefined});
   }
   public async getPendingOutbox(tenantId: string): Promise<OfflineOutboxItem[]> {
     const now = Date.now();
@@ -692,7 +699,11 @@ export class OfflineRepository {
     }
 
     // 2. Enqueue in durable outbox
-    const idempotencyKey = `ik_pay_${orderId}_${updateData.status || "Completed"}`;
+    // Each Kitchen state transition is a distinct command; retries retain its key.
+    // Payment retries retain their existing stable key to prevent duplicate settlement.
+    const idempotencyKey = updateData.paymentMethod
+      ? `ik_pay_${orderId}_${updateData.status || "Completed"}`
+      : `ik_order_status_${crypto.randomUUID()}`;
     return this.enqueueOutbox(tenantId, {
       entityType: updateData.paymentMethod ? "payment" : "order",
       entityId: orderId,
