@@ -1,0 +1,44 @@
+name: Integration dependency repair (temporary)
+
+on:
+  push:
+    branches: [integration/aatmyam-v1]
+    paths:
+      - .github/workflows/integration-dependency-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.ref == 'refs/heads/integration/aatmyam-v1'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: integration/aatmyam-v1
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Resolve advisory fixes without force
+        run: |
+          npm ci
+          npm install --save-exact nodemailer@10.2.1
+          npm audit fix
+      - name: Verify security, types, tests and build
+        run: |
+          npm audit --audit-level=moderate
+          npm run lint
+          npm test
+          npm run build
+      - name: Commit only dependency manifests on integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(deps): resolve security advisories on integration"
+            git push origin HEAD:integration/aatmyam-v1
+          fi
