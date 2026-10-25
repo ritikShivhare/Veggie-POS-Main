@@ -397,12 +397,25 @@ export class OfflineRepository {
   public async retryOperation(tenantId:string,id:string,payload?:any):Promise<void> {
     const item=await this.db.outbox.get([tenantId,id] as any);if(!item) throw new Error("Operation not found.");
     if (item.status === "SYNCED" || item.status === "completed") throw new Error("Already synchronized operations cannot be retried.");
-    // A changed payload represents a NEW business command and must first be
-    // reconciled against authoritative server state, not silently replayed.
-    if (payload !== undefined && JSON.stringify(payload) !== JSON.stringify(item.payload)) {
-      throw new Error("Changed operation requires server reconciliation before retry.");
+    const changed = payload !== undefined && JSON.stringify(payload) !== JSON.stringify(item.payload);
+    if (changed) {
+      // Compatibility recovery for legacy Kitchen "Completed" clears that the
+      // server correctly rejects. Revert the command to Ready (not a payment).
+      // All other changed commands, especially financial ones, stay blocked.
+      const legacyKitchenRepair =
+        item.entityType === "order" && item.operationType === "UPDATE" &&
+        item.status === "validation_error" && item.payload?.status === "Completed" &&
+        item.lastError?.includes("BUSINESS_COMMAND_REQUIRED") &&
+        payload?.status === "Ready" && Number.isInteger(payload?.version) &&
+        Object.keys(payload).every(k => k === "status" || k === "version");
+      if (!legacyKitchenRepair) throw new Error("Changed operation requires server reconciliation before retry.");
+      await this.db.outbox.update([tenantId,id] as any,{
+        payload, idempotencyKey: `ik_${crypto.randomUUID()}`,
+        status:"pending", nextRetryAt:0, lastError:undefined
+      });
+      return;
     }
-    // Preserve the original operationId and idempotency key for safe replay.
+    // Identical retries preserve the operationId and server idempotency key.
     await this.db.outbox.update([tenantId,id] as any,{status:"pending",nextRetryAt:0,lastError:undefined});
   }
   public async getPendingOutbox(tenantId: string): Promise<OfflineOutboxItem[]> {
