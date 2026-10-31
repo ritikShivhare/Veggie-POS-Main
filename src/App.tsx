@@ -1,3 +1,5 @@
+import {startVisiblePolling} from './features/shared/utils/visiblePolling';
+import SyncQueueStatus from "./features/shared/components/SyncQueueStatus";
 import React, { useState, useEffect } from "react";
 import { StaffMember, RestaurantTenant } from "./features/shared/types";
 import { AppContextProvider, useAppContext } from "./features/shared/context/AppContext";
@@ -69,6 +71,7 @@ function AppContent() {
     purchases,
     shifts,
     isInitialSyncLoading,
+    isTenantDataReady,
     setIsInitialSyncLoading,
     settings,
     setSettings,
@@ -101,6 +104,11 @@ function AppContent() {
 
   const [activeTab, setActiveTab] = useState<string>("dashboard");
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  useEffect(() => {
+    if (currentStaff && currentStaff.role !== "Owner" && ["dashboard", "ai-reports"].includes(activeTab)) {
+      setActiveTab("billing");
+    }
+  }, [activeTab, currentStaff]);
 
   // Safety watchdog: Automatically dismiss initial sync overlay after 2.5s if not resolved
   useEffect(() => {
@@ -155,25 +163,24 @@ function AppContent() {
 
   const [unreadNotifsCount, setUnreadNotifsCount] = useState<number>(0);
 
-  // Poll notifications for real-time badge count
+  // Recipient-scoped alerts: one request at a time, discard late tenant/session responses.
   useEffect(() => {
-    const fetchUnreadCount = async () => {
-      if (!currentStaff) return;
+    let active=true,busy=false,seen:Set<string>|null=null;
+    setUnreadNotifsCount(0);toast.clearAll();
+    const fetchUnreadCount=async()=>{
+      if(!currentStaff || busy)return;busy=true;
       try {
-        const res = await fetch("/api/notifications");
-        const data = await res.json();
-        if (data.success && data.notifications) {
-          const unread = data.notifications.filter((n: any) => !n.read).length;
-          setUnreadNotifsCount(unread);
-        }
-      } catch (err) {
-        console.warn("Failed to poll unread notifications:", err);
-      }
+        const res=await ApiClient.authenticatedFetch('/api/notifications');const data=await res.json();
+        if(!active || !res.ok || !data.success)return;
+        const notifications=data.notifications || [];
+        if(seen)for(const n of notifications)if(!n.read && n.metadata?.kind && !seen.has(n.id))toast.info(n.message,n.title,8000);
+        seen=new Set(notifications.map((n:any)=>n.id));
+        setUnreadNotifsCount(notifications.filter((n:any)=>!n.read).length);
+      }catch(err){console.warn('Failed to poll unread notifications:',err);}finally{busy=false;}
     };
-    fetchUnreadCount();
-    const interval = setInterval(fetchUnreadCount, 10000);
-    return () => clearInterval(interval);
-  }, [activeTab, currentStaff]);
+    const stopPolling=startVisiblePolling(fetchUnreadCount,10000);
+    return()=>{active=false;stopPolling();};
+  },[activeTenant.tenantId,currentStaff?.id,currentSessionId]);
 
   const handleSignupSuccess = (data: {
     tenant: RestaurantTenant;
@@ -298,7 +305,7 @@ function AppContent() {
               const cleanedName = data.businessName.toLowerCase().replace(/[^a-z0-9]/g, "");
               const randomSuffix = Math.floor(100 + Math.random() * 900);
               const newTenantId = `veg-${cleanedName}-${randomSuffix}`;
-              
+
               const newTenant: RestaurantTenant = {
                 id: `t-${Date.now()}`,
                 name: data.businessName,
@@ -365,7 +372,7 @@ function AppContent() {
           staffList={staffList}
           onLoginSuccess={(staff, sessId, loggedInTenant) => {
             handleLoginSuccess(staff, sessId, loggedInTenant);
-            setActiveTab(staff.permissions.includes("reports") ? "dashboard" : "billing");
+            setActiveTab(staff.role === "Owner" ? "dashboard" : "billing");
           }}
           restaurantName={activeTenant.name}
           tenantId={activeTenant.tenantId}
@@ -408,7 +415,7 @@ function AppContent() {
 
   return (
     <div className="h-screen w-full flex bg-[#f8fafc] text-[#1e293b] font-sans overflow-hidden select-none">
-      
+
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -422,7 +429,7 @@ function AppContent() {
       />
 
       <main className="flex-1 flex flex-col overflow-hidden bg-[#fafbfd]">
-        
+
         <header className="h-16 bg-white/90 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-4 sm:px-8 shadow-[0_1px_2px_0_rgba(0,0,0,0.02)] shrink-0 z-10">
           <div className="flex items-center gap-3 sm:gap-4">
             <button
@@ -435,7 +442,8 @@ function AppContent() {
             <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight font-display">
               {activeTab === "saas-admin" && "SaaS Multi-Tenant Control Panel"}
               {activeTab === "dashboard" && "Operations Center"}
-              {activeTab === "billing" && "Order Entry Desk"}
+              <SyncQueueStatus tenantId={activeTenant.tenantId} />
+          {activeTab === "billing" && "Order Entry Desk"}
               {activeTab === "kds" && "Kitchen Assembly Line"}
               {activeTab === "crm" && "Customer Relations (CRM)"}
               {activeTab === "delivery" && "Food Delivery Channel Gateway"}
@@ -474,11 +482,11 @@ function AppContent() {
               )}
             </button>
 
-            {activeTab === "dashboard" && (
+            {activeTab === "dashboard" && currentStaff.role === "Owner" && (
               <button
                 onClick={() => {
+                  // Navigate only. The Owner explicitly generates a report inside Reports.
                   setActiveTab("ai-reports");
-                  handleGenerateAIReport();
                 }}
                 className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg text-[11px] transition shadow-[0_2px_4px_rgba(0,0,0,0.05)] flex items-center gap-1.5 cursor-pointer"
                 id="header-audit-btn"
@@ -492,11 +500,11 @@ function AppContent() {
 
         <div className="flex-1 overflow-hidden relative">
           {isInitialSyncLoading && (
-            <div 
+            <div
               onClick={() => setIsInitialSyncLoading(false)}
               className="absolute inset-0 bg-slate-900/30 backdrop-blur-[2px] z-50 flex items-center justify-center p-4 animate-fade-in"
             >
-              <div 
+              <div
                 onClick={(e) => e.stopPropagation()}
                 className="bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-2xl rounded-2xl p-6 flex flex-col items-center gap-3 text-center max-w-xs w-full animate-scale-up relative"
               >
@@ -524,7 +532,14 @@ function AppContent() {
               </div>
             </div>
           )}
-          
+
+          {!isTenantDataReady ? (
+            <div role="status" className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+              <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
+              <h2 className="font-semibold">Loading restaurant data</h2>
+              <p className="text-sm text-slate-500">Keep this page open. Editing becomes available once your restaurant data is synchronized.</p>
+            </div>
+          ) : <>
           {activeTab === "dashboard" && (
             <Dashboard
               dashboardStats={dashboardStats}
@@ -562,7 +577,7 @@ function AppContent() {
                 <p className="text-sm font-medium text-slate-400 font-mono">Loading Kitchen Display System...</p>
               </div>
             }>
-              <KitchenKDS
+              <KitchenKDS key={activeTenant.tenantId+':'+currentStaff.id}
                 orders={orders}
                 onUpdateOrderStatus={handleUpdateOrderStatus}
                 kdsSoundAlerts={settings.kdsSoundAlerts}
@@ -599,7 +614,6 @@ function AppContent() {
               onUpdateRecipes={handleUpdateRecipes}
               onUpdateMenuItems={handleUpdateMenuItems}
               onAddPurchase={handleAddPurchase}
-              onUpdateSettings={setSettings}
             />
           )}
 
@@ -616,7 +630,7 @@ function AppContent() {
             />
           )}
 
-          {activeTab === "ai-reports" && (
+          {activeTab === "ai-reports" && currentStaff.role === "Owner" && (
             <React.Suspense fallback={
               <div className="flex flex-col items-center justify-center p-12 space-y-4">
                 <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
@@ -646,7 +660,7 @@ function AppContent() {
                 const cleanedName = data.businessName.toLowerCase().replace(/[^a-z0-9]/g, "");
                 const randomSuffix = Math.floor(100 + Math.random() * 900);
                 const newTenantId = `veg-${cleanedName}-${randomSuffix}`;
-                
+
                 const newTenant: RestaurantTenant = {
                   id: `t-${Date.now()}`,
                   name: data.businessName,
@@ -681,14 +695,14 @@ function AppContent() {
           )}
 
           {activeTab === "notifications" && (
-            <NotificationCenter />
+            <NotificationCenter key={activeTenant.tenantId+':'+currentStaff.id}/>
           )}
 
-          {activeTab === "events" && (
+          {activeTab === "events" && currentStaff.role === "Owner" && (
             <EventDrivenDashboard />
           )}
 
-          {activeTab === "settings" && (
+          {activeTab === "settings" && currentStaff.role === "Owner" && (
             <React.Suspense fallback={
               <div className="flex flex-col items-center justify-center p-12 space-y-4">
                 <RefreshCw className="w-8 h-8 text-emerald-500 animate-spin" />
@@ -714,18 +728,21 @@ function AppContent() {
                 purchases={purchases}
                 shifts={shifts}
                 handleLogout={handleLogout}
+                currentSessionId={currentSessionId}
                 tenants={tenants}
                 setTenants={setTenants}
               />
             </React.Suspense>
           )}
 
-          {activeTab === "security" && (
+          {activeTab === "security" && currentStaff.role === "Owner" && (
             <SessionManagementDashboard
               currentSessionId={currentSessionId}
               onSessionTerminated={handleLogout}
             />
           )}
+
+          </>}
 
         </div>
 
@@ -737,7 +754,7 @@ function AppContent() {
             <div className="w-14 h-14 bg-amber-50 rounded-full flex items-center justify-center mx-auto text-amber-500 animate-bounce">
               <AlertTriangle className="w-8 h-8" />
             </div>
-            
+
             <div className="space-y-1.5">
               <h3 className="text-base font-extrabold text-slate-800">Inactivity Idle Warning</h3>
               <p className="text-xs text-slate-500 leading-relaxed">
@@ -763,14 +780,14 @@ function AppContent() {
 
       {toastMessage && (
         <div className={`fixed bottom-6 right-6 z-[99999] flex items-center gap-3.5 px-4.5 py-4 rounded-2xl shadow-2xl border text-xs font-semibold tracking-wide animate-bounce duration-300 max-w-sm ${
-          toastMessage.type === "success" 
-            ? "bg-slate-900 border-slate-850 text-emerald-400" 
+          toastMessage.type === "success"
+            ? "bg-slate-900 border-slate-850 text-emerald-400"
             : "bg-rose-950/95 border-rose-900 text-rose-100 backdrop-blur"
         }`}>
           <div className={`w-2.5 h-2.5 rounded-full ${toastMessage.type === "success" ? "bg-emerald-500 animate-ping" : "bg-rose-500 animate-pulse"}`} />
           <span className="flex-1 leading-relaxed">{toastMessage.text}</span>
-          <button 
-            onClick={() => setToastMessage(null)} 
+          <button
+            onClick={() => setToastMessage(null)}
             className="text-[10px] uppercase font-black tracking-widest text-slate-400 hover:text-white px-1.5 py-1 transition-colors rounded hover:bg-white/5 ml-1"
           >
             Dismiss

@@ -90,7 +90,70 @@ h1, h2, h3, .font-serif {
     border: none !important;
   }
 
+  /* Printable content widths leave margins for 58/80mm thermal rolls. */
+  .printable-thermal-receipt[data-paper-size="58mm"] {
+    width: 54mm;
+    max-width: 54mm;
+    padding: 3mm 2mm;
+    font-size: 9px;
+    overflow-wrap: anywhere;
+  }
+  .printable-thermal-receipt[data-paper-size="80mm"] {
+    width: 76mm;
+    max-width: 76mm;
+  }
   .no-print {
+    display: none !important;
+  }
+}
+
+
+/* Print a historical paid-order receipt from the Dashboard, not the Dashboard
+   itself. The POS/KOT thermal print rules above remain unchanged. */
+@media print {
+  body:has(.historical-receipt-modal) .printable-thermal-receipt,
+  body:has(.historical-receipt-modal) .printable-thermal-receipt * {
+    visibility: hidden !important;
+  }
+
+  body:has(.historical-receipt-modal) .historical-receipt-modal,
+  body:has(.historical-receipt-modal) .historical-receipt-modal .historical-receipt-print-body,
+  body:has(.historical-receipt-modal) .historical-receipt-modal .historical-receipt-print-body * {
+    visibility: visible !important;
+  }
+
+  .historical-receipt-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 9999 !important;
+    display: block !important;
+    overflow: visible !important;
+    padding: 0 !important;
+    background: white !important;
+    backdrop-filter: none !important;
+  }
+
+  .historical-receipt-modal > div {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+
+  .historical-receipt-modal .historical-receipt-print-body {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 6mm !important;
+  }
+
+  .historical-receipt-modal > div > :not(.historical-receipt-print-body) {
     display: none !important;
   }
 }

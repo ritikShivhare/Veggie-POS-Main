@@ -1,8 +1,12 @@
+import {startTrial} from '../server/features/billing/SubscriptionLifecycle';
+import { isActiveStaff } from "../src/features/shared/staffStatus";
 import express from "express";
-import fs from "node:fs";
-import path from "node:path";
+import crypto from "node:crypto";
+import rateLimit from "express-rate-limit";
+import { publicStaff, publicTenant, digest, validPin, validPassword, escapeHtml } from "../server/features/shared/security";
+
 import bcrypt from "bcryptjs";
-import { Database } from "../server/features/shared/database";
+import { Database,handleApiError } from "../server/features/shared/database";
 import {
   sessionService,
   notificationService,
@@ -52,7 +56,9 @@ interface PendingSignup {
   pin: string;
   region: string;
   tenantId: string;
-  verificationCode: string;
+  codeHash: string;
+  passwordHash: string;
+  attempts: number;
   createdAt: number;
   expiresAt: number;
   lastSentAt?: number;
@@ -71,20 +77,23 @@ function generateVerificationEmailHtml(params: {
   tenantId: string;
   region: string;
 }): string {
-  const { ownerName, businessName, verificationCode, tenantId, region } = params;
+  const { verificationCode, tenantId } = params;
+  const ownerName=escapeHtml(String(params.ownerName));
+  const businessName=escapeHtml(String(params.businessName));
+  const region=escapeHtml(String(params.region));
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Activate Your VeggiePOS Account</title>
+  <title>Activate Your Aatmyam POS Account</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #0b1120; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f1f5f9;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #0b1120; padding: 32px 16px;">
     <tr>
       <td align="center">
         <table role="presentation" width="100%" style="max-width: 580px; background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);" cellspacing="0" cellpadding="0" border="0">
-          
+
           <!-- Top Gradient Accent Bar -->
           <tr>
             <td style="height: 6px; background: linear-gradient(90deg, #ec4899 0%, #f43f5e 50%, #f59e0b 100%);"></td>
@@ -112,7 +121,7 @@ function generateVerificationEmailHtml(params: {
                 Welcome, ${ownerName}! 👋
               </h2>
               <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #cbd5e1;">
-                Thank you for choosing VeggiePOS to power <strong style="color: #ffffff;">${businessName}</strong>. You are just one quick step away from activating your full cloud billing terminal, table QR ordering, live KDS, and smart inventory management.
+                Thank you for choosing Aatmyam POS to power <strong style="color: #ffffff;">${businessName}</strong>. You are just one quick step away from activating your full cloud billing terminal, table QR ordering, live KDS, and smart inventory management.
               </p>
             </td>
           </tr>
@@ -150,7 +159,7 @@ function generateVerificationEmailHtml(params: {
                     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                       <tr>
                         <td style="padding: 4px 0; font-size: 13px; color: #cbd5e1; line-height: 1.5;">
-                          <strong style="color: #f1f5f9;">1. Enter the 6 digits</strong> into your VeggiePOS registration screen.
+                          <strong style="color: #f1f5f9;">1. Enter the 6 digits</strong> into your Aatmyam POS registration screen.
                         </td>
                       </tr>
                       <tr>
@@ -202,7 +211,7 @@ function generateVerificationEmailHtml(params: {
           <tr>
             <td style="padding: 0 32px 24px 32px; font-size: 12px; line-height: 1.6; color: #64748b; border-top: 1px solid #1e293b; padding-top: 16px;">
               <p style="margin: 0 0 6px 0;">
-                🔒 <strong>Security Tip:</strong> Never share your verification code or login PIN. VeggiePOS representatives will never ask for your code.
+                🔒 <strong>Security Tip:</strong> Never share your verification code or login PIN. Aatmyam POS representatives will never ask for your code.
               </p>
               <p style="margin: 0;">
                 If you did not initiate this registration, you can safely disregard this email.
@@ -214,7 +223,7 @@ function generateVerificationEmailHtml(params: {
           <tr>
             <td style="background: #090e1a; padding: 20px 32px; text-align: center; border-top: 1px solid #1e293b;">
               <p style="margin: 0 0 4px 0; font-size: 11px; color: #64748b;">
-                &copy; ${new Date().getFullYear()} VeggiePOS Cloud Systems. All rights reserved.
+                &copy; ${new Date().getFullYear()} Aatmyam POS Cloud Systems. All rights reserved.
               </p>
               <p style="margin: 0; font-size: 11px; color: #475569;">
                 Next-Gen Cloud Restaurant OS &bull; Offline Billing &bull; Table QR Ordering &bull; KDS &bull; Inventory
@@ -230,171 +239,73 @@ function generateVerificationEmailHtml(params: {
 </html>`;
 }
 
-const PENDING_SIGNUPS_FILE = path.resolve(process.cwd(), "pending_signups.json");
-
-function readDiskPendingSignups(): PendingSignup[] {
-  try {
-    if (fs.existsSync(PENDING_SIGNUPS_FILE)) {
-      const content = fs.readFileSync(PENDING_SIGNUPS_FILE, "utf-8");
-      const list = JSON.parse(content);
-      if (Array.isArray(list)) {
-        const now = Date.now();
-        return list.filter(s => s && (now - (s.createdAt || 0)) < 30 * 60 * 1000);
-      }
-    }
-  } catch (err) {
-    console.warn("[Auth] Failed to read disk pending signups:", err);
-  }
-  return [];
-}
-
-function writeDiskPendingSignups(list: PendingSignup[]): void {
-  try {
-    fs.writeFileSync(PENDING_SIGNUPS_FILE, JSON.stringify(list, null, 2), "utf-8");
-  } catch (err) {
-    console.warn("[Auth] Failed to write disk pending signups:", err);
-  }
-}
-
-// Synchronize memory map with persistent disk and database storage to survive server recycles
+// Pending challenges are protected server records; no disk/plaintext credentials.
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
+router.use(['/auth/signup','/auth/resend-otp','/auth/verify','/auth/unlock-override'], authLimiter);
 async function syncPendingSignupsFromDb(): Promise<void> {
-  // 1. Sync from persistent disk file
-  try {
-    const diskList = readDiskPendingSignups();
-    for (const s of diskList) {
-      if (s.pendingToken) pendingSignups.set(s.pendingToken, s);
-      if (s.email) pendingSignups.set(s.email.toLowerCase().trim(), s);
-    }
-  } catch {}
-
-  // 2. Sync from Database store
-  try {
-    const db = Database.getInstance();
-    const stored = await db.getObject<PendingSignup[]>("global", "pending_signups_store");
-    if (stored && Array.isArray(stored)) {
-      const now = Date.now();
-      const active = stored.filter(s => s && (now - s.createdAt) < 30 * 60 * 1000);
-      for (const s of active) {
-        if (s.pendingToken) pendingSignups.set(s.pendingToken, s);
-        if (s.email) pendingSignups.set(s.email.toLowerCase().trim(), s);
-      }
-    }
-  } catch (err) {
-    console.warn("[Auth] Failed to sync pending signups from DB:", err);
+  const records = await Database.getInstance().getObject<PendingSignup[]>('saas-admin', 'signup_challenges_v2') || [];
+  pendingSignups.clear();
+  for (const s of records) if (s.expiresAt > Date.now()) {
+    pendingSignups.set(s.pendingToken, s);
   }
 }
-
 async function persistPendingSignup(signup: PendingSignup): Promise<void> {
-  const normEmail = signup.email.toLowerCase().trim();
-
+  await Database.getInstance().runTransaction('saas-admin', async trx => {
+    const all = await Database.getInstance().getObject<PendingSignup[]>('saas-admin','signup_challenges_v2') || [];
+    if((all.find(s=>s.pendingToken===signup.pendingToken) as any)?.registeredTenant) throw Object.assign(new Error("Registration is already complete."),{status:409});
+    await trx.saveObject('signup_challenges_v2', [...all.filter(s => s.expiresAt > Date.now() && s.pendingToken !== signup.pendingToken), signup]);
+  });
   pendingSignups.set(signup.pendingToken, signup);
-  pendingSignups.set(normEmail, signup);
-
-  // 1. Write to local persistent file on disk
-  try {
-    const diskList = readDiskPendingSignups().filter(s => 
-      s && s.email && s.email.toLowerCase().trim() !== normEmail && s.pendingToken !== signup.pendingToken
-    );
-    diskList.push(signup);
-    writeDiskPendingSignups(diskList);
-  } catch (err) {
-    console.warn("[Auth] Failed to write disk pending signup:", err);
-  }
-
-  // 2. Write to Database store
-  try {
-    const db = Database.getInstance();
-    const existingDb = (await db.getObject<PendingSignup[]>("global", "pending_signups_store")) || [];
-    const now = Date.now();
-    const filtered = (Array.isArray(existingDb) ? existingDb : []).filter(s => 
-      s &&
-      (now - s.createdAt) < 30 * 60 * 1000 &&
-      s.email && s.email.toLowerCase().trim() !== normEmail &&
-      s.pendingToken && s.pendingToken !== signup.pendingToken
-    );
-    filtered.push(signup);
-    await db.saveObject("global", "pending_signups_store", filtered);
-  } catch (err) {
-    console.warn("[Auth] Failed to persist pending signup to DB:", err);
-  }
 }
-
-async function removePendingSignupRecord(tokenOrEmail: string): Promise<void> {
-  if (!tokenOrEmail) return;
-  const norm = tokenOrEmail.toLowerCase().trim();
-  const existing = pendingSignups.get(tokenOrEmail) || pendingSignups.get(norm);
-  if (existing) {
-    pendingSignups.delete(existing.pendingToken);
-    pendingSignups.delete(existing.email.toLowerCase().trim());
-  } else {
-    pendingSignups.delete(tokenOrEmail);
-    pendingSignups.delete(norm);
-  }
-
-  // 1. Remove from disk
-  try {
-    const diskList = readDiskPendingSignups().filter(s => 
-      s &&
-      s.pendingToken !== tokenOrEmail && 
-      s.email && s.email.toLowerCase().trim() !== norm &&
-      (!existing || (s.pendingToken !== existing.pendingToken && s.email && s.email.toLowerCase().trim() !== existing.email.toLowerCase().trim()))
-    );
-    writeDiskPendingSignups(diskList);
-  } catch {}
-
-  // 2. Remove from DB
-  try {
-    const db = Database.getInstance();
-    const stored = (await db.getObject<PendingSignup[]>("global", "pending_signups_store")) || [];
-    if (Array.isArray(stored)) {
-      const filtered = stored.filter(s => 
-        s &&
-        s.pendingToken !== tokenOrEmail && 
-        s.email && s.email.toLowerCase().trim() !== norm &&
-        (!existing || (s.pendingToken !== existing.pendingToken && s.email && s.email.toLowerCase().trim() !== existing.email.toLowerCase().trim()))
-      );
-      await db.saveObject("global", "pending_signups_store", filtered);
-    }
-  } catch (err) {
-    console.warn("[Auth] Failed to remove pending signup from DB:", err);
-  }
+async function removePendingSignupRecord(token: string): Promise<void> {
+  await Database.getInstance().runTransaction('saas-admin', async trx => {
+    const all = await Database.getInstance().getObject<PendingSignup[]>('saas-admin','signup_challenges_v2') || [];
+    await trx.saveObject('signup_challenges_v2', all.filter(s => s.pendingToken !== token && s.expiresAt > Date.now()));
+  });
+  pendingSignups.delete(token);
 }
 
 // POST /auth/signup - सिर्फ OTP भेजें
 router.post("/auth/signup", async (req, res) => {
-  const { businessName, ownerName, ownerPhone, email, pin, region } = req.body;
-  
+  const { businessName, ownerName, ownerPhone, email, pin, region, password } = req.body;
+
   try {
-    const targetEmail = (email || "").trim();
+    if (typeof businessName !== 'string' || !businessName.trim() || businessName.length > 160 ||
+        typeof ownerName !== 'string' || !ownerName.trim() || ownerName.length > 120 ||
+        typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
+        !validPin(pin) || !validPassword(password)) {
+      return res.status(422).json({success:false,message:'Name, valid email, 4–6 digit PIN and a password of at least 8 characters and at most 72 UTF-8 bytes are required.'});
+    }
+    const targetEmail = email.trim().toLowerCase();
     if (!targetEmail) {
       return res.status(400).json({ success: false, message: "Valid email address is required." });
     }
 
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const pendingToken = `ptok-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const verificationCode = crypto.randomInt(100000,1000000).toString();
+    const pendingToken = crypto.randomBytes(32).toString("hex");
 
     const pendingSignupRecord: PendingSignup = {
       businessName: businessName || "",
       ownerName: ownerName || "",
       ownerPhone: ownerPhone || "",
       email: targetEmail,
-      pin: pin || "",
+      pin: await hashPin(pin),
       region: region || "North India / Delhi",
       tenantId: "",
-      verificationCode,
+      codeHash: digest(verificationCode),
+      passwordHash: await bcrypt.hash(password, 12),
+      attempts: 0,
       createdAt: Date.now(),
       expiresAt: Date.now() + 10 * 60 * 1000,
       lastSentAt: Date.now(),
       pendingToken
     };
 
-    pendingSignups.set(pendingToken, pendingSignupRecord);
-    pendingSignups.set(targetEmail.toLowerCase(), pendingSignupRecord);
-    await persistPendingSignup(pendingSignupRecord);
+
 
     const sendResult = await notificationService.send("system", {
-      title: "VeggiePOS Email Verification Code",
-      message: `Dear ${ownerName || "Customer"}, your 6-digit verification code is: ${verificationCode}. This code will expire in 10 minutes.`,
+      title: "Aatmyam POS Email Verification Code",
+      message: "Your verification code expires in 10 minutes. Never share it.",
       severity: "info",
       channels: ["email"],
       recipientEmail: targetEmail,
@@ -403,7 +314,7 @@ router.post("/auth/signup", async (req, res) => {
           <div style="text-align: center; margin-bottom: 24px;">
             <div style="display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #10b981, #059669); line-height: 48px; color: #ffffff; font-weight: 800; font-size: 20px;">V</div>
             <h2 style="color: #0f172a; margin: 12px 0 4px; font-size: 20px;">Verify Your Email</h2>
-            <p style="color: #64748b; font-size: 13px; margin: 0;">VeggiePOS Account Setup</p>
+            <p style="color: #64748b; font-size: 13px; margin: 0;">Aatmyam POS Account Setup</p>
           </div>
           <p style="color: #334155; font-size: 14px; line-height: 1.5;">Enter the following 6-digit verification code to complete your restaurant registration:</p>
           <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0;">
@@ -411,7 +322,7 @@ router.post("/auth/signup", async (req, res) => {
           </div>
           <p style="color: #64748b; font-size: 12px; line-height: 1.5;">This code expires in <strong>10 minutes</strong>. Never share this code with anyone.</p>
           <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
-          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${targetEmail} for VeggiePOS Security</p>
+          <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${escapeHtml(targetEmail)} for Aatmyam POS Security</p>
         </div>
       `
     });
@@ -421,7 +332,7 @@ router.post("/auth/signup", async (req, res) => {
     );
 
     if (!emailSent) {
-      await removePendingSignupRecord(pendingToken);
+
       return res.status(500).json({
         success: false,
         error: "EMAIL_SEND_FAILED",
@@ -429,6 +340,7 @@ router.post("/auth/signup", async (req, res) => {
       });
     }
 
+    await persistPendingSignup(pendingSignupRecord);
     res.json({
       success: true,
       pendingToken,
@@ -442,8 +354,9 @@ router.post("/auth/signup", async (req, res) => {
 
 // Endpoint to resend Email OTP
 router.post("/auth/resend-otp", async (req, res) => {
+  try {
   const { pendingToken, email } = req.body;
-  if (!pendingToken && !email) {
+  if (!pendingToken) {
     return res.status(400).json({
       success: false,
       message: "Verification token or email is required."
@@ -454,14 +367,14 @@ router.post("/auth/resend-otp", async (req, res) => {
 
   let signup: PendingSignup | undefined;
   if (pendingToken) signup = pendingSignups.get(pendingToken);
-  if (!signup && email) signup = pendingSignups.get(String(email).toLowerCase().trim());
+
 
   if (!signup && pendingToken) {
     try {
       const db = Database.getInstance();
-      const stored = (await db.getObject<PendingSignup[]>("global", "pending_signups_store")) || [];
+      const stored = (await db.getObject<PendingSignup[]>("saas-admin", "signup_challenges_v2")) || [];
       if (Array.isArray(stored)) {
-        signup = stored.find(s => s && (s.pendingToken === pendingToken || (email && s.email?.toLowerCase().trim() === String(email).toLowerCase().trim())));
+        signup = stored.find(s => s && (s.pendingToken === pendingToken));
       }
     } catch {}
   }
@@ -483,20 +396,18 @@ router.post("/auth/resend-otp", async (req, res) => {
   }
 
   // 1. Generate completely new 6-digit OTP
-  const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+  const newOtp = crypto.randomInt(100000,1000000).toString();
 
   // 2. Replace previous OTP and update expiration to 10 minutes
-  signup.verificationCode = newOtp;
+  signup = { ...signup, codeHash: digest(newOtp), attempts: 0 };
   signup.createdAt = Date.now();
   signup.expiresAt = Date.now() + 10 * 60 * 1000;
   signup.lastSentAt = Date.now();
 
-  await persistPendingSignup(signup);
-
   // 3. Send new OTP to user's email
   const sendResult = await notificationService.send("system", {
-    title: "VeggiePOS Email Verification (Resent)",
-    message: `Dear ${signup.ownerName || "Customer"}, your new verification code is: ${newOtp}. This code will expire in 10 minutes.`,
+    title: "Aatmyam POS Email Verification (Resent)",
+    message: "A replacement verification code expires in 10 minutes. Never share it.",
     severity: "info",
     channels: ["email"],
     recipientEmail: signup.email,
@@ -505,7 +416,7 @@ router.post("/auth/resend-otp", async (req, res) => {
         <div style="text-align: center; margin-bottom: 24px;">
           <div style="display: inline-block; width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #10b981, #059669); line-height: 48px; color: #ffffff; font-weight: 800; font-size: 20px;">V</div>
           <h2 style="color: #0f172a; margin: 12px 0 4px; font-size: 20px;">Verify Your Email (New Code)</h2>
-          <p style="color: #64748b; font-size: 13px; margin: 0;">VeggiePOS Account Setup</p>
+          <p style="color: #64748b; font-size: 13px; margin: 0;">Aatmyam POS Account Setup</p>
         </div>
         <p style="color: #334155; font-size: 14px; line-height: 1.5;">Enter the following new 6-digit verification code to complete your restaurant registration:</p>
         <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 18px; text-align: center; margin: 20px 0;">
@@ -513,7 +424,7 @@ router.post("/auth/resend-otp", async (req, res) => {
         </div>
         <p style="color: #64748b; font-size: 12px; line-height: 1.5;">This code expires in <strong>10 minutes</strong>. Only the newest code is valid.</p>
         <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0 16px;" />
-        <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${signup.email} for VeggiePOS Security</p>
+        <p style="color: #94a3b8; font-size: 11px; text-align: center; margin: 0;">Sent to ${escapeHtml(signup.email)} for Aatmyam POS Security</p>
       </div>
     `
   });
@@ -529,208 +440,28 @@ router.post("/auth/resend-otp", async (req, res) => {
     });
   }
 
+  await persistPendingSignup(signup);
   return res.json({
     success: true,
     pendingToken: signup.pendingToken,
     message: "Verification code sent to your email."
   });
+  } catch (error) { handleApiError(res,error); }
 });
 
-router.post("/auth/verify", async (req, res) => {
-  const { pendingToken, verificationCode, pin, email } = req.body;
-  
-  if ((!pendingToken && !email) || !verificationCode) {
-    return res.status(400).json({ 
-      success: false, 
-      message: "Verification code is required." 
-    });
-  }
-
-  // Ensure DB store is synchronized into memory
-  await syncPendingSignupsFromDb();
-
-  let signup: PendingSignup | undefined;
-  if (pendingToken) {
-    signup = pendingSignups.get(pendingToken);
-  }
-  if (!signup && email) {
-    signup = pendingSignups.get(String(email).toLowerCase().trim());
-  }
-
-  // Fallback: check directly in persistent DB array
-  if (!signup && pendingToken) {
-    try {
-      const db = Database.getInstance();
-      const stored = (await db.getObject<PendingSignup[]>("global", "pending_signups_store")) || [];
-      if (Array.isArray(stored)) {
-        signup = stored.find(s => 
-          s &&
-          ((pendingToken && s.pendingToken === pendingToken) || 
-           (email && s.email && s.email.toLowerCase().trim() === String(email).toLowerCase().trim()))
-        );
-      }
-    } catch {}
-  }
-
-  if (!signup) {
-    return res.status(400).json({ 
-      success: false, 
-      message: "Verification code expired. Please request a new code." 
-    });
-  }
-
-  // Check code expiration (10 minutes)
-  const isExpired = (Date.now() - signup.createdAt) > 10 * 60 * 1000;
-  if (isExpired) {
-    await removePendingSignupRecord(signup.pendingToken);
-    return res.status(400).json({ 
-      success: false, 
-      message: "Verification code expired. Please request a new code." 
-    });
-  }
-
-  // Strict backend comparison against stored OTP only
-  const inputCode = String(verificationCode || "").trim().replace(/\D/g, "");
-  const storedCode = String(signup.verificationCode).trim();
-  const isCodeValid = constantTimeStringCompare(inputCode, storedCode);
-
-  if (!isCodeValid) {
-    return res.status(401).json({ 
-      success: false, 
-      message: "Invalid verification code." 
-    });
-  }
-
-  // Require PIN
-  const effectivePin = String(pin || signup.pin || "").trim();
-  if (!effectivePin || effectivePin.length < 4) {
-    return res.status(400).json({ 
-      success: false, 
-      message: "Please provide a valid PIN (at least 4 digits)." 
-    });
-  }
-
+router.post("/auth/verify",async(req,res)=>{
+  const {pendingToken,verificationCode}=req.body;
+  if(typeof pendingToken!=="string" || pendingToken.length>100 || !/^\d{6}$/.test(String(verificationCode || ""))) return res.status(400).json({success:false,error:"INVALID_VERIFICATION_INPUT"});
   try {
-    // अब tenant ID बनाएं
-    const cleanedName = (signup.businessName || "restaurant").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const randomSuffix = Math.floor(100 + Math.random() * 900);
-    const tenantId = `veg-${cleanedName}-${randomSuffix}`;
-    signup.tenantId = tenantId;
-
-    // Owner बनाएं
-    const newOwnerId = `s-${signup.ownerName.toLowerCase().replace(/[^a-z0-9]/g, "")}-${Math.floor(100 + Math.random() * 900)}`;
-    const newOwner = {
-      id: newOwnerId,
-      name: signup.ownerName,
-      role: "Owner" as any,
-      pin: await hashPin(effectivePin), // ✅ यहां PIN लें
-      permissions: ["billing", "inventory", "reports", "settings"]
-    };
-
-    const newSettings = {
-      autoDeductStock: true,
-      blockOrdersIfInsufficient: true,
-      managerCanAddPurchases: true,
-      managerCanEditRecipes: true,
-      kdsSoundAlerts: false,
-      quickPinRequired: false
-    };
-
-    // Save new tenant owner account and initial settings with clean empty collections
-    await staffRepo.saveAll(tenantId, [newOwner] as any[]);
-    await settingsRepo.save(tenantId, newSettings);
-    await ingredientRepo.saveAll(tenantId, []);
-    await menuRepo.saveAll(tenantId, []);
-    await recipeRepo.saveAll(tenantId, []);
-    await customerRepo.saveAll(tenantId, []);
-    await orderRepo.saveAll(tenantId, []);
-    await purchaseRepo.saveAll(tenantId, []);
-    await shiftRepo.saveAll(tenantId, []);
-
-    // Also, publish registration event to EventBus
-    eventBus.publish(tenantId, "TENANT_REGISTERED", {
-      tenantId,
-      name: signup.businessName,
-      owner: signup.ownerName,
-      email: signup.email,
-      region: signup.region
-    });
-
-    await auditLogService.log(
-      tenantId,
-      "TENANT_INIT",
-      "SYSTEM",
-      `Self-serve signup completed. New tenant "${signup.businessName}" initialized successfully.`,
-      { region: signup.region, owner: signup.ownerName }
-    );
-
-    // Global tenants list में add करें
-    const list = await getGlobalTenantsList();
-    list.push({
-      id: `t-${Date.now()}`,
-      name: signup.businessName,
-      tenantId: tenantId,
-      status: "active",
-      created: new Date().toISOString().slice(0, 10),
-      region: signup.region || "North India / Delhi",
-      ownerName: signup.ownerName,
-      email: signup.email,
-      ownerPhone: signup.ownerPhone || "",
-      ownerPin: await hashPin(effectivePin)
-    });
-    await saveGlobalTenantsList(list);
-
-    // ✅ अब Email भेजें - Restaurant ID के साथ
-    try {
-      await notificationService.send(tenantId, {
-        title: "✅ VeggiePOS Restaurant Setup Complete",
-        message: `Congratulations! "${signup.businessName}" is ready to use.\n\nYour Restaurant Store Code: ${tenantId}\n\nLogin करने के लिए अपना Store Code और PIN दर्ज करें।`,
-        severity: "info",
-        channels: ["email"],
-        recipientEmail: signup.email,
-        metadata: { tenantId }
-      });
-    } catch (emailErr) {
-      console.warn("[Auth] Email delivery warning:", emailErr);
-    }
-
-    // Session बनाएं और login करें
-    const userAgent = req.headers["user-agent"] || "Unknown";
-    const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
-    const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
-
-    const session = await sessionService.createSession(
-      tenantId,
-      newOwner.id,
-      newOwner.name,
-      newOwner.role,
-      ip,
-      userAgent
-    );
-
-    res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
-
-    await removePendingSignupRecord(signup.pendingToken);
-
-    res.json({
-      success: true,
-      session,
-      tenant: {
-        id: `t-${Date.now()}`,
-        name: signup.businessName,
-        tenantId: tenantId,
-        status: "active",
-        storeCode: tenantId // ✅ यह दिखाएं
-      },
-      user: {
-        id: newOwner.id,
-        name: newOwner.name,
-        role: newOwner.role
-      }
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, error: error.message });
-  }
+    const tenantId=`aatm-${crypto.randomUUID()}`;
+    const result=await Database.getInstance().registerRestaurant(pendingToken,digest(String(verificationCode)),tenantId,crypto.randomUUID());
+    if(!result.success) return res.status(result.status || 400).json(result);
+    await startTrial(result.tenant.tenantId);
+    const owner=await staffRepo.getById(result.tenant.tenantId,result.ownerId);
+    const session=await sessionService.createSession(result.tenant.tenantId,owner.id,owner.name,owner.role,req.ip || "unknown",req.headers["user-agent"] || "Unknown",owner.permissions);
+    res.cookie(SESSION_COOKIE_NAME,session.sessionId,getSessionCookieOptions(req));
+    return res.json({success:true,session,tenant:publicTenant(result.tenant),user:publicStaff(owner)});
+  } catch(error) {handleApiError(res,error);}
 });
 
 router.get("/auth/tenant-info", async (req, res) => {
@@ -761,7 +492,7 @@ router.get("/auth/tenant-info", async (req, res) => {
         status: match.status,
         ownerName: match.ownerName,
         storeCode: match.tenantId,
-        staffQrSecret: match.staffQrSecret || `qr-init-${match.tenantId}`,
+
         staffQrUpdatedAt: match.staffQrUpdatedAt || match.created
       }
     });
@@ -771,7 +502,7 @@ router.get("/auth/tenant-info", async (req, res) => {
 });
 
 // Rotate / Change QR Code for restaurant staff access (Protected by session auth & settings permission)
-router.post("/auth/tenant/regenerate-qr", authMiddleware, requirePermission("settings"), async (req, res) => {
+router.post("/auth/tenant/regenerate-qr", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   if (!tenantId) {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant could not be resolved from session" });
@@ -801,14 +532,14 @@ router.post("/auth/tenant/regenerate-qr", authMiddleware, requirePermission("set
 });
 
 router.post("/auth/login", async (req, res) => {
-  let { pin, email, phone, outletCode, tenantId, restaurantName, isDemoLogin } = req.body;
+  let { pin, password, email, phone, outletCode, tenantId, restaurantName, isDemoLogin } = req.body;
   const userAgent = req.headers["user-agent"] || "Unknown User Agent";
   const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
   const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
 
   try {
     const globalTenants = await getGlobalTenantsList();
-    
+
     // 1. First attempt to match target tenant by ID, Name, Outlet Code, Email, or Phone (newest first)
     let targetTenant = [...globalTenants].reverse().find(
       (t) =>
@@ -829,8 +560,14 @@ router.post("/auth/login", async (req, res) => {
       });
     }
 
+    if (!targetTenant) return res.status(404).json({ success:false, error:"TENANT_NOT_FOUND", message:"Register and verify this restaurant before signing in." });
     let staff = effectiveTenantId ? ((await staffRepo.getAll(effectiveTenantId)) || []) : [];
-    let matchingUser = pin ? await findStaffByPinConstantTime(staff, pin) : null;
+    staff=staff.filter(isActiveStaff);
+    let matchingUser = validPin(pin) ? await findStaffByPinConstantTime(staff, pin) : null;
+    if (validPassword(password)) {
+      const owner=staff.find(s=>s.role==="Owner");
+      if ((owner as any)?.passwordHash && await bcrypt.compare(password,(owner as any).passwordHash)) matchingUser=owner;
+    }
 
     if (!effectiveTenantId) {
       return res.status(400).json({
@@ -858,7 +595,7 @@ router.post("/auth/login", async (req, res) => {
             : `Keypad paused for ${lockout.cooldownSeconds}s cooldown.`
       });
     }
-    
+
     const userId = matchingUser ? matchingUser.id : "unknown";
     const userName = matchingUser ? matchingUser.name : (email ? email.split('@')[0] : "Unknown User");
     const role = matchingUser ? matchingUser.role : "Staff";
@@ -873,7 +610,7 @@ router.post("/auth/login", async (req, res) => {
         userAgent,
         "Incorrect PIN passcode entered"
       );
-      
+
       // Dispatch real security alerts if tier 2 or 3 is triggered
       if (failStatus.locked && failStatus.tier && failStatus.tier >= 2) {
         try {
@@ -933,7 +670,7 @@ router.post("/auth/login", async (req, res) => {
     res.json({
       success: true,
       session,
-      tenant: targetTenant || {
+      tenant: publicTenant(targetTenant) || {
         id: `t-${effectiveTenantId}`,
         name: targetTenant?.name || effectiveTenantId,
         tenantId: effectiveTenantId,
@@ -983,9 +720,9 @@ router.post("/auth/unlock-override", async (req, res) => {
   try {
     const globalTenants = await getGlobalTenantsList();
     const targetTenant = globalTenants.find(t => t.tenantId === tenantId || t.id === tenantId);
-    
+
     const staff = (await staffRepo.getAll(tenantId)) || [];
-    const owner = staff.find(s => s.role === "Owner" || s.permissions.includes("settings"));
+    const owner = staff.find(s => s.role === "Owner");
 
     // Strictly require MASTER_VERIFICATION_CODE from environment variable; no fallback default string
     const isMasterCode = verifyMasterVerificationCode(masterPin);
@@ -1002,7 +739,7 @@ router.post("/auth/unlock-override", async (req, res) => {
       constantTimeStringCompare(targetTenant.email.toLowerCase(), ownerEmail.toLowerCase())
     );
 
-    if (!isMasterCode && !isOwnerPinMatch && !isOwnerEmailMatch) {
+    if (!isMasterCode && !isOwnerPinMatch) {
       return res.status(403).json({
         success: false,
         error: "INVALID_OVERRIDE_KEY",
@@ -1103,12 +840,28 @@ router.get("/auth/session/current", async (req, res) => {
     return res.json({
       success: true,
       session,
-      tenant: tenantInfo,
+      tenant: publicTenant(tenantInfo),
       user: userInfo
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, error: error.message });
   }
+});
+
+router.post("/auth/change-pin",authMiddleware,rateLimit({windowMs:15*60*1000,limit:10,standardHeaders:true,legacyHeaders:false}),async(req,res)=>{
+  try {
+    const tenantId=(req as any).tenantId,staffId=(req as any).session.userId;
+    if(!validPin(req.body.newPin)) return res.status(400).json({success:false,error:"INVALID_PIN"});
+    await Database.getInstance().runTransaction(tenantId,async()=>{
+      const staff=await staffRepo.getById(tenantId,staffId);
+      if(!staff || !await verifyPin(req.body.currentPin,staff.pin)) throw Object.assign(new Error("Current PIN is incorrect."),{status:401});
+      const others=(await staffRepo.getAll(tenantId)).filter(s=>s.id!==staffId);
+      if(await findStaffByPinConstantTime(others,req.body.newPin)) throw Object.assign(new Error("Choose a unique PIN."),{status:400});
+      await staffRepo.update(tenantId,{...staff,pin:req.body.newPin});
+      await sessionService.revokeAllSessions(tenantId);
+    });
+    res.clearCookie(SESSION_COOKIE_NAME,getClearCookieOptions(req));res.json({success:true,message:"PIN changed. Log in again."});
+  }catch(error){handleApiError(res,error);}
 });
 
 router.post("/auth/logout", async (req, res) => {
@@ -1162,7 +915,7 @@ router.get("/auth/staff-directory", async (req, res) => {
   try {
     const staff = (await staffRepo.getAll(targetTenantId)) || [];
     // Only return ID, name, role, and avatar to avoid leaking PIN codes
-    const publicStaff = staff.map((s) => ({
+    const publicStaff = staff.filter(isActiveStaff).map((s) => ({
       id: s.id,
       name: s.name,
       role: s.role,
@@ -1174,7 +927,7 @@ router.get("/auth/staff-directory", async (req, res) => {
   }
 });
 
-router.get("/auth/sessions-data", authMiddleware, async (req, res) => {
+router.get("/auth/sessions-data", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tid = (req as any).tenantId;
   if (!tid) {
     return res.status(401).json({ success: false, error: "UNAUTHORIZED", message: "Tenant not resolved from session." });
@@ -1185,7 +938,7 @@ router.get("/auth/sessions-data", authMiddleware, async (req, res) => {
     const securitySettings = await sessionService.getSecuritySettings(tid);
     res.json({
       success: true,
-      activeSessions,
+      activeSessions: activeSessions.map(({sessionId, ...s}) => ({...s, managementId: digest(sessionId), isCurrent:sessionId===(req as any).session.sessionId})),
       loginHistory,
       securitySettings
     });
@@ -1194,13 +947,14 @@ router.get("/auth/sessions-data", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/auth/sessions/revoke", authMiddleware, async (req, res) => {
+router.post("/auth/sessions/revoke", authMiddleware, requireRole("Owner"), async (req, res) => {
+  try {
   const tenantId = (req as any).tenantId;
-  const { sessionId } = req.body;
+  const active = await sessionService.getActiveSessions(tenantId);
+  const sessionId = active.find(s => digest(s.sessionId) === req.body.managementId)?.sessionId;
   if (!sessionId) {
     return res.status(400).json({ success: false, error: "MISSING_SESSION", message: "Session ID to revoke is required." });
   }
-  try {
     const success = await sessionService.revokeSession(tenantId, sessionId);
     if (req.cookies?.[SESSION_COOKIE_NAME] === sessionId) {
       res.clearCookie(SESSION_COOKIE_NAME, getClearCookieOptions(req));
@@ -1211,7 +965,7 @@ router.post("/auth/sessions/revoke", authMiddleware, async (req, res) => {
   }
 });
 
-router.post("/auth/sessions/revoke-all", authMiddleware, requirePermission("settings"), async (req, res) => {
+router.post("/auth/sessions/revoke-all", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { exceptSessionId } = req.body;
   try {
@@ -1229,7 +983,7 @@ router.post("/auth/sessions/revoke-all", authMiddleware, requirePermission("sett
   }
 });
 
-router.post("/auth/history/clear", authMiddleware, requirePermission("settings"), async (req, res) => {
+router.post("/auth/history/clear", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
     await sessionService.clearLoginHistory(tenantId);
@@ -1239,7 +993,7 @@ router.post("/auth/history/clear", authMiddleware, requirePermission("settings")
   }
 });
 
-router.post("/auth/settings/update", authMiddleware, requirePermission("settings"), async (req, res) => {
+router.post("/auth/settings/update", authMiddleware, requireRole("Owner"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { sessionTimeoutMinutes, maxFailedAttempts, lockoutDurationSeconds, enableBruteForceProtection } = req.body;
   try {

@@ -15,20 +15,23 @@ jobs:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js Environment (v20)
+      - name: Setup Node.js Environment (v24)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
 
       - name: Install Application Dependencies
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Run Linter & Static Code Typecheck
         run: npm run lint
 
       - name: Run Unit Tests (Vitest)
-        run: npm run test
+        run: npm test
+
+      - name: Audit installed dependencies
+        run: npm audit --audit-level=high
 
       - name: Verify Full-Stack Build Compilation
         run: npm run build

@@ -68,6 +68,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   });
 
   const [isInitialSyncLoading, setIsInitialSyncLoading] = useState<boolean>(false);
+  const [isTenantDataReady, setIsTenantDataReady] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Gemini AI Report State
@@ -140,6 +141,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     loadFromIndexedDB();
 
     isLoadedRef.current = false;
+    setIsTenantDataReady(false);
     loadedTenantIdRef.current = "";
     lastFetchedStateRef.current = "";
 
@@ -171,18 +173,24 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   // Initial Sync load & Background Sync Polling
   useEffect(() => {
     if (!currentStaff || !currentSessionId) {
+      setIsTenantDataReady(false);
       setIsInitialSyncLoading(false);
       return;
     }
     let active = true;
+    offlineRepository.resumeAuthOperations(activeTenantId).then(()=>OutboxProcessor.triggerDrain(activeTenantId)).catch(console.warn);
     isLoadedRef.current = false;
+    setIsTenantDataReady(false);
 
     let ws: WebSocket | null = null;
     let reconnectTimer: any = null;
     let pingInterval: any = null;
     let pollingInterval: any = null;
 
+    let syncReadInFlight = false;
     const fetchSyncUpdates = async () => {
+      if (!active || syncReadInFlight) return;
+      syncReadInFlight = true;
       try {
         if (hasPendingChangesRef.current || (Date.now() - lastSaveTimeRef.current < 1500)) {
           return;
@@ -197,7 +205,11 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
 
         if (json.success && json.initialized && json.data) {
           const d = json.data;
-          if (loadedTenantIdRef.current === activeTenantId) {
+          await offlineRepository.saveFullTenantState(activeTenantId,d);
+          if (!active) return;
+          d.orders=await offlineRepository.getOrders(activeTenantId) as Order[];
+          if (!active) return;
+          {
             const serverStateStr = JSON.stringify({
               menuItems: d.menuItems,
               ingredients: d.ingredients,
@@ -220,6 +232,10 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
             if (d.purchases) setPurchases(d.purchases);
             if (d.shifts) setShifts(d.shifts);
             if (d.settings) setSettings(d.settings);
+            loadedTenantIdRef.current = activeTenantId;
+            isLoadedRef.current = true;
+            setIsTenantDataReady(true);
+            setIsInitialSyncLoading(false);
 
             try {
               offlineRepository.saveFullTenantState(activeTenantId, d).catch(e => console.warn(e));
@@ -228,22 +244,22 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
         }
       } catch (err) {
         console.warn("[Realtime] Skipped background synchronization update due to network status:", err);
+      } finally {
+        syncReadInFlight = false;
       }
     };
 
     const fetchSync = async () => {
       try {
-        // Enforce 3-second network timeout so initial sync never blocks applet
-        const json = await Promise.race([
-          ApiClient.getTenantSync(activeTenantId, currentSessionId || undefined),
-          new Promise<SyncResponse>((_, reject) =>
-            setTimeout(() => reject(new Error("INITIAL_SYNC_TIMEOUT")), 3000)
-          )
-        ]);
+        const json = await ApiClient.getTenantSync(activeTenantId, currentSessionId || undefined);
         if (!active) return;
 
         if (json.success && json.initialized && json.data) {
           const d = json.data;
+          await offlineRepository.saveFullTenantState(activeTenantId,d);
+          if (!active) return;
+          d.orders=await offlineRepository.getOrders(activeTenantId) as Order[];
+          if (!active) return;
           
           const serverStateStr = JSON.stringify({
             menuItems: d.menuItems,
@@ -274,70 +290,10 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
 
           loadedTenantIdRef.current = activeTenantId;
           isLoadedRef.current = true;
+          setIsTenantDataReady(true);
           setIsInitialSyncLoading(false);
         } else if (json.success && !json.initialized) {
-          let initialStaffList: StaffMember[] = [];
-          if (pendingOwnerRef.current) {
-            initialStaffList = [pendingOwnerRef.current];
-            pendingOwnerRef.current = null;
-          } else if (currentStaff) {
-            initialStaffList = [currentStaff];
-          }
-
-          const initialPayload = {
-            menuItems: [],
-            ingredients: [],
-            recipes: [],
-            staffList: initialStaffList.map(s => ({ ...s, version: s.version ?? 1 })),
-            orders: [],
-            customers: [],
-            purchases: [],
-            shifts: [],
-            settings: {
-              autoDeductStock: true,
-              blockOrdersIfInsufficient: true,
-              managerCanAddPurchases: true,
-              managerCanEditRecipes: true,
-              kdsSoundAlerts: false,
-              quickPinRequired: false
-            }
-          };
-
-          if (currentSessionId) {
-            await ApiClient.saveTenantSync(activeTenantId, initialPayload, currentSessionId);
-          }
-          
-          if (active) {
-            const serverStateStr = JSON.stringify({
-              menuItems: initialPayload.menuItems,
-              ingredients: initialPayload.ingredients,
-              recipes: initialPayload.recipes,
-              staffList: initialPayload.staffList,
-              orders: initialPayload.orders,
-              customers: initialPayload.customers,
-              purchases: initialPayload.purchases,
-              shifts: initialPayload.shifts,
-              settings: initialPayload.settings
-            });
-            lastFetchedStateRef.current = serverStateStr;
-
-            setMenuItems(initialPayload.menuItems);
-            setIngredients(initialPayload.ingredients);
-            setRecipes(initialPayload.recipes);
-            setStaffList(initialPayload.staffList);
-            setOrders(initialPayload.orders);
-            setCustomers(initialPayload.customers);
-            setPurchases(initialPayload.purchases);
-            setShifts(initialPayload.shifts);
-            setSettings(initialPayload.settings);
-            
-            try {
-              offlineRepository.saveFullTenantState(activeTenantId, initialPayload).catch(e => console.warn(e));
-            } catch (e) {}
-
-            loadedTenantIdRef.current = activeTenantId;
-            isLoadedRef.current = true;
-          }
+          setToastMessage({type:"error",text:"Restaurant setup is incomplete. Contact the owner."});
         } else if (json.error) {
           throw new Error(json.error);
         }
@@ -371,8 +327,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
 
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         const host = window.location.host;
-        const tokenQuery = currentSessionId ? `?token=${encodeURIComponent(currentSessionId)}` : "";
-        const wsUrl = `${protocol}//${host}/ws${tokenQuery}`;
+        const wsUrl = `${protocol}//${host}/ws`;
 
         ws = new WebSocket(wsUrl);
 
@@ -410,7 +365,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
 
             // Minimal payload event dispatched from server
             if (
-              msg.type === "sync:updated" ||
+              msg.type === "sync:updated" || msg.type === "order:created" || msg.type === "order:updated" || msg.type === "customer:updated" ||
               msg.type === "order:completed" ||
               msg.type === "inventory:updated" ||
               msg.type === "payment:success"
@@ -460,6 +415,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     // Execute Initial Load
     fetchSync().then(() => {
       if (active) {
+        startPollingFallback();
         setupServerMediatedRealtime();
       }
     });
@@ -487,211 +443,86 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     };
   }, [activeTenantId, currentStaff, currentSessionId]);
 
-  // Sync state modifications to server
-  useEffect(() => {
-    if (!isLoadedRef.current || loadedTenantIdRef.current !== activeTenantId || !currentSessionId) {
-      return;
+  // Save only changed management records. Orders/payments/purchases have one
+  // durable command path and are never replayed as snapshots.
+  useEffect(()=>{
+    if(!isLoadedRef.current || loadedTenantIdRef.current!==activeTenantId || !currentSessionId || !["Owner","Manager"].includes(currentStaff?.role || "")) return;
+    const baseline=JSON.parse(lastFetchedStateRef.current || "{}");
+    const current:any={menuItems,ingredients,recipes,...(currentStaff?.role==="Owner"?{settings}:{})};
+    const payload:any={},deletions:any={};
+    const clean=(row:any)=>{const {tenantId,branchId,deviceId,updatedAt,createdAt,...safe}=row;return safe;};
+    for(const key of Object.keys(current)) {
+      if(key==="settings") {if(JSON.stringify(current.settings)!==JSON.stringify(baseline.settings)) payload.settings=current.settings;continue;}
+      const previous=baseline[key] || [],idKey=key==="recipes"?"menuItemId":"id";
+      const rows=current[key];
+      const changed=rows.filter((r:any)=>{const old=previous.find((p:any)=>p[idKey]===r[idKey]);return !old || JSON.stringify(clean(old))!==JSON.stringify(clean(r));});
+      if(changed.length) payload[key]=changed.map(clean);
+      const removed=previous.filter((p:any)=>!rows.some((r:any)=>r[idKey]===p[idKey])).map((p:any)=>({id:p[idKey],version:p.version || 1}));
+      if(removed.length) deletions[key]=removed;
     }
-
-    const currentState = {
-      menuItems: menuItems.map(item => ({
-        ...item,
-        version: typeof item.version === "number" ? item.version : 1
-      })),
-      ingredients: ingredients.map(item => ({
-        ...item,
-        version: typeof (item as any).version === "number" ? (item as any).version : 1
-      })),
-      recipes,
-      staffList: staffList.map(item => ({
-        ...item,
-        version: typeof item.version === "number" ? item.version : 1
-      })),
-      orders: orders.map(item => ({
-        ...item,
-        version: typeof item.version === "number" ? item.version : 1
-      })),
-      customers: customers.map(item => ({
-        ...item,
-        version: typeof (item as any).version === "number" ? (item as any).version : 1
-      })),
-      purchases: purchases.map(item => ({
-        ...item,
-        version: typeof (item as any).version === "number" ? (item as any).version : 1
-      })),
-      shifts: shifts.map(item => ({
-        ...item,
-        version: typeof (item as any).version === "number" ? (item as any).version : 1
-      })),
-      settings
-    };
-
-    const currentStateStr = JSON.stringify(currentState);
- 
-    // Guard: Do not attempt to sync before local state is loaded, or if user has no active session
-    if (!isLoadedRef.current || !currentSessionId) {
-      return;
-    }
-
-    if (currentStateStr === lastFetchedStateRef.current) {
-      return;
-    }
-
-    hasPendingChangesRef.current = true;
-
-    const saveSync = async () => {
+    if(Object.keys(deletions).length) payload.deletions=deletions;
+    if(!Object.keys(payload).length) return;
+    hasPendingChangesRef.current=true;
+    const timer=setTimeout(async()=>{
       try {
-        const res = await ApiClient.saveTenantSync(activeTenantId, currentState, currentSessionId);
-        if (res.success) {
-          hasPendingChangesRef.current = false;
-          lastSaveTimeRef.current = Date.now();
-          if (res.data) {
-            if (res.data.menuItems) setMenuItems(res.data.menuItems);
-            if (res.data.staffList) setStaffList(res.data.staffList);
-            if (res.data.orders) setOrders(res.data.orders);
-            if (res.data.ingredients) setIngredients(res.data.ingredients);
-            if (res.data.customers) setCustomers(res.data.customers);
-            if (res.data.purchases) setPurchases(res.data.purchases);
-            if (res.data.shifts) setShifts(res.data.shifts);
-            if (res.data.settings) setSettings(res.data.settings);
-          }
-          const savedStateStr = JSON.stringify(res.data || currentState);
-          lastFetchedStateRef.current = savedStateStr;
-          try {
-            offlineRepository.saveFullTenantState(activeTenantId, res.data || currentState).catch(e => console.warn(e));
-          } catch (e) {}
-        } else {
-          console.warn("Server rejected state synchronization update:", res.error);
+        const res=await ApiClient.saveTenantSync(activeTenantId,payload,currentSessionId);
+        if(!res.success) throw new Error(res.message || res.error || "Save failed");
+        lastFetchedStateRef.current=JSON.stringify(res.data);
+        if(res.data.menuItems) setMenuItems(res.data.menuItems);
+        if(res.data.ingredients) setIngredients(res.data.ingredients);
+        if(res.data.recipes) setRecipes(res.data.recipes);
+        if(res.data.staffList) setStaffList(res.data.staffList);
+        if(res.data.settings) setSettings(res.data.settings);
+        await offlineRepository.saveFullTenantState(activeTenantId,res.data);
+      } catch(err:any) {
+        setToastMessage({type:"error",text:`Changes were not saved: ${err.message}. Keep this page open and retry when online.`});
+      } finally {hasPendingChangesRef.current=false;}
+    },500);
+    return()=>clearTimeout(timer);
+  },[menuItems,ingredients,recipes,staffList,settings,activeTenantId,currentSessionId,currentStaff?.role]);
 
-          if (res.error === "OPTIMISTIC_LOCK_CONFLICT") {
-            hasPendingChangesRef.current = false;
-            setToastMessage({
-              type: "error",
-              text: "Data Conflict (409 CONFLICT): Stale updates detected. Re-syncing latest data to prevent lost updates."
-            });
-            try {
-              const fresh = await ApiClient.getTenantSync(activeTenantId, currentSessionId || undefined);
-              if (fresh.success && fresh.data) {
-                const d = fresh.data;
-                if (d.menuItems) setMenuItems(d.menuItems);
-                if (d.staffList) setStaffList(d.staffList);
-                if (d.orders) setOrders(d.orders);
-                if (d.ingredients) setIngredients(d.ingredients);
-                if (d.customers) setCustomers(d.customers);
-                if (d.purchases) setPurchases(d.purchases);
-                if (d.shifts) setShifts(d.shifts);
-                if (d.settings) setSettings(d.settings);
-                const freshStr = JSON.stringify(d);
-                lastFetchedStateRef.current = freshStr;
-                offlineRepository.saveFullTenantState(activeTenantId, d).catch(e => console.warn(e));
-              }
-            } catch (reErr) {
-              console.warn("Failed to reconcile state after 409 conflict:", reErr);
-            }
-            return;
-          }
-
-          try {
-            // Persist locally in IndexedDB and enqueue in outbox for offline sync
-            offlineRepository.saveFullTenantState(activeTenantId, currentState).catch(e => console.warn(e));
-            offlineRepository.enqueueOutbox(
-              activeTenantId,
-              "SYNC_FULL_STATE",
-              `/api/sync?tenantId=${encodeURIComponent(activeTenantId)}`,
-              "POST",
-              currentState,
-              ApiClient.generateIdempotencyKey("sync_state")
-            ).catch(e => console.warn(e));
-          } catch (e) {}
-
-          const isDbUnavailable = res.error === "DATABASE_UNAVAILABLE";
-          setToastMessage({
-            type: "error",
-            text: isDbUnavailable
-              ? "Database Unavailable (503 DATABASE_UNAVAILABLE): In-memory fallback is disabled. Local cache marked as stale/readonly."
-              : `Data Sync Issue: ${res.message || res.error || "The server rejected the transaction packet."}`
-          });
-        }
-      } catch (err: any) {
-        console.warn("Failed to push synchronized update:", err);
-        try {
-          // Persist locally in IndexedDB and enqueue in outbox for offline sync
-          offlineRepository.saveFullTenantState(activeTenantId, currentState).catch(e => console.warn(e));
-          offlineRepository.enqueueOutbox(
-            activeTenantId,
-            "SYNC_FULL_STATE",
-            `/api/sync?tenantId=${encodeURIComponent(activeTenantId)}`,
-            "POST",
-            currentState,
-            ApiClient.generateIdempotencyKey("sync_state")
-          ).catch(e => console.warn(e));
-        } catch (e) {}
-        setToastMessage({
-          type: "error",
-          text: `Database Unavailable (503 DATABASE_UNAVAILABLE): ${err.message || "Write could not be committed. Local cache marked as stale/readonly."}`
-        });
-      }
-    };
-    const timeout = setTimeout(saveSync, 300);
-    return () => clearTimeout(timeout);
-  }, [menuItems, ingredients, recipes, staffList, orders, customers, purchases, shifts, settings, activeTenantId, currentSessionId]);
+  useEffect(()=>{
+    const onSync=(e:any)=>{if(e.detail?.tenantId!==activeTenantId) return;offlineRepository.getOrders(activeTenantId).then(rows=>setOrders(rows as Order[]));};
+    const onError=(e:any)=>{if(e.detail?.item?.tenantId===activeTenantId) setToastMessage({type:"error",text:`Order sync needs attention: ${e.detail.errorMsg}`});};
+    const onBlocked=(e:any)=>{if(e.detail?.tenantId===activeTenantId) setToastMessage({type:"error",text:`Order ${e.detail.entityId} is waiting for a rejected earlier operation. Review sync errors before retrying.`});};
+    window.addEventListener("veggiepos_realtime_event",onSync);
+    window.addEventListener("veggiepos_sync_blocked",onBlocked);
+    for(const event of ["veggiepos_reconcile_conflict","veggiepos_validation_failed","veggiepos_forbidden_error"]) window.addEventListener(event,onError);
+    return()=>{window.removeEventListener("veggiepos_sync_blocked",onBlocked);window.removeEventListener("veggiepos_realtime_event",onSync);for(const event of ["veggiepos_reconcile_conflict","veggiepos_validation_failed","veggiepos_forbidden_error"]) window.removeEventListener(event,onError);};
+  },[activeTenantId]);
 
   // Global order creation handler
   // POS write operations commit to IndexedDB first; UI does NOT wait for cloud API
-  const handleOrderCreated = (newOrder: Order) => {
-    const orderWithVersion: Order = {
-      ...newOrder,
-      version: typeof newOrder.version === "number" ? newOrder.version : 1
-    };
-    // 1. Instantaneous UI state update
-    setOrders([orderWithVersion, ...orders]);
-
-    // 2. Commit to IndexedDB first & queue in durable outbox
-    offlineRepository.recordOrderOffline(activeTenantId, orderWithVersion).then(() => {
-      // Fire-and-forget outbox drain in background
-      OutboxProcessor.triggerDrain(activeTenantId);
-    }).catch(err => {
-      console.warn("[useSyncState] Error recording order offline:", err);
-    });
+  const handleOrderCreated=async(newOrder:Order)=>{
+    if(newOrder.managerPin) {
+      if(!navigator.onLine) throw new Error("Manager PIN discounts require an online connection.");
+      const response=await ApiClient.authenticatedFetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json','x-tenant-id':activeTenantId,'Idempotency-Key':`manager-order-${newOrder.id}`},body:JSON.stringify(newOrder)});
+      const result=await response.json();
+      if(!response.ok || !result.success) throw new Error(result.message || result.error || 'Order was rejected.');
+      const canonical=result.order || result.data;
+      setOrders(prev=>[canonical,...prev.filter(o=>o.id!==canonical.id)]);
+      await offlineRepository.putOrder(activeTenantId,canonical).catch(console.warn);
+      return;
+    }
+    await offlineRepository.recordOrderOffline(activeTenantId,newOrder);
+    setOrders(prev=>[newOrder,...prev]);
+    OutboxProcessor.triggerDrain(activeTenantId).catch(console.warn);
   };
-
-  // Handle Kitchen KDS status change and payment settlement
-  // Commits to IndexedDB first; non-blocking UI
-  const handleUpdateOrderStatus = (orderId: string, nextStatus: any, paymentMethod?: 'Cash' | 'UPI', paidAt?: string) => {
-    // 1. Instantaneous UI state update
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id === orderId) {
-          const updated = { ...o, status: nextStatus };
-          if (paymentMethod) updated.paymentMethod = paymentMethod;
-          if (paidAt) updated.paidAt = paidAt;
-          return updated;
-        }
-        return o;
-      })
-    );
-
-    // 2. Commit to IndexedDB first & queue in durable outbox
-    offlineRepository.recordPaymentOffline(activeTenantId, orderId, {
-      status: nextStatus,
-      paymentMethod,
-      paidAt
-    }).then(() => {
-      OutboxProcessor.triggerDrain(activeTenantId);
-    }).catch(err => {
-      console.warn("[useSyncState] Error recording payment/order status offline:", err);
-    });
+  const handleUpdateOrderStatus=async(orderId:string,status:any,paymentMethod?:"Cash"|"UPI",paidAt?:string)=>{
+    if(status==="Cancelled") {
+      const response=await ApiClient.authenticatedFetch(`/api/orders/${encodeURIComponent(orderId)}`);const result=await response.json();
+      if(!response.ok || !result.success) throw new Error(result.message || "Failed to refresh cancellation.");
+      await offlineRepository.putOrder(activeTenantId,result.data);setOrders(prev=>prev.map(o=>o.id===orderId?result.data:o));return;
+    }
+    await offlineRepository.recordPaymentOffline(activeTenantId,orderId,{status,paymentMethod,paidAt});
+    // Payment is queued, not settled: do not mark Paid in React state until
+    // the canonical server response arrives via the offline sync event.
+    if (!paymentMethod) setOrders(prev=>prev.map(o=>o.id===orderId?{...o,status}:o));
+    OutboxProcessor.triggerDrain(activeTenantId).catch(console.warn);
   };
 
   // Handle Ingredient stock updates
-  const handleUpdateIngredients = (updated: Ingredient[]) => {
-    setIngredients(updated);
-    offlineRepository.recordInventoryOffline(activeTenantId, updated).then(() => {
-      OutboxProcessor.triggerDrain(activeTenantId);
-    }).catch(err => {
-      console.warn("[useSyncState] Error recording inventory offline:", err);
-    });
-  };
+  const handleUpdateIngredients=(updated:Ingredient[])=>{setIngredients(updated);};
 
   // Handle Recipe updates
   const handleUpdateRecipes = (updated: Recipe[]) => {
@@ -715,41 +546,6 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   const handleAddPurchase = (purchase: Purchase) => {
     setPurchases([purchase, ...purchases]);
 
-    if (purchase.ingredientId && purchase.quantity > 0) {
-      setIngredients((prev) => {
-        const next = prev.map((ing) => {
-          if (ing.id !== purchase.ingredientId) return ing;
-          const currentStockValid = Math.max(0, ing.currentStock);
-          const purchaseQty = Number(purchase.quantity);
-          const purchaseCost = Number(purchase.cost || 0);
-          const newStock = Number((ing.currentStock + purchaseQty).toFixed(3));
-
-          let newCostPerUnit = ing.costPerUnit;
-          if (purchaseQty > 0 && purchaseCost > 0) {
-            if (currentStockValid > 0 && ing.costPerUnit > 0) {
-              const currentVal = currentStockValid * ing.costPerUnit;
-              newCostPerUnit = Number(((currentVal + purchaseCost) / (currentStockValid + purchaseQty)).toFixed(2));
-            } else {
-              newCostPerUnit = Number((purchaseCost / purchaseQty).toFixed(2));
-            }
-          }
-
-          return {
-            ...ing,
-            currentStock: newStock,
-            costPerUnit: newCostPerUnit,
-            updated_at: new Date().toISOString()
-          };
-        });
-
-        try {
-          offlineRepository.saveIngredients(activeTenantId, next).catch((e) => console.warn(e));
-        } catch (e) {}
-
-        return next;
-      });
-    }
-
     offlineRepository.recordPurchaseOffline(activeTenantId, purchase).then(() => {
       OutboxProcessor.triggerDrain(activeTenantId);
     }).catch(err => {
@@ -766,15 +562,15 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     const today = new Date().toDateString();
     const todayOrders = safeOrders.filter((o) => o && o.date && new Date(o.date).toDateString() === today);
     const totalRevenue = todayOrders
-      .filter((o) => o && o.status !== "Cancelled")
+      .filter((o) => o && o.status === "Completed" && Boolean(o.paidAt))
       .reduce((sum, o) => sum + (o.total || 0), 0);
 
     const cashRevenue = todayOrders
-      .filter((o) => o && o.status !== "Cancelled" && o.paymentMethod === "Cash")
+      .filter((o) => o && o.status === "Completed" && Boolean(o.paidAt) && o.paymentMethod === "Cash")
       .reduce((sum, o) => sum + (o.total || 0), 0);
 
     const upiRevenue = todayOrders
-      .filter((o) => o && o.status !== "Cancelled" && o.paymentMethod === "UPI")
+      .filter((o) => o && o.status === "Completed" && Boolean(o.paidAt) && o.paymentMethod === "UPI")
       .reduce((sum, o) => sum + (o.total || 0), 0);
 
     const activeShiftsCount = safeShifts.filter((s) => s && s.status === "Active").length;
@@ -783,7 +579,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
 
     const itemSalesMap: { [id: string]: { name: string; qty: number; sales: number } } = {};
     safeOrders
-      .filter((o) => o && o.status !== "Cancelled")
+      .filter((o) => o && o.status === "Completed" && Boolean(o.paidAt))
       .forEach((order) => {
         if (!order || !order.items) return;
         order.items.forEach((item) => {
@@ -845,7 +641,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
       });
 
       if (data.success) {
-        setAiReport(data.report);
+        setAiReport((data.isSimulated ? "Local summary (AI provider is not configured)\n\n" : "")+data.report);
       } else {
         setReportError(data.error || "Error response from reports API. Using calculated parameters fallback.");
       }
@@ -875,6 +671,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     shifts,
     setShifts,
     isInitialSyncLoading,
+    isTenantDataReady,
     setIsInitialSyncLoading,
     settings,
     setSettings,

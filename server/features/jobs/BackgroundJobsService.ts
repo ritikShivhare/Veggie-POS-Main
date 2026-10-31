@@ -1,3 +1,5 @@
+import {getSubscription} from '../billing/SubscriptionLifecycle';
+import {reconcileAllPayments} from '../billing/CashfreeBilling';
 import { Database } from "../shared/database";
 import { Ingredient, Order, Customer } from "../../../src/features/shared/types";
 
@@ -66,12 +68,12 @@ export class BackgroundJobsService {
         type: "daily_report_gen",
         name: "Daily Sales Auto-Report Generator",
         description: "Calculates total orders, UPI/Cash split, and compiling analytics dashboards.",
-        schedule: "Every 2 minutes",
+        schedule: "Disabled — Owner reports are generated on demand",
         intervalMs: 2 * 60 * 1000,
         lastRun: null,
         nextRun: new Date(now + 2 * 60 * 1000).toISOString(),
         status: "idle",
-        enabled: true,
+        enabled: false,
       },
       {
         id: "job-3",
@@ -95,7 +97,7 @@ export class BackgroundJobsService {
         lastRun: null,
         nextRun: new Date(now + 5 * 60 * 1000).toISOString(),
         status: "idle",
-        enabled: true,
+        enabled: false,
       },
       {
         id: "job-5",
@@ -107,7 +109,7 @@ export class BackgroundJobsService {
         lastRun: null,
         nextRun: new Date(now + 4 * 60 * 1000).toISOString(),
         status: "idle",
-        enabled: true,
+        enabled: false,
       }
     ];
   }
@@ -127,7 +129,8 @@ export class BackgroundJobsService {
         this.jobs.forEach((j, i) => {
           j.lastRun = persistedJobs[i].lastRun;
           j.status = persistedJobs[i].status === "running" ? "idle" : persistedJobs[i].status;
-          j.enabled = persistedJobs[i].enabled;
+          // A previously persisted enabled flag must not reactivate legacy report spam.
+          j.enabled = j.type === "daily_report_gen" ? false : persistedJobs[i].enabled;
         });
       }
 
@@ -174,7 +177,7 @@ export class BackgroundJobsService {
    */
   public async runJob(jobId: string): Promise<boolean> {
     const job = this.jobs.find((j) => j.id === jobId);
-    if (!job) return false;
+    if (!job || job.type === "daily_report_gen") return false;
 
     if (job.status === "running") {
       console.log(`Job ${job.name} is already executing.`);
@@ -198,26 +201,15 @@ export class BackgroundJobsService {
           resultMessage = stockResult.message;
           resultDetails = stockResult.details;
           break;
-        case "daily_report_gen":
-          const reportResult = await this.executeDailyReportGen();
-          resultMessage = reportResult.message;
-          resultDetails = reportResult.details;
-          break;
         case "subscription_reminder":
           const subResult = await this.executeSubscriptionReminderCheck();
           resultMessage = subResult.message;
           resultDetails = subResult.details;
           break;
         case "notification":
-          const notifyResult = await this.executeCustomerNotificationCampaign();
-          resultMessage = notifyResult.message;
-          resultDetails = notifyResult.details;
-          break;
+          throw new Error("Promotional dispatch is not configured.");
         case "database_backup":
-          const backupResult = await this.executeDatabaseBackup();
-          resultMessage = backupResult.message;
-          resultDetails = backupResult.details;
-          break;
+          throw new Error("Database backups must be configured and verified in the database provider dashboard.");
         default:
           throw new Error("Invalid job type action");
       }
@@ -242,7 +234,7 @@ export class BackgroundJobsService {
    */
   public toggleJobEnabled(jobId: string, enabled: boolean): boolean {
     const job = this.jobs.find((j) => j.id === jobId);
-    if (!job) return false;
+    if (!job || job.type === "daily_report_gen") return false;
     job.enabled = enabled;
     if (enabled) {
       job.nextRun = new Date(Date.now() + job.intervalMs).toISOString();
@@ -300,7 +292,7 @@ export class BackgroundJobsService {
         return list.filter((t) => t.status !== "suspended").map((t) => t.tenantId);
       }
     } catch {}
-    return ["veg-main-001", "veg-cp-002", "veg-reetesh-dhaba"];
+    return [];
   }
 
   private async executeLowStockAlertCheck(): Promise<{ message: string; details: any }> {
@@ -387,30 +379,10 @@ export class BackgroundJobsService {
   }
 
   private async executeSubscriptionReminderCheck(): Promise<{ message: string; details: any }> {
-    const tenantIds = await this.getActiveTenants();
-    const creationDateStr = await this.db.getObject<string>("system-tenant", "tenant_creation_date") || new Date().toISOString();
-    const expiryDate = new Date(new Date(creationDateStr).getTime() + 30 * 24 * 60 * 60 * 1000);
-    const daysLeft = Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-
-    for (const tenantId of tenantIds) {
-      if (daysLeft <= 10) {
-        const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
-        currentNotifications.unshift({
-          id: `notify-${Date.now()}-${tenantId}`,
-          title: "💳 Subscription Expiration Warning",
-          message: `Your VeggiePOS subscription expires in ${daysLeft} days on ${expiryDate.toLocaleDateString()}. Please update details.`,
-          timestamp: new Date().toISOString(),
-          read: false,
-          severity: "info",
-        });
-        await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
-      }
-    }
-
-    return {
-      message: `Subscription audit: ${daysLeft} days remaining for licensing across ${tenantIds.length} active tenants.`,
-      details: { daysRemaining: daysLeft, tenantCount: tenantIds.length }
-    };
+    const tenantIds=await this.getActiveTenants();
+    for(const tenant of tenantIds) await getSubscription(tenant);
+    const invoices=await reconcileAllPayments();
+    return {message:`Subscription lifecycle checked for ${tenantIds.length} tenants; ${invoices} Cashfree invoices reconciled.`,details:{tenantCount:tenantIds.length,invoices}};
   }
 
   private async executeCustomerNotificationCampaign(): Promise<{ message: string; details: any }> {
@@ -449,83 +421,5 @@ export class BackgroundJobsService {
     };
   }
 
-  private async executeDatabaseBackup(): Promise<{ message: string; details: any }> {
-    const tenantIds = await this.getActiveTenants();
-    let totalRecords = 0;
-    const tenantRecordCounts: Record<string, any> = {};
-
-    for (const tenantId of tenantIds) {
-      const menuItems = (await this.db.getSlice<any>(tenantId, "menu_items")) || [];
-      const ingredients = (await this.db.getSlice<any>(tenantId, "ingredients")) || [];
-      const orders = (await this.db.getSlice<any>(tenantId, "orders")) || [];
-      const customers = (await this.db.getSlice<any>(tenantId, "customers")) || [];
-      const settings = (await this.db.getObject<any>(tenantId, "settings")) || {};
-
-      const count = menuItems.length + ingredients.length + orders.length + customers.length;
-      totalRecords += count;
-      tenantRecordCounts[tenantId] = {
-        menuItems: menuItems.length,
-        ingredients: ingredients.length,
-        orders: orders.length,
-        customers: customers.length,
-        hasSettings: !!settings.restaurantName,
-        total: count
-      };
-
-      // Dispatch notification to each tenant workspace
-      const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
-      currentNotifications.unshift({
-        id: `notify-${Date.now()}-${tenantId}`,
-        title: "💾 Automated Database Backup Successful",
-        message: `Database snapshot created. Records archived: ${count}. Integrity checked (SHA256 verified).`,
-        timestamp: new Date().toISOString(),
-        read: false,
-        severity: "success"
-      });
-      await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
-    }
-
-    const backupId = `backup-${Date.now()}`;
-    const timestamp = new Date().toISOString();
-    
-    // Compute checksum simulation
-    const checksumInput = JSON.stringify(tenantRecordCounts) + timestamp;
-    let checksum = 0;
-    for (let i = 0; i < checksumInput.length; i++) {
-      checksum = (checksum + checksumInput.charCodeAt(i) * i) % 1000000007;
-    }
-    const checksumHex = "sha256-" + checksum.toString(16).toUpperCase();
-
-    // Simulated file size
-    const estimatedSizeBytes = totalRecords * 342 + 2048; // avg 342 bytes per record
-
-    // Retrieve global PITR status
-    const systemSettings = await this.db.getObject<any>("system-tenant", "system_settings") || {};
-    const pitrEnabled = systemSettings.pitrEnabled !== false; // default true/active
-
-    const backupRecord = {
-      id: backupId,
-      timestamp,
-      status: "success",
-      sizeBytes: estimatedSizeBytes,
-      checksum: checksumHex,
-      recordCounts: tenantRecordCounts,
-      totalRecords,
-      tenantsBackedUp: tenantIds.length,
-      pitrActive: pitrEnabled,
-      storageProvider: "Supabase Storage (secure-backups-bucket)",
-      retentionDays: 30
-    };
-
-    // Save backup to history list
-    const currentBackups = await this.db.getObject<any[]>("system-tenant", "db_backup_history") || [];
-    currentBackups.unshift(backupRecord);
-    // Keep last 30 backup histories
-    await this.db.saveObject("system-tenant", "db_backup_history", currentBackups.slice(0, 30));
-
-    return {
-      message: `Database backup snapshot '${backupId}' created successfully for ${tenantIds.length} tenants with ${totalRecords} items. Integrity checksum verified: ${checksumHex}.`,
-      details: backupRecord
-    };
-  }
+  private async executeDatabaseBackup():Promise<any> {throw new Error("Provider backup integration is not configured.");}
 }

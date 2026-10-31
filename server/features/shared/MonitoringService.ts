@@ -98,7 +98,8 @@ export class MonitoringService {
     }
 
     // Persist logs with a clean sliding window of last 250 log entries
-    const logs = await this.getLogs();
+    let logs:LogEntry[];
+    try {logs=await this.getLogs();}catch{return entry;}
     logs.unshift(entry);
     try {
       await this.db.saveObject("global", "system_telemetry_logs", logs.slice(0, 250));
@@ -166,9 +167,9 @@ export class MonitoringService {
     const memUsage = process.memoryUsage();
     const rssMb = Math.round(memUsage.rss / 1024 / 1024);
 
-    // Mock realistic CPU & active worker threads parameters for visual monitoring layout
-    const mockCpu = Math.floor(10 + Math.random() * 25);
-    const mockThreads = 8;
+    // CPU sampling is not configured; report it as unavailable rather than inventing a value.
+    const mockCpu = null as any;
+    const mockThreads = null as any;
 
     return {
       apiLatencyAverageMs: avgLatency,

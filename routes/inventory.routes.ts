@@ -1,4 +1,7 @@
+import {assertInventoryWritable} from '../server/features/billing/SubscriptionLifecycle';
 import express from "express";
+import crypto from "node:crypto";
+import {validateEntity} from "../server/features/shared/validation";
 import {
   ingredientRepo,
   menuRepo,
@@ -8,11 +11,17 @@ import {
   authMiddleware,
   requirePermission,
   idempotencyMiddleware,
-  realtimeService
+  realtimeService, syncService,settingsRepo
 } from "../server/context";
 import { Database, handleApiError } from "../server/features/shared/database";
 
 const router = express.Router();
+
+router.use(async(req,res,next)=>{
+  if(!['POST','PUT','PATCH','DELETE'].includes(req.method) || !/^\/(ingredients|recipes|purchases|inventory-movements)(\/|$)/.test(req.path)) return next();
+  // Authenticate before resolving entitlements; client tenant identifiers are not authority.
+  authMiddleware(req,res,async()=>{try{await assertInventoryWritable((req as any).tenantId);next();}catch(error){handleApiError(res,error);}});
+});
 
 // ============================================================================
 // REST ENDPOINTS: INGREDIENTS
@@ -43,6 +52,7 @@ router.get("/ingredients/:id", authMiddleware, async (req, res) => {
 router.post("/ingredients", authMiddleware, idempotencyMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
+    validateEntity("ingredients",req.body,true);
     await ingredientRepo.add(tenantId, req.body);
     const saved = await ingredientRepo.getById(tenantId, req.body.id);
     try {
@@ -57,7 +67,8 @@ router.post("/ingredients", authMiddleware, idempotencyMiddleware, requirePermis
 router.post("/ingredients/bulk", authMiddleware, idempotencyMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await ingredientRepo.saveAll(tenantId, req.body);
+    const state=await syncService.saveFullState(tenantId,{ingredients:req.body},(req as any).session.userId);
+    req.body=state.ingredients;
     try {
       realtimeService.broadcastSyncUpdate(tenantId, "ingredients");
     } catch {}
@@ -67,10 +78,12 @@ router.post("/ingredients/bulk", authMiddleware, idempotencyMiddleware, requireP
   }
 });
 
-router.put("/ingredients/:id", authMiddleware, requirePermission("inventory"), async (req, res) => {
+router.put("/ingredients/:id", authMiddleware, idempotencyMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    const updated = await ingredientRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
+    validateEntity("ingredients",{...req.body,id:req.params.id});
+    const state=await syncService.saveFullState(tenantId,{ingredients:[{...req.body,id:req.params.id}]},(req as any).session.userId);
+    const updated=state.ingredients.find((i:any)=>i.id===req.params.id);
     try {
       realtimeService.broadcastToTenant(tenantId, "inventory:updated", { entityId: req.params.id, slice: "ingredients" });
     } catch {}
@@ -85,10 +98,9 @@ router.delete("/ingredients/:id", authMiddleware, requirePermission("inventory")
   const ingredientId = req.params.id;
   try {
     // 1. Cascade unlink ingredient from all mapped recipes to prevent orphan references
-    const unlinkedCount = await recipeRepo.unlinkIngredient(tenantId, ingredientId);
-
-    // 2. Delete the ingredient record
-    await ingredientRepo.delete(tenantId, ingredientId);
+    const unlinkedCount=await Database.getInstance().runTransaction(tenantId,async trx=>{
+      const count=await recipeRepo.unlinkIngredient(tenantId,ingredientId,trx);await ingredientRepo.delete(tenantId,ingredientId,trx);return count;
+    });
 
     // 3. Broadcast realtime updates for both ingredients and recipes
     try {
@@ -139,6 +151,7 @@ router.get("/menu-items/:id", authMiddleware, async (req, res) => {
 router.post("/menu-items", authMiddleware, requirePermission("inventory", "settings"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
+    validateEntity("menuItems",req.body,true);
     await menuRepo.add(tenantId, req.body);
     res.json({ success: true, message: "Menu item added successfully." });
   } catch (error: any) {
@@ -149,7 +162,7 @@ router.post("/menu-items", authMiddleware, requirePermission("inventory", "setti
 router.post("/menu-items/bulk", authMiddleware, requirePermission("inventory", "settings"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await menuRepo.saveAll(tenantId, req.body);
+    await syncService.saveFullState(tenantId,{menuItems:req.body});
     res.json({ success: true, message: "Menu items synchronized successfully." });
   } catch (error: any) {
     handleApiError(res, error);
@@ -159,6 +172,7 @@ router.post("/menu-items/bulk", authMiddleware, requirePermission("inventory", "
 router.put("/menu-items/:id", authMiddleware, requirePermission("inventory", "settings"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
+    validateEntity("menuItems",{...req.body,id:req.params.id});
     const updated = await menuRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
     res.json({ success: true, message: "Menu item updated successfully.", data: updated });
   } catch (error: any) {
@@ -169,7 +183,7 @@ router.put("/menu-items/:id", authMiddleware, requirePermission("inventory", "se
 router.delete("/menu-items/:id", authMiddleware, requirePermission("inventory", "settings"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await menuRepo.delete(tenantId, req.params.id);
+    await Database.getInstance().runTransaction(tenantId,async trx=>{const recipes=(await recipeRepo.getAll(tenantId)) || [];await recipeRepo.saveAll(tenantId,recipes.filter(r=>r.menuItemId!==req.params.id),trx);await menuRepo.delete(tenantId,req.params.id,trx);});
     res.json({ success: true, message: "Menu item deleted successfully." });
   } catch (error: any) {
     handleApiError(res, error);
@@ -208,12 +222,13 @@ router.post("/purchases", authMiddleware, idempotencyMiddleware, requirePermissi
   const session = (req as any).session;
 
   try {
+    const result=await Database.getInstance().runTransaction(tenantId,async trx=>{
     const purchase = req.body;
     const ingredientId = purchase.ingredientId;
     const quantity = Number(purchase.quantity);
     const cost = Number(purchase.cost);
 
-    if (!ingredientId || isNaN(quantity) || quantity <= 0) {
+    if (!ingredientId || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(cost) || cost<0) {
       return res.status(400).json({
         success: false,
         error: "INVALID_PURCHASE",
@@ -221,6 +236,10 @@ router.post("/purchases", authMiddleware, idempotencyMiddleware, requirePermissi
       });
     }
 
+    const existingPurchase=purchase.id ? await purchaseRepo.getById(tenantId,purchase.id) : null;
+    if(existingPurchase) return res.json({success:true,data:existingPurchase});
+    const settings=await settingsRepo.get(tenantId);
+    if(session.role==="Manager" && settings?.managerCanAddPurchases===false) return res.status(403).json({success:false,error:"FORBIDDEN"});
     const ingredient = await ingredientRepo.getById(tenantId, ingredientId);
     if (!ingredient) {
       return res.status(404).json({
@@ -277,66 +296,34 @@ router.post("/purchases", authMiddleware, idempotencyMiddleware, requirePermissi
       newStock,
       referenceId: purchaseId,
       reason: `Vendor purchase invoice #${purchase.invoiceNumber || purchaseId}`,
-      performedBy: user?.name || session?.name || "Inventory Manager",
+      performedBy: user?.id || session?.userId,
       created_at: nowIso,
       updated_at: nowIso,
       version: 1
     };
 
-    const db = Database.getInstance();
-    await db.runTransaction(tenantId, async (trx) => {
+    // Staged under the calculation transaction.
       await purchaseRepo.add(tenantId, purchaseRecord, trx);
       await ingredientRepo.update(tenantId, updatedIngredient, ingredient.version, trx);
       const existingMovements = (await inventoryMovementRepo.getAll(tenantId)) || [];
       await inventoryMovementRepo.saveAll(tenantId, [...existingMovements, movementRecord], trx);
+    return purchaseRecord;
     });
-
+    if (!result || !result.id) return;
     try {
-      realtimeService.broadcastToTenant(tenantId, "purchase:created", { entityId: purchaseId, slice: "purchases" });
-      realtimeService.broadcastToTenant(tenantId, "inventory:updated", { entityId: ingredientId, slice: "ingredients" });
+      realtimeService.broadcastToTenant(tenantId, "purchase:created", { entityId: result.id, slice: "purchases" });
+      realtimeService.broadcastToTenant(tenantId, "inventory:updated", { entityId: result.ingredientId, slice: "ingredients" });
     } catch {}
 
-    res.json({ success: true, message: "Purchase invoice registered and stock updated.", data: purchaseRecord });
+    res.json({ success: true, message: "Purchase invoice registered and stock updated.", data: result });
   } catch (error: any) {
     handleApiError(res, error);
   }
 });
 
-router.post("/purchases/bulk", authMiddleware, idempotencyMiddleware, requirePermission("inventory"), async (req, res) => {
-  const tenantId = (req as any).tenantId;
-  try {
-    await purchaseRepo.saveAll(tenantId, req.body);
-    try {
-      realtimeService.broadcastSyncUpdate(tenantId, "purchases");
-    } catch {}
-    res.json({ success: true, message: "Purchases synchronized successfully.", data: req.body });
-  } catch (error: any) {
-    handleApiError(res, error);
-  }
-});
-
-router.put("/purchases/:id", authMiddleware, requirePermission("inventory"), async (req, res) => {
-  const tenantId = (req as any).tenantId;
-  try {
-    const updated = await purchaseRepo.update(tenantId, { ...req.body, id: req.params.id }, req.body.version);
-    try {
-      realtimeService.broadcastToTenant(tenantId, "purchase:updated", { entityId: req.params.id, slice: "purchases" });
-    } catch {}
-    res.json({ success: true, message: "Purchase updated successfully.", data: updated || req.body });
-  } catch (error: any) {
-    handleApiError(res, error);
-  }
-});
-
-router.delete("/purchases/:id", authMiddleware, requirePermission("inventory"), async (req, res) => {
-  const tenantId = (req as any).tenantId;
-  try {
-    await purchaseRepo.delete(tenantId, req.params.id);
-    res.json({ success: true, message: "Purchase deleted successfully." });
-  } catch (error: any) {
-    handleApiError(res, error);
-  }
-});
+router.post("/purchases/bulk",authMiddleware,requirePermission("inventory"),(_req,res)=>res.status(400).json({success:false,error:"BUSINESS_COMMAND_REQUIRED"}));
+router.put("/purchases/:id",authMiddleware,requirePermission("inventory"),(_req,res)=>res.status(400).json({success:false,error:"PURCHASE_LEDGER_IMMUTABLE"}));
+router.delete("/purchases/:id",authMiddleware,requirePermission("inventory"),(_req,res)=>res.status(400).json({success:false,error:"PURCHASE_LEDGER_IMMUTABLE"}));
 
 // ============================================================================
 // REST ENDPOINTS: RECIPES
@@ -354,7 +341,8 @@ router.get("/recipes", authMiddleware, async (req, res) => {
 router.post("/recipes", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await recipeRepo.addOrUpdate(tenantId, req.body);
+    const settings=await settingsRepo.get(tenantId);if((req as any).session.role==="Manager" && settings?.managerCanEditRecipes===false) return res.status(403).json({success:false,error:"FORBIDDEN"});
+    await syncService.saveFullState(tenantId,{recipes:[req.body]});
     res.json({ success: true, message: "Recipe saved successfully." });
   } catch (error: any) {
     handleApiError(res, error);
@@ -364,7 +352,7 @@ router.post("/recipes", authMiddleware, requirePermission("inventory"), async (r
 router.post("/recipes/bulk", authMiddleware, requirePermission("inventory"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {
-    await recipeRepo.saveAll(tenantId, req.body);
+    await syncService.saveFullState(tenantId,{recipes:req.body});
     res.json({ success: true, message: "Recipes synchronized successfully." });
   } catch (error: any) {
     handleApiError(res, error);

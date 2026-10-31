@@ -75,7 +75,7 @@ export default function Sidebar({
       el.addEventListener("scroll", checkScroll);
       window.addEventListener("resize", checkScroll);
       checkScroll();
-      
+
       const timer = setTimeout(checkScroll, 300);
       return () => {
         el.removeEventListener("scroll", checkScroll);
@@ -87,22 +87,22 @@ export default function Sidebar({
 
   const menuItems: Array<{ id: string; label: string; icon: any; permission?: string; role?: string }> = [
     { id: "saas-admin", label: "SaaS Admin Panel", icon: Crown, role: "Owner" },
-    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, permission: "reports" },
+    { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, role: "Owner" },
     { id: "billing", label: "POS Billing", icon: ShoppingCart, permission: "billing" },
     { id: "kds", label: "Kitchen (KDS)", icon: ChefHat, permission: "billing" },
     { id: "crm", label: "CRM & Loyalty", icon: Users, permission: "billing" },
     { id: "inventory", label: "Inventory & Recipes", icon: Boxes, permission: "inventory" },
     { id: "shifts", label: "Staff Shifts", icon: Clock, permission: "billing" },
-    { id: "ai-reports", label: "Automated AI Reports", icon: FileText, permission: "reports" },
+    { id: "ai-reports", label: "Automated AI Reports", icon: FileText, role: "Owner" },
     { id: "jobs", label: "Background Jobs", icon: Cpu, permission: "settings" },
-    { id: "notifications", label: "Notification Center", icon: Bell, permission: "billing" },
-    { id: "events", label: "Events & Audit", icon: Zap, permission: "billing" },
-    { id: "security", label: "Security & Sessions", icon: Shield, permission: "settings" },
-    { id: "settings", label: "Settings", icon: Settings, permission: "settings" }
+    { id: "notifications", label: "Notification Center", icon: Bell },
+    { id: "settings", label: "Settings", icon: Settings, role: "Owner" }
   ];
 
   // Filter menu items by permissions and roles
   const filteredMenuItems = menuItems.filter((item) => {
+    if (["jobs","monitoring"].includes(item.id)) return currentStaff.role==="SaaS Owner";
+    if (item.id === "delivery") return false;
     if (item.id === "saas-admin") {
       // Completely removed from the restaurant terminal sidebar as requested
       return false;
@@ -285,7 +285,7 @@ export default function Sidebar({
                       <IconComponent className={`shrink-0 transition-transform duration-150 ${
                         collapsedMode ? "w-5 h-5 group-hover:scale-110" : "w-4 h-4"
                       } ${isSelected ? "text-pink-500" : "text-slate-400 group-hover:text-slate-600"}`} />
-                      
+
                       {!collapsedMode && (
                         <span className="truncate text-slate-600 group-hover:text-slate-900 transition-colors duration-150">
                           {item.label}
@@ -355,7 +355,7 @@ export default function Sidebar({
                 <span>Lock Terminal</span>
               </button>
               <p className="text-center text-[9px] text-slate-400 mt-3 font-mono">
-                VeggiePOS 1.20
+                Aatmyam POS 1.20
               </p>
             </>
           )}

@@ -1,385 +1,76 @@
-import React, { useState, useEffect } from "react";
-import { CreditCard, CheckCircle, AlertTriangle, Zap, ArrowRight, Shield, Crown } from "lucide-react";
-import { ApiClient } from "../services/api";
-
-interface BillingSettingsProps {
-  tenantId: string;
-}
-
-export function BillingSettings({ tenantId }: BillingSettingsProps) {
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<any>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchSubscription();
-  }, [tenantId]);
-
-  // Read URL query parameters to see if we just returned from checkout
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("checkout") === "success") {
-      // Clean query params
-      window.history.replaceState({}, document.title, window.location.pathname + "?tab=settings");
-      fetchSubscription();
-    }
-  }, []);
-
-  const fetchSubscription = async () => {
-    setLoading(true);
-    try {
-      const sessId = ApiClient.getSessionId();
-      const res = await fetch(`/api/billing/subscription?tenantId=${tenantId}`, {
-        headers: {
-          "x-session-id": sessId || "",
-        },
-        credentials: "include"
-      });
-      const json = await res.json();
-      if (json.success) {
-        setData(json);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCheckout = async (plan: string) => {
-    setActionLoading(plan);
-    try {
-      const sessId = ApiClient.getSessionId();
-      const idempotencyKey = ApiClient.generateIdempotencyKey(`checkout_${tenantId}_${plan}`);
-      const res = await fetch(`/api/billing/create-checkout-session`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "x-session-id": sessId || "",
-          "Idempotency-Key": idempotencyKey
-        },
-        credentials: "include",
-        body: JSON.stringify({ tenantId, plan })
-      });
-      const json = await res.json();
-      if (json.success && json.url) {
-        window.location.href = json.url;
-      } else {
-        alert(json.message || "Failed to create checkout session.");
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handlePortal = async () => {
-    setActionLoading("portal");
-    try {
-      const sessId = ApiClient.getSessionId();
-      const idempotencyKey = ApiClient.generateIdempotencyKey(`portal_${tenantId}`);
-      const res = await fetch(`/api/billing/create-portal-session`, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "x-session-id": sessId || "",
-          "Idempotency-Key": idempotencyKey
-        },
-        credentials: "include",
-        body: JSON.stringify({ tenantId })
-      });
-      const json = await res.json();
-      if (json.success && json.url) {
-        window.location.href = json.url;
-      } else {
-        alert(json.message || "Failed to create portal session.");
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm animate-pulse space-y-4">
-        <div className="h-6 w-1/4 bg-slate-200 rounded"></div>
-        <div className="h-20 bg-slate-100 rounded"></div>
-      </div>
-    );
-  }
-
-  const { subscription, limits, usage } = data || {};
-  const { plan = "free", isReadOnly = false } = subscription || {};
-
-  const safeLimits = {
-    staffCount: limits?.staffCount ?? (plan === "pro" ? 10 : plan === "enterprise" ? 100000 : 3),
-    monthlyOrders: limits?.monthlyOrders ?? (plan === "pro" ? 500 : plan === "enterprise" ? 100000 : 30)
-  };
-  const safeUsage = {
-    staffCount: usage?.staffCount ?? 0,
-    monthlyOrders: usage?.monthlyOrders ?? 0
-  };
-
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-4 gap-4">
-        <div>
-          <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-blue-600" />
-            Subscription & Stripe Billing
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">Manage VeggiePOS SaaS plans, limits, and real-time operational usage.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400 font-medium font-mono">Status:</span>
-          {isReadOnly ? (
-            <span className="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-700 rounded-full text-[10px] font-bold tracking-wider uppercase flex items-center gap-1 animate-pulse">
-              <AlertTriangle className="w-3 h-3" /> Read-Only Mode
-            </span>
-          ) : (
-            <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full text-[10px] font-bold tracking-wider uppercase flex items-center gap-1">
-              <CheckCircle className="w-3 h-3" /> Active Account
-            </span>
-          )}
-        </div>
-      </div>
-
-      {isReadOnly && (
-        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2.5">
-          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-rose-600 animate-bounce" />
-          <div className="space-y-1">
-            <span className="font-bold">Billing Suspension Active!</span>
-            <p className="text-rose-600 leading-relaxed">
-              Your account has been restricted to <b>Read-Only Mode</b> because your latest payment failed, subscription was canceled, or invoice is past due. To restore POS checkouts and staff additions, please upgrade or click "Manage Billing Portal" to renew.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Plan Details & Limits Progress */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        
-        {/* Column 1: Quantity-Based Capacity Limits (Quantity Base) */}
-        <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200/50 pb-2">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">1. Quantity-Based Limits</h3>
-            <span className="text-[10px] bg-slate-200/70 text-slate-700 px-2 py-0.5 rounded-full font-mono">Caps</span>
-          </div>
-          
-          <div className="space-y-4">
-            {/* Staff Limit */}
-            <div>
-              <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
-                <span>Staff Members Limit</span>
-                <span>{safeUsage.staffCount} / {safeLimits.staffCount >= 10000 ? "∞" : safeLimits.staffCount}</span>
-              </div>
-              <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
-                <div 
-                  className={`h-full rounded-full transition-all duration-300 ${safeUsage.staffCount >= (safeLimits.staffCount >= 10000 ? Infinity : safeLimits.staffCount) ? 'bg-rose-500' : 'bg-blue-600'}`}
-                  style={{ width: `${safeLimits.staffCount >= 10000 ? 0 : Math.min(100, (safeUsage.staffCount / safeLimits.staffCount) * 100)}%` }}
-                ></div>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">Current team size synced to plan capacity.</p>
-            </div>
-
-            {/* Monthly Orders Limit */}
-            <div>
-              <div className="flex justify-between text-xs font-bold text-slate-700 mb-1">
-                <span>Monthly Orders Limit</span>
-                <span>{safeUsage.monthlyOrders} / {safeLimits.monthlyOrders >= 10000 ? "∞" : safeLimits.monthlyOrders}</span>
-              </div>
-              <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
-                <div 
-                  className={`h-full rounded-full transition-all duration-300 ${safeUsage.monthlyOrders >= (safeLimits.monthlyOrders >= 10000 ? Infinity : safeLimits.monthlyOrders) ? 'bg-rose-500' : 'bg-blue-600'}`}
-                  style={{ width: `${safeLimits.monthlyOrders >= 10000 ? 0 : Math.min(100, (safeUsage.monthlyOrders / safeLimits.monthlyOrders) * 100)}%` }}
-                ></div>
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">Orders reset dynamically on the first of each month.</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Column 2: Feature-Based Access (Subscription Plan Feature) */}
-        <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200/50 pb-2">
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">2. Feature-Based Access</h3>
-            <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-mono">Modules</span>
-          </div>
-          
-          <div className="grid grid-cols-1 gap-2 text-[11px]">
-            <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-100">
-              <span className="text-slate-700 font-medium">✓ Standard POS Terminal</span>
-              <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">Unlocked</span>
-            </div>
-            <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-100">
-              <span className="text-slate-700 font-medium">✓ Basic Sales Reporting</span>
-              <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">Unlocked</span>
-            </div>
-            <div className={`flex items-center justify-between p-2 rounded-lg border ${plan !== "free" ? "bg-white border-slate-100" : "bg-slate-100/40 border-slate-200/30 opacity-60"}`}>
-              <span className="text-slate-700 font-medium">Advanced Inventory Control</span>
-              {plan !== "free" ? (
-                <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">Unlocked</span>
-              ) : (
-                <span className="text-[9px] text-slate-400 font-bold bg-slate-200/60 px-1.5 py-0.5 rounded">Locked</span>
-              )}
-            </div>
-            <div className={`flex items-center justify-between p-2 rounded-lg border ${plan !== "free" ? "bg-white border-slate-100" : "bg-slate-100/40 border-slate-200/30 opacity-60"}`}>
-              <span className="text-slate-700 font-medium">Gemini Copilot AI Assist</span>
-              {plan !== "free" ? (
-                <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">Unlocked</span>
-              ) : (
-                <span className="text-[9px] text-slate-400 font-bold bg-slate-200/60 px-1.5 py-0.5 rounded">Locked</span>
-              )}
-            </div>
-            <div className={`flex items-center justify-between p-2 rounded-lg border ${plan === "enterprise" ? "bg-white border-slate-100" : "bg-slate-100/40 border-slate-200/30 opacity-60"}`}>
-              <span className="text-slate-700 font-medium">24/7 Dedicated Support</span>
-              {plan === "enterprise" ? (
-                <span className="text-[9px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">Unlocked</span>
-              ) : (
-                <span className="text-[9px] text-slate-400 font-bold bg-slate-200/60 px-1.5 py-0.5 rounded">Locked</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Column 3: Quick billing gateway card */}
-        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-xl p-5 flex flex-col justify-between">
-          <div>
-            <span className="text-[9px] uppercase font-mono tracking-widest text-slate-400">VeggiePOS SaaS Gateway</span>
-            <h4 className="text-sm font-bold capitalize text-white flex items-center gap-1.5 mt-1">
-              {plan === "free" ? <Zap className="w-4 h-4 text-amber-400" /> : plan === "pro" ? <Shield className="w-4 h-4 text-blue-400" /> : <Crown className="w-4 h-4 text-purple-400" />}
-              {plan} Tier Subscription
-            </h4>
-            <p className="text-slate-300 text-[11px] mt-1.5 leading-relaxed">
-              Your system operations are governed by our Stripe billing policies. If you require higher resource caps, update your tier.
-            </p>
-          </div>
-          {plan !== "free" ? (
-            <button
-              onClick={handlePortal}
-              disabled={actionLoading !== null}
-              className="mt-4 w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-2 px-3 rounded-lg text-xs transition duration-200 flex items-center justify-center gap-1.5 cursor-pointer border-none"
-            >
-              {actionLoading === "portal" ? "Opening Portal..." : "Manage Billing Portal"}
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <div className="text-[11px] text-slate-400 mt-4 italic">
-              Subscribe to a professional plan below to unlock custom limits & portal access.
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Pricing Comparison Cards */}
-      <div>
-        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3.5">Compare Subscription Tiers</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          
-          {/* Free Card */}
-          <div className={`border rounded-xl p-4 flex flex-col justify-between ${plan === "free" ? "border-blue-500 ring-1 ring-blue-500/30 bg-blue-50/10" : "border-slate-200 bg-white"}`}>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs font-bold text-slate-800">Free Starter</span>
-                {plan === "free" && <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Active</span>}
-              </div>
-              <p className="text-sm font-extrabold text-slate-900">₹0 / month</p>
-              
-              <ul className="text-[11px] text-slate-500 mt-3 space-y-1.5 border-t border-slate-100 pt-3">
-                <li className="flex items-center gap-1">✓ 3 Staff Members</li>
-                <li className="flex items-center gap-1">✓ 30 Orders / month</li>
-                <li className="flex items-center gap-1 text-slate-600">✓ Standard POS UI</li>
-                <li className="flex items-center gap-1 text-slate-600">✓ Basic Business Reports</li>
-                <li className="flex items-center gap-1 opacity-50">✗ Advanced Inventory</li>
-                <li className="flex items-center gap-1 opacity-50">✗ Gemini AI Assist</li>
-              </ul>
-            </div>
-            <button
-              disabled
-              className="mt-4 w-full border border-slate-200 bg-slate-50 text-slate-400 font-semibold py-1.5 rounded-lg text-xs border-none"
-            >
-              {plan === "free" ? "Current Plan" : "N/A"}
-            </button>
-          </div>
-
-          {/* Pro Card */}
-          <div className={`border rounded-xl p-4 flex flex-col justify-between ${plan === "pro" ? "border-blue-500 ring-1 ring-blue-500/30 bg-blue-50/10" : "border-slate-200 bg-white"}`}>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs font-bold text-slate-800">Professional Pro</span>
-                {plan === "pro" && <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Active</span>}
-              </div>
-              <p className="text-sm font-extrabold text-slate-900">₹999 / month</p>
-              
-              <ul className="text-[11px] text-slate-500 mt-3 space-y-1.5 border-t border-slate-100 pt-3">
-                <li className="flex items-center gap-1 font-medium text-slate-700">✓ 10 Staff Members</li>
-                <li className="flex items-center gap-1 font-medium text-slate-700">✓ 500 Orders / month</li>
-                <li className="flex items-center gap-1 font-medium text-slate-700">✓ Standard POS UI</li>
-                <li className="flex items-center gap-1 font-medium text-slate-700">✓ Basic Business Reports</li>
-                <li className="flex items-center gap-1 text-emerald-600 font-semibold">✓ Advanced Inventory</li>
-                <li className="flex items-center gap-1 text-emerald-600 font-semibold">✓ Gemini AI Assist</li>
-              </ul>
-            </div>
-            {plan === "pro" ? (
-              <button
-                disabled
-                className="mt-4 w-full bg-blue-50 text-blue-600 font-bold py-1.5 rounded-lg text-xs border-none"
-              >
-                Current Plan
-              </button>
-            ) : (
-              <button
-                onClick={() => handleCheckout("pro")}
-                disabled={actionLoading !== null}
-                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 rounded-lg text-xs transition cursor-pointer border-none"
-              >
-                {actionLoading === "pro" ? "Upgrading..." : "Upgrade to Pro"}
-              </button>
-            )}
-          </div>
-
-          {/* Enterprise Card */}
-          <div className={`border rounded-xl p-4 flex flex-col justify-between ${plan === "enterprise" ? "border-purple-500 ring-1 ring-purple-500/30 bg-purple-50/10" : "border-slate-200 bg-white"}`}>
-            <div>
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-xs font-bold text-slate-800">Enterprise Elite</span>
-                {plan === "enterprise" && <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Active</span>}
-              </div>
-              <p className="text-sm font-extrabold text-slate-900">₹2999 / month</p>
-              
-              <ul className="text-[11px] text-slate-500 mt-3 space-y-1.5 border-t border-slate-100 pt-3">
-                <li className="flex items-center gap-1 font-medium text-purple-700">✓ Unlimited Staff (∞)</li>
-                <li className="flex items-center gap-1 font-medium text-purple-700">✓ Unlimited Orders (∞)</li>
-                <li className="flex items-center gap-1 font-medium text-slate-700">✓ Standard POS UI</li>
-                <li className="flex items-center gap-1 font-medium text-slate-700">✓ Basic Business Reports</li>
-                <li className="flex items-center gap-1 text-emerald-600 font-semibold">✓ Advanced Inventory</li>
-                <li className="flex items-center gap-1 text-emerald-600 font-semibold">✓ Gemini AI Assist</li>
-                <li className="flex items-center gap-1 text-purple-600 font-extrabold">✓ 24/7 Dedicated Support</li>
-              </ul>
-            </div>
-            {plan === "enterprise" ? (
-              <button
-                disabled
-                className="mt-4 w-full bg-purple-50 text-purple-600 font-bold py-1.5 rounded-lg text-xs border-none"
-              >
-                Current Plan
-              </button>
-            ) : (
-              <button
-                onClick={() => handleCheckout("enterprise")}
-                disabled={actionLoading !== null}
-                className="mt-4 w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-1.5 rounded-lg text-xs transition cursor-pointer border-none"
-              >
-                {actionLoading === "enterprise" ? "Upgrading..." : "Upgrade Elite"}
-              </button>
-            )}
-          </div>
-
-        </div>
-      </div>
-    </div>
-  );
+import React,{useEffect,useState} from 'react';
+import {ApiClient} from '../services/api';
+import {PLAN_LIMITS} from '../../../../shared/planCatalog';
+interface BillingSettingsProps {tenantId:string}
+export function BillingSettings({tenantId}:BillingSettingsProps){
+ const [data,setData]=useState<any>(null),[error,setError]=useState(''),[busy,setBusy]=useState('');
+ const [reasons,setReasons]=useState<Record<string,string>>({});
+ const [customer,setCustomer]=useState({name:'',email:'',phone:''}),[selected,setSelected]=useState<string[]>([]);
+ const headers=()=>({'Content-Type':'application/json','x-session-id':ApiClient.getSessionId() || ''});
+ async function api(path:string,body?:any,key?:string){
+  const response=await fetch('/api/billing/'+path+(body===undefined?'?tenantId='+encodeURIComponent(tenantId):''),{method:body===undefined?'GET':'POST',credentials:'include',headers:{...headers(),...(key?{'Idempotency-Key':key}:{})},body:body===undefined?undefined:JSON.stringify(body)});
+  const json=await response.json();if(!response.ok || !json.success) throw new Error(json.message || json.error || 'Request failed. Please retry.');return json;
+ }
+ async function refresh(){try{const json=await api('subscription');setData(json);setSelected((json.staffOptions || []).filter((s:any)=>s.status==null || String(s.status).toLowerCase()==='active').map((s:any)=>s.id));}catch(e:any){setError(e.message);}}
+ useEffect(()=>{setData(null);setError('');void refresh();},[tenantId]);
+ async function action(name:string,work:()=>Promise<void>){setBusy(name);setError('');try{await work();await refresh();}catch(e:any){setError(e.message);await refresh();}finally{setBusy('');}}
+ const sub=data?.subscription,usage=data?.usage,limits=data?.limits;
+ const pending=data?.links?.find((l:any)=>['ACTIVE','CREATING','CANCEL_PENDING'].includes(l.status));
+ const startCheckout=(plan:string)=>action(plan,async()=>{
+  const key=pending?.status==='CREATING'?pending.requestId:ApiClient.generateIdempotencyKey('cashfree');
+  const result=await api('create-checkout-session',{plan,customer},key);
+  if(result.url) window.location.assign(result.url);
+ });
+ return <section className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 space-y-5 text-sm text-slate-700">
+  <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3">Subscription & Billing</h2>
+  <p className="text-xs text-slate-500 leading-relaxed">One outlet. Prices include all subscription charges. Cashfree verifies your payment before access changes.</p>
+  {error && <p role="alert" className="bg-rose-50 text-rose-700 p-3 rounded">{error}</p>}
+  {!data ? <button onClick={refresh}>Load subscription</button> : <>
+   <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
+    <strong className="text-sm font-bold text-slate-800">{sub.trialEndsAt?'14-day trial':PLAN_LIMITS[sub.plan as keyof typeof PLAN_LIMITS]?.label}</strong>
+    <p>Owner + {usage.staffCount} / {limits.staffCount} active staff</p>
+    <p>{usage.monthlyOrders} / {limits.monthlyOrders<0?'Unlimited (fair use)':limits.monthlyOrders} orders · {usage.openKots} open KOTs{sub.plan==='free'?' / 5':''}</p>
+    {sub.plan!=='free' && <p>5 successful AI reports/day · resets at midnight IST</p>}
+    <p>Cycle: {new Date(sub.cycleStart).toLocaleDateString()} – {new Date(sub.cycleEnd).toLocaleDateString()}</p>
+    {sub.trialEndsAt && <p>Trial ends: {new Date(sub.trialEndsAt).toLocaleString()}</p>}
+    {sub.paidUntil && <p>Paid access until: {new Date(sub.paidUntil).toLocaleString()}</p>}
+    {sub.inventoryFrozen && <p>Inventory is read-only. Automatic stock deduction is paused.</p>}
+    {sub.financialReview && <p role="status" className="text-rose-700">Financial Review: contact support. Your records remain available on Free Starter.</p>}
+    {sub.reviewRequired && <p>Trial eligibility needs review. Free Starter is available while support reviews it.</p>}
+    {Object.keys(sub.frozenKots || {}).length>0 && <p>Trial KOT items/totals are frozen. Each bill has a 12-hour settlement window from trial expiry.</p>}
+   </div>
+   {!sub.trialUsed && sub.plan==='free' && <button disabled={!!busy} onClick={()=>action('trial',async()=>{await api('start-trial',{});})} className="border rounded px-4 py-2">Start eligible 14-day trial</button>}
+   {sub.plan==='free' && data.staffOptions?.length>0 && <fieldset className="border border-slate-200 bg-slate-50/50 rounded-xl p-4 space-y-3"><legend className="text-sm font-semibold text-slate-800 px-1">Choose up to 3 active staff · Owner remains active</legend>
+    {data.staffOptions.map((s:any)=><label key={s.id} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5"><input className="h-4 w-4 accent-blue-600" type="checkbox" checked={selected.includes(s.id)} onChange={e=>setSelected(e.target.checked?[...selected,s.id]:selected.filter(id=>id!==s.id))} disabled={!selected.includes(s.id) && selected.length>=3}/> {s.name}</label>)}
+    <p className="text-sm text-slate-600">Cashier/Manager priority keeps up to 3 active staff running after expiry. You can change these selections at any time.</p>
+    <button className="w-full sm:w-auto rounded-lg bg-blue-600 hover:bg-blue-700 px-4 py-2.5 font-semibold text-white disabled:opacity-50" disabled={!!busy} onClick={()=>action('staff',async()=>{await api('select-staff',{staffIds:selected});})}>Save staff selection</button>
+   </fieldset>}
+   {!!data.expiredFrozenKots?.length && <fieldset className="border rounded p-3 space-y-3"><legend className="font-semibold">Resolve expired trial KOTs · Owner only</legend>
+    <p className="text-sm text-slate-600">Settle the original frozen amount after receiving Cash/UPI, or close an unpaid bill with an audit reason. Closing records no payment and makes no stock adjustment.</p>
+    {data.expiredFrozenKots.map((kot:any)=><div key={kot.id} className="border rounded p-3 space-y-2">
+     <p>{kot.orderNumber} · ₹{kot.total}</p>
+     <label className="block text-sm">Audit reason<input aria-label={`Recovery reason for ${kot.orderNumber}`} className="block border rounded p-2 w-full" value={reasons[kot.id] || ''} onChange={e=>setReasons({...reasons,[kot.id]:e.target.value})} minLength={10} maxLength={1000}/></label>
+     <div className="flex flex-wrap gap-3">{(['Cash','UPI','close'] as const).map(method=><button key={method} disabled={!!busy || (reasons[kot.id] || '').trim().length<10} className="border rounded px-3 py-2 disabled:opacity-50" onClick={()=>action('kot',async()=>{await api(`frozen-kots/${encodeURIComponent(kot.id)}/recover`,{action:method==='close'?'close':'settle',reason:reasons[kot.id],...(method==='close'?{}:{paymentMethod:method})},ApiClient.generateIdempotencyKey('kot-recovery'));})}>{method==='close'?'Close unpaid':`Received ${method} · settle ₹${kot.total}`}</button>)}</div>
+    </div>)}
+   </fieldset>}
+   {!sub.financialReview && <>
+    <fieldset className="rounded-xl border border-slate-200 p-4 space-y-3"><legend className="text-sm font-bold text-slate-800 px-1">Payment contact</legend>
+     {(['name','email','phone'] as const).map(key=><label key={key} className="block text-sm">{key==='phone'?'Indian mobile':key==='name'?'Name':'Email'}<input className="mt-1.5 block border border-slate-300 bg-white rounded-lg px-3 py-2.5 w-full focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" type={key==='email'?'email':key==='phone'?'tel':'text'} autoComplete={key==='phone'?'tel':key} value={customer[key]} onChange={e=>setCustomer({...customer,[key]:e.target.value})}/></label>)}
+    </fieldset>
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">{Object.entries(PLAN_LIMITS).map(([id,plan])=><div className="border border-slate-200 bg-white rounded-xl p-4 sm:p-5 space-y-3 shadow-sm min-w-0" key={id}>
+     <h3 className="text-sm font-bold text-slate-800">{plan.label}</h3><p className="text-xl font-bold text-slate-900">₹{plan.price}{plan.price>0?' / 30 days':''}</p>
+     <p>Owner + {plan.staffCount} staff</p><p>{plan.monthlyOrders<0?'Unlimited orders (fair use)':`${plan.monthlyOrders} orders per 30-day cycle`}</p>
+     {id==='enterprise' && sub.plan==='pro' && <p id="elite-upgrade-note" className="text-sm font-medium text-amber-800">Elite upgrade: verified payment starts a fresh 30-day cycle immediately. No proration or credit for unused Pro days.</p>}
+     {id!=='free' && <button aria-describedby={id==='enterprise' && sub.plan==='pro'?'elite-upgrade-note':undefined} className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg px-3 py-2.5 disabled:opacity-50 transition-colors" disabled={!!busy || (pending?.status==='CREATING' && pending.plan!==id)} onClick={()=>startCheckout(id)}>{busy===id?'Creating…':pending?.status==='CREATING'?'Recover checkout':'Pay with Cashfree'}</button>}
+    </div>)}</div>
+    <p className="text-xs text-slate-600">Payment links expire in 60 minutes. A new link cancels the previous pending one. Elite upgrades start a fresh 30-day cycle without proration. Paid renewals within 24 hours of expiry retain the original renewal date.</p>
+   </>}
+   {!!data.links?.length && <div className="space-y-2"><h3 className="font-semibold">Recent payment links</h3>{data.links.slice(0,10).map((link:any)=><div key={link.id} className="border border-slate-200 rounded-xl p-4 text-sm space-y-2">
+    <p>{PLAN_LIMITS[link.plan as keyof typeof PLAN_LIMITS]?.label} · ₹{link.amount} · {link.status}</p>
+    <p>Expires: {new Date(link.expiresAt).toLocaleString()}</p>
+    {!sub.financialReview && link.url && link.status==='ACTIVE' && Date.parse(link.expiresAt)>Date.now() && <a href={link.url} target="_blank" rel="noreferrer" className="text-blue-700 underline mr-4">Open payment link</a>}
+    <button disabled={!!busy} className="text-blue-700 underline" onClick={()=>action('check',async()=>{await api('check-payment-status',{linkId:link.id});})}>Check Payment Status</button>
+   </div>)}</div>}
+  </>}
+ </section>;
 }

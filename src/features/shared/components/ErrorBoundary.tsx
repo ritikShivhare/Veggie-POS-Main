@@ -143,14 +143,14 @@ function ErrorFallbackView({
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-2xl bg-slate-900 rounded-3xl border border-slate-800 p-6 sm:p-8 shadow-2xl relative overflow-hidden z-10">
-        
+
         {/* Header Icon */}
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-16 h-16 bg-red-500/10 rounded-2xl border border-red-500/30 flex items-center justify-center text-red-500 mb-4 animate-bounce">
             <AlertTriangle className="w-8 h-8" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-white mb-2">
-            VeggiePOS Encountered a Crash
+            Aatmyam POS Encountered a Crash
           </h1>
           <p className="text-slate-400 text-sm max-w-md">
             एप्लीकेशन में कोई तकनीकी समस्या आई है। हमने इस क्रैश को Sentry मॉनिटरिंग सर्वर पर रिपोर्ट कर दिया है।
@@ -250,7 +250,7 @@ function ErrorFallbackView({
 
         {/* Help text */}
         <p className="text-center text-[10px] text-slate-500 mt-6 font-mono">
-          VeggiePOS Cloud Core Agent Sentry Client v1.2.0 • Session Diagnostics ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}
+          Aatmyam POS Cloud Core Agent Sentry Client v1.2.0 • Session Diagnostics ID: {Math.random().toString(36).substr(2, 9).toUpperCase()}
         </p>
 
       </div>
