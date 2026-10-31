@@ -1317,7 +1317,7 @@ export default function Dashboard({
 
       {/* DETAILED TAX INVOICE RECEIPT MODAL */}
       {selectedOrderReceipt && (
-        <div className="fixed inset-0 z-60 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fade-in">
+        <div className="historical-receipt-modal fixed inset-0 z-60 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full max-h-[92vh] flex flex-col overflow-hidden animate-scale-up">
 
             {/* Invoice Top Bar */}
@@ -1337,7 +1337,7 @@ export default function Dashboard({
             </div>
 
             {/* Printable Receipt Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 font-mono text-xs text-slate-800 bg-white">
+            <div className="historical-receipt-print-body flex-1 overflow-y-auto p-6 space-y-4 font-mono text-xs text-slate-800 bg-white">
               <div className="text-center border-b border-dashed border-slate-300 pb-4">
                 <h2 className="text-lg font-black text-slate-900 uppercase font-sans">
                   {activeTenant?.name || "Aatmyam POS Restaurant"}
