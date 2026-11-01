@@ -725,6 +725,11 @@ router.post("/auth/unlock-override", async (req, res) => {
     const globalTenants = await getGlobalTenantsList();
     const targetTenant = globalTenants.find(t => t.tenantId === tenantId || t.id === tenantId);
 
+    // Require a known restaurant before loading tenant-specific staff records.
+    if (!targetTenant) return res.status(403).json({ success: false, error: "INVALID_OVERRIDE_KEY", message: "Invalid owner verification." });
+    if (typeof ownerEmail !== "string" || !ownerEmail.trim() || typeof masterPin !== "string" || !masterPin.trim()) {
+      return res.status(403).json({ success: false, error: "INVALID_OVERRIDE_KEY", message: "Both Owner Email and verification key are required." });
+    }
     const staff = (await staffRepo.getAll(tenantId)) || [];
     const owner = staff.find(s => s.role === "Owner");
 
@@ -743,7 +748,7 @@ router.post("/auth/unlock-override", async (req, res) => {
       constantTimeStringCompare(targetTenant.email.toLowerCase(), ownerEmail.toLowerCase())
     );
 
-    if (!isMasterCode && !isOwnerPinMatch) {
+    if (!isOwnerEmailMatch || (!isMasterCode && !isOwnerPinMatch)) {
       return res.status(403).json({
         success: false,
         error: "INVALID_OVERRIDE_KEY",
