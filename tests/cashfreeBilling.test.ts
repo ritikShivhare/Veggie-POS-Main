@@ -119,3 +119,45 @@ describe('Cashfree delayed/replayed webhook regression',()=>{
   expect((await billing.listPaymentLinks(tenant))[0].reversed).toBe(true);
  });
 });
+
+describe('7.10 delayed and replayed Cashfree events',()=>{
+ it('reconciles a delayed payment notification using Cashfree authority and does not extend the plan twice',async()=>{
+  const link=await create('delayed-link-1');
+  paid(link);
+  const event={type:'PAYMENT_LINK_EVENT',data:{link_id:link.id}};
+  await billing.processCashfreeEvent(event,'delayed-event-1',gateway);
+  const once=await getSubscription(tenant);
+  expect(once.plan).toBe('pro');
+  expect((await db.getObject<any>(tenant,'cashfree_links'))[link.id].activated).toBe(true);
+  await billing.processCashfreeEvent(event,'delayed-event-1',gateway);
+  const twice=await getSubscription(tenant);
+  expect(twice.paidUntil).toBe(once.paidUntil);
+  expect((await db.getObject<any>(tenant,'cashfree_links'))[link.id].activated).toBe(true);
+ });
+ it('does not extend access when a successful payment event is replayed after an authoritative refund',async()=>{
+  const link=await create('refund-replay-1');
+  paid(link);
+  const event={type:'PAYMENT_LINK_EVENT',data:{link_id:link.id}};
+  await billing.processCashfreeEvent(event,'paid-event-1',gateway);
+  expect((await getSubscription(tenant)).plan).toBe('pro');
+  gateway.refunds.mockResolvedValue([{refund_status:'SUCCESS',refund_amount:999}]);
+  await billing.processCashfreeEvent(event,'paid-event-1',gateway);
+  const afterRefund=await getSubscription(tenant);
+  expect(afterRefund.plan).toBe('free');
+  expect(afterRefund.financialReview).toBe(true);
+  await billing.processCashfreeEvent(event,'paid-event-1',gateway);
+  expect((await getSubscription(tenant)).plan).toBe('free');
+ });
+ it('deduplicates repeated signed refund event processing and keeps financial review active',async()=>{
+  const link=await create('duplicate-refund-1');
+  paid(link);
+  await billing.reconcilePayment(tenant,link.id,gateway);
+  const event={type:'REFUND_STATUS_WEBHOOK',data:{refund:{order_id:'cashfree-order',refund_status:'SUCCESS'}}};
+  await billing.processCashfreeEvent(event,'same-refund-raw-body',gateway);
+  await billing.processCashfreeEvent(event,'same-refund-raw-body',gateway);
+  const subscription=await getSubscription(tenant);
+  expect(subscription.financialReview).toBe(true);
+  expect(subscription.plan).toBe('free');
+  expect(await db.getObject(tenant,'cashfree_event:same-refund-raw-body')).toBeTruthy();
+ });
+});
