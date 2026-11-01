@@ -311,8 +311,8 @@ export default function PinLogin({
   // Handle Emergency Master Unlock Override
   const handleEmergencyUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!overrideMasterPin && !overrideOwnerEmail) {
-      setOverrideError("Please enter Owner Master PIN or Owner Email.");
+    if (!overrideMasterPin.trim() || !overrideOwnerEmail.trim()) {
+      setOverrideError("Enter both your registered Owner Email and Owner PIN or Master Key.");
       return;
     }
     setOverrideError("");
@@ -610,7 +610,7 @@ export default function PinLogin({
             ) : (
               <form onSubmit={handleEmergencyUnlock} className="mt-4 space-y-3">
                 <p className="text-xs text-[#5A6056] leading-relaxed">
-                  Enter your registered <strong>Owner Master PIN</strong> or <strong>Owner Email</strong> to verify authority and unlock this device.
+                  Enter your registered <strong>Owner Email</strong> and <strong>Owner PIN or Master Key</strong> to unlock this device.
                 </p>
 
                 <div className="space-y-1">
@@ -629,7 +629,7 @@ export default function PinLogin({
 
                 <div className="relative flex items-center justify-center my-2">
                   <div className="border-t border-[#EAE5DA] w-full" />
-                  <span className="bg-[#F4F0E8] px-2 text-[10px] font-mono text-[#787F74] uppercase">OR</span>
+                  <span className="bg-[#F4F0E8] px-2 text-[10px] font-mono text-[#787F74] uppercase">AND</span>
                 </div>
 
                 <div className="space-y-1">
