@@ -241,7 +241,11 @@ function generateVerificationEmailHtml(params: {
 
 // Pending challenges are protected server records; no disk/plaintext credentials.
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
-router.use(['/auth/signup','/auth/resend-otp','/auth/verify','/auth/unlock-override'], authLimiter);
+router.use(['/auth/signup','/auth/resend-otp','/auth/verify'], authLimiter);
+// Emergency unlock has its own much stricter per-IP attempt budget.
+const unlockLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, standardHeaders: true, legacyHeaders: false,
+  message: { success: false, error: "UNLOCK_RATE_LIMITED", message: "Too many unlock attempts. Try again later." } });
+router.use('/auth/unlock-override', unlockLimiter);
 async function syncPendingSignupsFromDb(): Promise<void> {
   const records = await Database.getInstance().getObject<PendingSignup[]>('saas-admin', 'signup_challenges_v2') || [];
   pendingSignups.clear();
