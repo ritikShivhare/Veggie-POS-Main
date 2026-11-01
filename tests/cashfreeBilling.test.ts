@@ -65,3 +65,57 @@ it('routes chargebacks by server-owned Cashfree order mapping',async()=>{
  await billing.processCashfreeEvent({type:'DISPUTE_CREATED',data:{order_details:{order_id:'cashfree-order'},dispute:{dispute_type:'CHARGEBACK'}}},'dispute-1',gateway);
  expect((await getSubscription(tenant)).financialReview).toBe(true);expect((await getSubscription(tenant)).plan).toBe('free');
 });
+
+// Test #7.10: delayed and replayed Cashfree webhooks.
+// These tests use an in-memory database and an injected fake Cashfree gateway:
+// no outbound payment requests, production data, or subscriptions are modified.
+describe('Cashfree delayed/replayed webhook regression',()=>{
+ it('checks Cashfree before honoring a delayed, validly signed PAID claim',async()=>{
+  const link=await create('delayed-event-01');
+  const event={type:'PAYMENT_LINK_EVENT',data:{link_id:link.id,link_status:'PAID',tenant_id:'spoofed-tenant'}};
+  const raw=Buffer.from(JSON.stringify(event));
+  const oldTimestamp=String(Date.now()-2*60*60*1000);
+  const signature=crypto.createHmac('sha256','test-secret').update(oldTimestamp).update(raw).digest('base64');
+  expect(verifyCashfreeSignature(raw,signature,oldTimestamp,'test-secret')).toBe(true);
+  expect(verifyCashfreeSignature(Buffer.concat([raw,Buffer.from(' ')]),signature,oldTimestamp,'test-secret')).toBe(false);
+  gateway.get.mockResolvedValue({link_id:link.id,link_status:'ACTIVE',link_currency:'INR',link_amount:999,link_amount_paid:0});
+  await billing.processCashfreeEvent(event,'delayed-event-01',gateway);
+  expect((await getSubscription(tenant)).plan).toBe('free');
+  // The same webhook body is safe to retry only after Cashfree itself confirms payment.
+  paid(link);
+  await billing.processCashfreeEvent(event,'delayed-event-01',gateway);
+  expect((await getSubscription(tenant)).plan).toBe('pro');
+  expect((await getSubscription('spoofed-tenant')).plan).toBe('free');
+ });
+
+ it('does not extend the paid plan twice when a successful link event is replayed',async()=>{
+  const link=await create('replayed-event-01');paid(link);
+  const event={type:'PAYMENT_LINK_EVENT',data:{link_id:link.id}};
+  await billing.processCashfreeEvent(event,'same-signed-body',gateway);
+  const first=(await getSubscription(tenant)).paidUntil;
+  expect(first).toBeTruthy();
+  await billing.processCashfreeEvent(event,'same-signed-body',gateway);
+  const again=await getSubscription(tenant);
+  expect(again.plan).toBe('pro');
+  expect(again.paidUntil).toBe(first);
+  const links=await billing.listPaymentLinks(tenant);
+  expect(links.filter(l=>l.activated)).toHaveLength(1);
+ });
+
+ it('deduplicates a refund webhook and blocks an old PAID event after reversal',async()=>{
+  const link=await create('reversed-event-01');paid(link);
+  const paidEvent={type:'PAYMENT_LINK_EVENT',data:{link_id:link.id}};
+  await billing.processCashfreeEvent(paidEvent,'paid-event',gateway);
+  const refund={type:'REFUND_STATUS_WEBHOOK',data:{refund:{order_id:'cashfree-order',refund_status:'SUCCESS',refund_amount:999,refund_currency:'INR'}}};
+  await billing.processCashfreeEvent(refund,'same-refund-payload',gateway);
+  const first=await db.getObject<any>(tenant,'cashfree_event:same-refund-payload');
+  expect(first?.processedAt).toBeTruthy();
+  await billing.processCashfreeEvent(refund,'same-refund-payload',gateway);
+  expect(await db.getObject<any>(tenant,'cashfree_event:same-refund-payload')).toEqual(first);
+  await billing.processCashfreeEvent(paidEvent,'late-paid-event',gateway);
+  const sub=await getSubscription(tenant);
+  expect(sub.financialReview).toBe(true);
+  expect(sub.plan).toBe('free');
+  expect((await billing.listPaymentLinks(tenant))[0].reversed).toBe(true);
+ });
+});
