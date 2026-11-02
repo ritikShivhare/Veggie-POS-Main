@@ -34,8 +34,6 @@ services:
         sync: false
       - key: CASHFREE_ENV
         value: sandbox
-      - key: APP_URL
-        sync: false
       - key: CASHFREE_APP_ID
         sync: false
       - key: CASHFREE_SECRET_KEY
