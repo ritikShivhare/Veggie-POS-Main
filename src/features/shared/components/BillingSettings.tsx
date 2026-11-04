@@ -63,14 +63,14 @@ export function BillingSettings({tenantId}:BillingSettingsProps){
      {id==='enterprise' && sub.plan==='pro' && <p id="elite-upgrade-note" className="text-sm font-medium text-amber-800">Elite upgrade: verified payment starts a fresh 30-day cycle immediately. No proration or credit for unused Pro days.</p>}
      {id!=='free' && <button aria-describedby={id==='enterprise' && sub.plan==='pro'?'elite-upgrade-note':undefined} className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-semibold rounded-lg px-3 py-2.5 disabled:opacity-50 transition-colors" disabled={!!busy || (pending?.status==='CREATING' && pending.plan!==id)} onClick={()=>startCheckout(id)}>{busy===id?'Creating…':pending?.status==='CREATING'?'Recover checkout':'Pay with Cashfree'}</button>}
     </div>)}</div>
-    <p className="text-xs text-slate-600">Payment links expire in 60 minutes. A new link cancels the previous pending one. Elite upgrades start a fresh 30-day cycle without proration. Paid renewals within 24 hours of expiry retain the original renewal date.</p>
    </>}
-   {!!data.links?.length && <div className="space-y-2"><h3 className="font-semibold">Recent payment links</h3>{data.links.slice(0,10).map((link:any)=><div key={link.id} className="border border-slate-200 rounded-xl p-4 text-sm space-y-2">
-    <p>{PLAN_LIMITS[link.plan as keyof typeof PLAN_LIMITS]?.label} · ₹{link.amount} · {link.status}</p>
-    <p>Expires: {new Date(link.expiresAt).toLocaleString()}</p>
-    {!sub.financialReview && link.url && link.status==='ACTIVE' && Date.parse(link.expiresAt)>Date.now() && <a href={link.url} target="_blank" rel="noreferrer" className="text-blue-700 underline mr-4">Open payment link</a>}
-    <button disabled={!!busy} className="text-blue-700 underline" onClick={()=>action('check',async()=>{await api('check-payment-status',{linkId:link.id});})}>Check Payment Status</button>
-   </div>)}</div>}
+   {!!pending && <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2" role="status">
+    <p className="font-medium text-slate-800">Payment in progress</p>
+    <div className="flex flex-wrap gap-4">
+     {!sub.financialReview && pending.url && pending.status==='ACTIVE' && Date.parse(pending.expiresAt)>Date.now() && <a href={pending.url} target="_blank" rel="noreferrer" className="text-blue-700 underline">Continue payment</a>}
+     <button disabled={!!busy} className="text-blue-700 underline disabled:opacity-50" onClick={()=>action('check',async()=>{await api('check-payment-status',{linkId:pending.id});})}>Check Payment Status</button>
+    </div>
+   </div>}
   </>}
  </section>;
 }
