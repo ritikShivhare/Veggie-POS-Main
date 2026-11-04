@@ -33,11 +33,19 @@ router.post('/billing/check-payment-status',authMiddleware,requireRole('Owner'),
   const tenant=(req as any).tenantId;res.json({success:true,link:await reconcilePayment(tenant,req.body.linkId),subscription:await getSubscription(tenant)});}catch(error){handleApiError(res,error);}
 });
 router.post('/billing/create-portal-session',authMiddleware,requireRole('Owner'),(_req,res)=>res.status(410).json({success:false,error:'STRIPE_RETIRED',message:'Use Check Payment Status or select a Cashfree plan.'}));
+// Log fixed error categories only: never log payloads, headers, signatures, IDs, or provider errors.
+const logCashfreeWebhookReject=(category:'WEBHOOK_NOT_CONFIGURED'|'INVALID_SIGNATURE'|'INVALID_JSON'|'UNKNOWN_PAYMENT'|'PROCESSING_ERROR')=>{
+ console.warn('[CASHFREE_WEBHOOK_REJECTED]',category);
+};
 router.post('/webhooks/cashfree',async(req,res)=>{
  const sig=req.headers['x-webhook-signature'],ts=req.headers['x-webhook-timestamp'];
- if(!process.env.CASHFREE_SECRET_KEY) return res.status(503).json({success:false,error:'WEBHOOK_NOT_CONFIGURED'});
- if(typeof sig!=='string' || typeof ts!=='string' || !verifyCashfreeSignature(req.body,sig,ts,process.env.CASHFREE_SECRET_KEY)) return res.status(400).json({success:false,error:'INVALID_SIGNATURE'});
- try{const event=JSON.parse(req.body.toString('utf8'));const hash=crypto.createHash('sha256').update(req.body).digest('hex');await processCashfreeEvent(event,hash);res.json({received:true});}catch(error){handleApiError(res,error);}
+ if(!process.env.CASHFREE_SECRET_KEY) {logCashfreeWebhookReject('WEBHOOK_NOT_CONFIGURED');return res.status(503).json({success:false,error:'WEBHOOK_NOT_CONFIGURED'});}
+ if(typeof sig!=='string' || typeof ts!=='string' || !verifyCashfreeSignature(req.body,sig,ts,process.env.CASHFREE_SECRET_KEY)) {logCashfreeWebhookReject('INVALID_SIGNATURE');return res.status(400).json({success:false,error:'INVALID_SIGNATURE'});}
+ try{const event=JSON.parse(req.body.toString('utf8'));const hash=crypto.createHash('sha256').update(req.body).digest('hex');await processCashfreeEvent(event,hash);res.json({received:true});}catch(error){
+  const category=error instanceof SyntaxError?'INVALID_JSON':(error && typeof error==='object' && 'code' in error && error.code==='UNKNOWN_PAYMENT'?'UNKNOWN_PAYMENT':'PROCESSING_ERROR');
+  logCashfreeWebhookReject(category);
+  handleApiError(res,error);
+ }
 });
 router.post('/webhooks/stripe',(_req,res)=>res.status(410).json({success:false,error:'STRIPE_RETIRED'}));
 // Old mock paths are intentionally not registered in any environment.
