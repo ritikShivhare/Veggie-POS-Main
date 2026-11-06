@@ -14,6 +14,21 @@
   --color-leaf: #6E8F45;
   --color-leaf-dark: #567234;
   --color-saffron: #D97706;
+
+  /* Aatmyam UI v1: additive semantic tokens; older colors stay until screen migrations. */
+  --color-app-bg: #F8FAFC;
+  --color-app-surface: #FFFFFF;
+  --color-app-primary: #2563EB;
+  --color-app-primary-hover: #1D4ED8;
+  --color-app-text: #0F172A;
+  --color-app-muted: #475569;
+  --color-app-border: #E2E8F0;
+  --color-app-success: #059669;
+  --color-app-warning: #D97706;
+  --color-app-danger: #E11D48;
+
+  --radius-app-card: 0.875rem;
+  --radius-app-control: 0.625rem;
 }
 
 /* Base typography defaults */
