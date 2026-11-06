@@ -169,7 +169,7 @@ describe("End-to-End Smoke Tests: Multi-Tenant Lifecycle, Security & Realtime Is
       id: "ord-smoke-101",
       customerName: "Rohan Verma",
       tableNumber: "T-4",
-      total: 440,
+      total: 462,
       paymentMethod: "UPI",
       status: "Completed",
       date: new Date().toISOString(),
@@ -202,7 +202,7 @@ describe("End-to-End Smoke Tests: Multi-Tenant Lifecycle, Security & Realtime Is
     const committedOrder = await orderRepo.getById(TENANT_T1, "ord-smoke-101");
     expect(committedOrder).not.toBeNull();
     expect(committedOrder?.id).toBe("ord-smoke-101");
-    expect(committedOrder?.total).toBe(440);
+    expect(committedOrder?.total).toBe(462);
     expect(committedOrder?.status).toBe("Completed");
     expect(committedOrder?.customerName).toBe("Rohan Verma");
     expect((committedOrder as any)?.version).toBe(1);
@@ -308,6 +308,8 @@ describe("End-to-End Smoke Tests: Multi-Tenant Lifecycle, Security & Realtime Is
       expect(failData.message).toContain("Database is unavailable");
 
       // Verify the failing row was NOT written to database
+      await expect(orderRepo.getById(TENANT_T1,"ord-fail-503")).rejects.toMatchObject({status:503});
+      db.resumeDatabase();
       const row = await orderRepo.getById(TENANT_T1, "ord-fail-503");
       expect(row).toBeNull();
     } finally {
@@ -320,10 +322,10 @@ describe("End-to-End Smoke Tests: Multi-Tenant Lifecycle, Security & Realtime Is
     const recoveredOrderPayload = {
       id: "ord-recovered-200",
       customerName: "Recovered Order",
-      total: 250,
-      status: "Completed",
+      total: 231,
+      status: "Pending",
       date: new Date().toISOString(),
-      items: []
+      items: [{menuItemId:"m-thali",quantity:1}]
     };
 
     const recoverRes = await fetch(`${serverUrl}/api/orders`, {

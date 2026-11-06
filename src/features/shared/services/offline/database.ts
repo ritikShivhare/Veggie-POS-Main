@@ -141,6 +141,58 @@ export class VeggiePOSLocalDatabase extends Dexie {
         console.warn("[LocalDB Migration V3] Upgrade warning on outbox store:", err);
       }
     });
+    // Dexie cannot change an existing primary key. Copy into new stores first,
+    // then remove the legacy stores in v5; IDs remain unchanged for the server.
+    this.version(4).stores({
+      menuItems_v4: "[tenantId+id], id, tenantId, branchId, category, isAvailable, updatedAt, version, [tenantId+category], [tenantId+updatedAt], [tenantId+id]",
+      ingredients_v4: "[tenantId+id], id, tenantId, branchId, currentStock, minStock, updatedAt, version, [tenantId+updatedAt], [tenantId+id]",
+      recipes_v4: "[tenantId+id], id, tenantId, branchId, menuItemId, updatedAt, version, [tenantId+menuItemId], [tenantId+id]",
+      staff_v4: "[tenantId+id], id, tenantId, branchId, role, updatedAt, version, [tenantId+role], [tenantId+id]",
+      orders_v4: "[tenantId+id], id, tenantId, branchId, status, date, cashierId, updatedAt, version, [tenantId+status], [tenantId+date], [tenantId+id]",
+      orderItems_v4: "[tenantId+id], id, tenantId, branchId, orderId, menuItemId, updatedAt, version, [tenantId+orderId], [tenantId+id]",
+      customers_v4: "[tenantId+id], id, tenantId, branchId, phone, name, updatedAt, version, [tenantId+phone], [tenantId+id]",
+      shifts_v4: "[tenantId+id], id, tenantId, branchId, staffId, status, startTime, updatedAt, version, [tenantId+status], [tenantId+id]",
+      settings_v4: "[tenantId+id], id, tenantId, branchId, key, updatedAt, version, [tenantId+key], [tenantId+id]",
+      outbox_v4: "[tenantId+id], id, tenantId, branchId, operationId, status, entityType, entityId, operationType, createdAt, clientTimestamp, nextRetryAt, updatedAt, version, [tenantId+status], [tenantId+id]",
+      syncMetadata_v4: "[tenantId+id], id, tenantId, branchId, sliceName, updatedAt, version, [tenantId+sliceName], [tenantId+id]"
+    }).upgrade(async tx => {
+      for (const name of ['menuItems', 'ingredients', 'recipes', 'staff', 'orders', 'orderItems', 'customers', 'shifts', 'settings', 'outbox', 'syncMetadata']) {
+        const rows = await tx.table(name).toArray();
+        const scoped = rows.filter((r:any)=>r.tenantId && r.id && !(name==='settings' && ['managerPin','pin','password','passwordHash','slackWebhookUrl','sentryDsn','emailAlertAddress'].includes(r.key))).map((r:any)=> {
+          const credentials=['pin','password','passwordHash','managerPin','sessionId'];
+          let removed=false;
+          const safe=JSON.parse(JSON.stringify(r,(key,value)=>{if(credentials.includes(key)){removed=true;return undefined;}return value;}));
+          if(name==='outbox' && removed) {safe.status='validation_error';safe.lastError='Legacy credentials were removed. Review and reauthorize this command.';}
+          return safe;
+        });
+        if (scoped.length) await tx.table(name+"_v4").bulkPut(scoped);
+      }
+    });
+    this.version(5).stores({
+      menuItems: null,
+      ingredients: null,
+      recipes: null,
+      staff: null,
+      orders: null,
+      orderItems: null,
+      customers: null,
+      shifts: null,
+      settings: null,
+      outbox: null,
+      syncMetadata: null
+    });
+    this.menuItems = this.table("menuItems_v4");
+    this.ingredients = this.table("ingredients_v4");
+    this.recipes = this.table("recipes_v4");
+    this.staff = this.table("staff_v4");
+    this.orders = this.table("orders_v4");
+    this.orderItems = this.table("orderItems_v4");
+    this.customers = this.table("customers_v4");
+    this.shifts = this.table("shifts_v4");
+    this.settings = this.table("settings_v4");
+    this.outbox = this.table("outbox_v4");
+    this.syncMetadata = this.table("syncMetadata_v4");
+
   }
 }
 

@@ -190,10 +190,10 @@ export default function StaffQrModal({
         </head>
         <body>
           <div class="card">
-            <div class="badge">VeggiePOS • Staff Terminal</div>
+            <div class="badge">Aatmyam POS • Staff Terminal</div>
             <h1>${tenant.name}</h1>
             <p class="sub">कर्मचारी लॉगिन क्यूआर कोड (Staff Quick Login)</p>
-            
+
             <div class="qr-wrapper">
               <img src="${qrDataUrl}" alt="Staff QR Code" />
             </div>
@@ -213,7 +213,7 @@ export default function StaffQrModal({
             </div>
 
             <div class="footer">
-              सुरक्षित प्रमाणीकरण • Powered by VeggiePOS Cloud Suite
+              सुरक्षित प्रमाणीकरण • Powered by Aatmyam POS Cloud Suite
             </div>
           </div>
           <script>
@@ -310,7 +310,7 @@ export default function StaffQrModal({
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-200">
-          
+
           {/* Main QR Display Card */}
           <div className="bg-slate-950 border border-slate-800/80 rounded-2xl p-5 flex flex-col items-center text-center space-y-4">
             <div className="relative group">

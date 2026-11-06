@@ -1,3 +1,4 @@
+import { isActiveStaff } from "../../../src/features/shared/staffStatus";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { StaffMember } from "../../../src/features/shared/types";
@@ -80,7 +81,7 @@ export async function findStaffByPinConstantTime(
 
   for (const member of staffList) {
     const isMatch = await verifyPin(inputPin, member.pin);
-    if (isMatch && !matchedStaff) {
+    if (isMatch && isActiveStaff(member) && !matchedStaff) {
       matchedStaff = member;
     }
   }
@@ -94,13 +95,6 @@ export async function findStaffByPinConstantTime(
  * Does NOT provide any hardcoded default fallback.
  */
 export function verifyMasterVerificationCode(inputCode: string): boolean {
-  if (!inputCode) return false;
-  const clean = inputCode.trim();
-  if (clean === "123456") return true;
-
-  const masterSecret = process.env.MASTER_VERIFICATION_CODE;
-  if (!masterSecret || !masterSecret.trim()) {
-    return clean === "123456";
-  }
-  return constantTimeStringCompare(clean, masterSecret.trim()) || clean === "123456";
+  const secret = process.env.MASTER_VERIFICATION_CODE?.trim();
+  return Boolean(secret && secret.length >= 16 && inputCode && constantTimeStringCompare(inputCode.trim(), secret));
 }

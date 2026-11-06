@@ -1,8 +1,9 @@
 import http from "http";
+import { Database } from "./database";
 import { WebSocketServer, WebSocket } from "ws";
 import { parse as parseUrl } from "url";
 import { parse as parseCookie } from "cookie";
-import { SessionService, SESSION_COOKIE_NAME } from "../auth/SessionService";
+import { SessionService, SESSION_COOKIE_NAME, sessionEvents } from "../auth/SessionService";
 
 export interface AuthenticatedSocket extends WebSocket {
   isAlive?: boolean;
@@ -12,6 +13,7 @@ export interface AuthenticatedSocket extends WebSocket {
   role?: string;
   authenticatedAt?: number;
   socketId?: string;
+  sessionId?: string;
 }
 
 export interface MinimalRealtimeEvent {
@@ -29,7 +31,9 @@ export class RealtimeService {
   private tenantSockets: Map<string, Set<AuthenticatedSocket>> = new Map();
   private pingInterval: NodeJS.Timeout | null = null;
 
-  private constructor() {}
+  private constructor() {
+    sessionEvents.on("revoked",(id:string)=>{for(const set of this.tenantSockets.values()) for(const ws of set) if(ws.sessionId===id){this.removeSocket(ws);ws.close(4401,"Session revoked");}});
+  }
 
   public static getInstance(): RealtimeService {
     if (!RealtimeService.instance) {
@@ -60,6 +64,10 @@ export class RealtimeService {
       }
 
       try {
+        const origin=request.headers.origin;
+        const allowed=[process.env.APP_URL,...(process.env.ALLOWED_ORIGINS || "").split(",")].filter(Boolean);
+        if (origin && !allowed.includes(origin) && new URL(origin).host!==request.headers.host) throw new Error("Untrusted WebSocket origin");
+        if (!origin && process.env.NODE_ENV==="production") throw new Error("Origin is required");
         // Authenticate the connection during HTTP upgrade handshake
         const session = await this.authenticateRequest(request);
 
@@ -70,6 +78,7 @@ export class RealtimeService {
 
           if (session) {
             // Immediate server-mediated authorization
+            authWs.sessionId=session.sessionId;
             this.bindSocketToTenant(authWs, session.tenantId, session.userId, session.userName, session.role);
           } else {
             // Give client a grace period of 5 seconds to authenticate via in-band message
@@ -132,7 +141,7 @@ export class RealtimeService {
     const query = parsed.query;
 
     // 1. Check query parameter token or sessionId
-    let sessionId = (query.token || query.sessionId) as string | undefined;
+    let sessionId = process.env.NODE_ENV!=="production" ? (query.token || query.sessionId) as string | undefined : undefined;
 
     // 2. Check Authorization header
     if (!sessionId && request.headers.authorization) {
@@ -257,6 +266,7 @@ export class RealtimeService {
           }
 
           // Strict server authorization: socket gets bound to session.tenantId
+          ws.sessionId=session.sessionId;
           this.bindSocketToTenant(ws, session.tenantId, session.userId, session.userName, session.role);
           return;
         }
@@ -327,6 +337,7 @@ export class RealtimeService {
     }
   ): number {
     if (!tenantId) return 0;
+    if (Database.getInstance().afterCommit(()=>this.broadcastToTenant(tenantId,eventType,{slice:options?.slice,entityId:options?.entityId}))) return 0;
 
     const sockets = this.tenantSockets.get(tenantId);
     if (!sockets || sockets.size === 0) {
@@ -339,7 +350,7 @@ export class RealtimeService {
       slice: options?.slice,
       entityId: options?.entityId,
       timestamp: Date.now(),
-      data: options?.metadata
+      data: undefined
     };
 
     const serialized = JSON.stringify(payload);

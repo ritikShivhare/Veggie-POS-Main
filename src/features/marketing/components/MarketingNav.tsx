@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { MarketingRoute } from "../types";
+import BrandLogo from "../../shared/components/BrandLogo";
 import {
   Menu,
   X,
@@ -63,18 +64,7 @@ export default function MarketingNav({
             className="flex items-center gap-2.5 group text-left cursor-pointer focus:outline-hidden"
             id="brand-home-link"
           >
-            <div className="w-8 h-8 rounded-lg bg-[#181A18] text-[#FBF9F5] flex items-center justify-center font-serif text-lg font-bold border border-[#2E332D] shadow-xs group-hover:bg-[#6E8F45] transition-colors duration-200">
-              V
-            </div>
-            <div className="flex flex-col">
-              <span className="font-serif text-lg tracking-tight font-bold text-[#181A18] flex items-center gap-1.5">
-                Veggie POS
-                <span className="w-1.5 h-1.5 rounded-full bg-[#6E8F45]"></span>
-              </span>
-              <span className="text-[10px] uppercase tracking-wider font-mono text-[#787F74]">
-                Hospitality Command
-              </span>
-            </div>
+            <BrandLogo />
           </button>
 
           {/* Desktop Navigation Links */}

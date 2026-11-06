@@ -1,22 +1,43 @@
+import {getPlanLimits} from '../billing/SubscriptionLifecycle';
 import { BaseRepository, DatabaseTransaction } from "../shared/BaseRepository";
 import { StaffMember } from "../../../src/features/shared/types";
-import { hashPin, isBcryptHash } from "../auth/PinSecurityService";
+import { countActiveStaff, isActiveStaff } from "../../../src/features/shared/staffStatus";
+import { getSubscription } from "../shared/subscription";
+import { hashPin } from "../auth/PinSecurityService";
 
 export class StaffRepository extends BaseRepository<StaffMember> {
   protected sliceKey = "staffList";
 
-  override async add(tenantId: string, item: StaffMember): Promise<void> {
-    if (item && item.pin) {
-      item.pin = await hashPin(item.pin);
-    }
-    return super.add(tenantId, item);
+  /** Called inside the tenant transaction by both command and sync writes. */
+  async assertActiveCapacity(tenantId: string, next: StaffMember[]): Promise<void> {
+    const current = (await this.getAll(tenantId)) || [];
+    const nonowners=(list:StaffMember[])=>list.filter(s=>s.role!=='Owner' && isActiveStaff(s)).length;
+    const activeOwners=(list:StaffMember[])=>list.filter(s=>s.role==='Owner' && isActiveStaff(s)).length;
+    if(activeOwners(next)>Math.max(1,activeOwners(current))) throw Object.assign(new Error('Only one active Owner is allowed per restaurant.'),{status:403,code:'OWNER_LIMIT_EXCEEDED'});
+    const nextCount = nonowners(next);
+    if (nextCount <= nonowners(current)) return;
+    const sub = await getSubscription(tenantId);
+    const limit = getPlanLimits(sub).staffCount;
+    if (nextCount > limit) throw Object.assign(new Error(`Your plan supports up to ${limit} active staff members.`), {
+      status: 403, code: 'PLAN_LIMIT_EXCEEDED'
+    });
   }
 
-  override async update(tenantId: string, item: StaffMember, expectedVersion?: number): Promise<StaffMember> {
-    if (item && item.pin) {
-      item.pin = await hashPin(item.pin);
-    }
-    return super.update(tenantId, item, expectedVersion);
+  override async add(tenantId: string, item: StaffMember, trx?: DatabaseTransaction): Promise<void> {
+    if (!trx) return this.db.runTransaction(tenantId, tx => this.add(tenantId, item, tx));
+    const record = { ...item, status: item.status ?? 'active' } as StaffMember;
+    await this.assertActiveCapacity(tenantId, [...((await this.getAll(tenantId)) || []), record]);
+    if (record.pin) { record.pin = await hashPin(record.pin); item.pin = record.pin; }
+    return super.add(tenantId, record, trx);
+  }
+
+  override async update(tenantId: string, item: StaffMember, expectedVersion?: number, trx?: DatabaseTransaction): Promise<StaffMember> {
+    if (!trx) return this.db.runTransaction(tenantId, tx => this.update(tenantId, item, expectedVersion, tx));
+    const current = (await this.getAll(tenantId)) || [];
+    await this.assertActiveCapacity(tenantId, current.map(s => s.id === item.id ? { ...s, ...item } : s));
+    const record = { ...item };
+    if (record.pin) { record.pin = await hashPin(record.pin); item.pin = record.pin; }
+    return super.update(tenantId, record, expectedVersion, trx);
   }
 
   override async saveAll(tenantId: string, items: StaffMember[], trx?: DatabaseTransaction): Promise<void> {
@@ -36,121 +57,7 @@ export class StaffRepository extends BaseRepository<StaffMember> {
       return list;
     }
 
-    // Default seed lists for known demo tenants if they are not yet in database (All PINs securely pre-hashed with bcrypt)
-    if (tenantId === "veg-main-001") {
-      const defaultStaff: StaffMember[] = [
-        {
-          id: "s-rahul",
-          name: "Rahul Sharma",
-          role: "Owner",
-          pin: "$2b$10$.eV6LbBYV68J0EO0MLhLIe5ZE8IBgOYdpvK2GJclRMnMToWZwhUEe", // "11111"
-          permissions: ["billing", "inventory", "reports", "settings"]
-        },
-        {
-          id: "s-amit",
-          name: "Amit Kumar",
-          role: "Manager",
-          pin: "$2b$10$pmJPJKtm9Eicw.KWjbWuIeeCqavg3NMmldwRH4rd28S4pFRqik7lC", // "2222"
-          permissions: ["billing", "inventory", "reports"]
-        },
-        {
-          id: "s-mohan",
-          name: "Mohan Lal",
-          role: "Staff",
-          pin: "$2b$10$4mW6ViNBwGmmEUjQ.BuATefJF5PracmvcGD44MQiCxLcXKLQQdY8u", // "3333"
-          permissions: ["billing"]
-        }
-      ];
-      await this.saveAll(tenantId, defaultStaff);
-      return defaultStaff;
-    }
-
-    if (tenantId === "veg-reetesh-dhaba") {
-      const defaultStaff: StaffMember[] = [
-        {
-          id: "s-reetesh-dhaba",
-          name: "Reetesh",
-          role: "Owner",
-          pin: "$2b$10$Xx13wGB3RVuvQ/AwqAK7y.gBSVVPiNrt9B8R/JA/dd/pqeWUiuBXq", // "12345"
-          permissions: ["billing", "inventory", "reports", "settings"]
-        },
-        {
-          id: "s-amit-reetesh",
-          name: "Amit Kumar",
-          role: "Manager",
-          pin: "$2b$10$pmJPJKtm9Eicw.KWjbWuIeeCqavg3NMmldwRH4rd28S4pFRqik7lC", // "2222"
-          permissions: ["billing", "inventory", "reports"]
-        },
-        {
-          id: "s-mohan-reetesh",
-          name: "Mohan Lal",
-          role: "Staff",
-          pin: "$2b$10$4mW6ViNBwGmmEUjQ.BuATefJF5PracmvcGD44MQiCxLcXKLQQdY8u", // "3333"
-          permissions: ["billing"]
-        }
-      ];
-      await this.saveAll(tenantId, defaultStaff);
-      return defaultStaff;
-    }
-
-    if (tenantId === "veg-cp-002") {
-      const defaultStaff: StaffMember[] = [
-        {
-          id: "s-amit-cp",
-          name: "Amit Verma",
-          role: "Owner",
-          pin: "$2b$10$cYPW6LNOj2Ui0QPSaKvMLuxLeP7T6yLle3ZhOTt75dwrotTntdX4W", // "22222"
-          permissions: ["billing", "inventory", "reports", "settings"]
-        },
-        {
-          id: "s-amit-kumar-cp",
-          name: "Amit Kumar",
-          role: "Manager",
-          pin: "$2b$10$pmJPJKtm9Eicw.KWjbWuIeeCqavg3NMmldwRH4rd28S4pFRqik7lC", // "2222"
-          permissions: ["billing", "inventory", "reports"]
-        },
-        {
-          id: "s-mohan-cp",
-          name: "Mohan Lal",
-          role: "Staff",
-          pin: "$2b$10$4mW6ViNBwGmmEUjQ.BuATefJF5PracmvcGD44MQiCxLcXKLQQdY8u", // "3333"
-          permissions: ["billing"]
-        }
-      ];
-      await this.saveAll(tenantId, defaultStaff);
-      return defaultStaff;
-    }
-
-    // Universal fallback: For restaurant tenants without staff records,
-    // seed standard default roles so terminals and staff are always functional.
-    // Skip automatic seeding for test/mock tenant IDs to keep test isolation clean.
-    if (tenantId && !tenantId.startsWith("test-")) {
-      const defaultStaff: StaffMember[] = [
-        {
-          id: `s-owner-${tenantId}`,
-          name: "Store Owner",
-          role: "Owner",
-          pin: "$2b$10$Xx13wGB3RVuvQ/AwqAK7y.gBSVVPiNrt9B8R/JA/dd/pqeWUiuBXq", // "12345"
-          permissions: ["billing", "inventory", "reports", "settings"]
-        },
-        {
-          id: `s-mgr-${tenantId}`,
-          name: "Store Manager",
-          role: "Manager",
-          pin: "$2b$10$pmJPJKtm9Eicw.KWjbWuIeeCqavg3NMmldwRH4rd28S4pFRqik7lC", // "2222"
-          permissions: ["billing", "inventory", "reports"]
-        },
-        {
-          id: `s-staff-${tenantId}`,
-          name: "Store Staff",
-          role: "Staff",
-          pin: "$2b$10$4mW6ViNBwGmmEUjQ.BuATefJF5PracmvcGD44MQiCxLcXKLQQdY8u", // "3333"
-          permissions: ["billing"]
-        }
-      ];
-      await this.saveAll(tenantId, defaultStaff);
-      return defaultStaff;
-    }
+    // Demo accounts must never be created from a failed or empty production read.
     return list;
   }
 }

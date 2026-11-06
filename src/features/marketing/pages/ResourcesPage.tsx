@@ -31,47 +31,47 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
       category: "inventory",
       readTime: "6 min read",
       publishDate: "Operational Guide",
-      keyTakeaway: "Linking raw materials to recipes eliminates 3-5% of monthly ingredient shrinkage."
+      keyTakeaway: "Recipe records can help track ingredient usage alongside menu items."
     },
     {
       id: "register-speed",
-      title: "The 8-Second Register Blueprint: Queue-Busting at Peak Rush",
+      title: "Counter Order and Payment Workflow",
       summary:
-        "Tactical layout and keypad hotkey strategies that help cashiers process orders and collect UPI payments in under 10 seconds without calculation errors.",
+        "A practical guide to organizing menu items, recording orders, and keeping payment details with each sale.",
       category: "operations",
       readTime: "5 min read",
       publishDate: "Field Note",
-      keyTakeaway: "Dynamic UPI QR codes eliminate manual cashier change calculations completely."
+      keyTakeaway: "Cash and manual UPI payment records can be kept with restaurant orders."
     },
     {
       id: "cash-drawer-audit",
       title: "The Anti-Pilferage Protocol: Shift Blind Closes & Audit Logs",
       summary:
-        "Why mandatory manager PINs for bill cancellations and automated drawer pop event logging protect thousands in cash float every month.",
+        "Review staff access, permission settings, and end-of-shift sales records as part of a restaurant's operating process.",
       category: "operations",
       readTime: "7 min read",
       publishDate: "Security Best Practice",
-      keyTakeaway: "Blind cash counting at shift end prevents count manipulation."
+      keyTakeaway: "Clear staff permissions can help owners manage access to restaurant tasks."
     },
     {
       id: "hardware-guide",
-      title: "Hardware Independence: Running a 30-Table Floor on Standard Tablets",
+      title: "Using a Browser POS on Familiar Devices",
       summary:
-        "How modern browser architecture lets restaurants use consumer iPads, Android tablets, and ESC/POS thermal printers instead of $2,000 locked terminals.",
+        "Questions to consider when choosing devices and printers for a browser-based restaurant POS.",
       category: "technology",
       readTime: "4 min read",
       publishDate: "Tech Architecture",
-      keyTakeaway: "Avoid proprietary POS hardware leases with open-standard web applications."
+      keyTakeaway: "Discuss device and printer compatibility before setup."
     },
     {
-      id: "multi-outlet-playbook",
-      title: "Multi-Outlet Menu Governance: Centralized Distribution for Chains",
+      id: "single-outlet-operations",
+      title: "Organizing Operations for a Single Restaurant Outlet",
       summary:
-        "How 5-20 location restaurant groups push synchronized menu changes, seasonal promotions, and price tiers in one click from an owner console.",
-      category: "growth",
+        "A practical checklist for keeping menu, staff, and kitchen workflows organized in one restaurant outlet.",
+      category: "operations",
       readTime: "8 min read",
-      publishDate: "Scaling Playbook",
-      keyTakeaway: "Centralized cloud sync prevents pricing drift across franchises."
+      publishDate: "Operations Guide",
+      keyTakeaway: "A clear workflow helps staff understand where to enter orders and update kitchen status."
     },
     {
       id: "kds-transition",
@@ -81,7 +81,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
       category: "operations",
       readTime: "5 min read",
       publishDate: "Kitchen Ops",
-      keyTakeaway: "Color-coded station splitting ensures no tickets get lost behind the grill."
+      keyTakeaway: "Kitchen order statuses help staff review preparation progress."
     }
   ];
 
@@ -92,7 +92,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
 
   return (
     <div className="bg-[#FBF9F5] text-[#1C1E1B] min-h-screen">
-      
+
       {/* 1. RESOURCES HERO */}
       <section className="pt-28 pb-16 md:pt-36 md:pb-24 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -115,7 +115,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
       {/* 2. CATEGORY TABS & ARTICLE GRID */}
       <section className="py-16 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
+
           {/* Category Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
             {[
@@ -123,7 +123,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
               { label: "Inventory & Costing", key: "inventory" },
               { label: "Service Speed & Ops", key: "operations" },
               { label: "Hardware & Tech", key: "technology" },
-              { label: "Multi-Outlet Growth", key: "growth" }
+              { label: "Single Outlet Operations", key: "operations" }
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -194,7 +194,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
       {/* 3. DOWNLOADABLE OPERATOR TOOLKIT CTA */}
       <section className="py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          
+
           <div className="bg-[#181A18] text-[#FBF9F5] rounded-3xl p-8 sm:p-12 border border-[#2E332D] flex flex-col lg:flex-row items-center justify-between gap-8 shadow-xl">
             <div className="space-y-4 max-w-2xl">
               <div className="inline-flex items-center gap-2 text-xs font-mono text-[#84A955]">
@@ -251,7 +251,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
                   OPERATIONAL IMPLEMENTATION SUMMARY:
                 </p>
                 <p className="text-xs text-[#2E4A1C] leading-relaxed">
-                  {activeArticleModal.keyTakeaway} All principles outlined in this guide come pre-configured inside the Veggie POS module workflows.
+                  {activeArticleModal.keyTakeaway} All principles outlined in this guide come pre-configured inside the Aatmyam POS module workflows.
                 </p>
               </div>
             </div>

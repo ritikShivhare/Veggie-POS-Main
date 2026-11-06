@@ -188,7 +188,7 @@ describe("Express idempotencyMiddleware Unit Tests", () => {
       idempotency_key: "ik-var-key",
       status_code: 200,
       response_body: { success: true, sessionUrl: "https://checkout.stripe.com/test" },
-      request_path: "/api/billing/create-checkout-session",
+      request_path: "/api/orders",
       request_method: "POST"
     });
 

@@ -13,7 +13,6 @@ import {
   Clock,
   TrendingUp,
   ShieldCheck,
-  Building
 } from "lucide-react";
 
 interface SolutionsPageProps {
@@ -28,96 +27,77 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
       id: "fine-dine",
       title: "Fine Dining & Casual Table Service",
       category: "Dine-In",
-      tagline: "Paced service, multi-server handoffs, and error-free split checks.",
+      tagline: "Table service and kitchen order tracking.",
       icon: UtensilsCrossed,
       friction:
-        "Servers spend too much time walking back to a single desktop terminal, courses arrive out of sync, and guests wait 10+ minutes just to get their bill split at dinner peak.",
+        "Staff may need to coordinate table orders, kitchen preparation, and billing during busy service.",
       solution:
-        "Veggie POS gives servers instant 4-digit PIN table-side ordering. KOTs are automatically paced (Starters ➔ Mains ➔ Desserts), and bills can be split by item or guest in two taps.",
+        "Aatmyam POS keeps table orders, kitchen preparation status, and billing in one restaurant workflow.",
       highlights: [
-        "Visual table status (Occupied, Dining, Billing, Vacant)",
-        "Multi-course KOT holding & firing",
-        "Instant split billing by seat or item",
-        "Staff tip and server commission reporting"
+        "Table-based order entry",
+        "Kitchen order status",
+        "Cash and manual UPI payment recording",
+        "Staff roles and permissions"
       ],
-      impactMetric: "14 min faster table turnover",
+      impactMetric: "Table and kitchen workflow",
       accent: "#6E8F45"
     },
     {
       id: "qsr",
       title: "Quick-Service (QSR) & Counter Service",
       category: "Counter",
-      tagline: "Queue-busting register speed and zero cashier calculation mistakes.",
+      tagline: "Order entry, payment recording, and kitchen status.",
       icon: Zap,
       friction:
-        "Long lines at the register during lunch rush cause frustrated customers to walk away. Cashiers make mistakes during manual change calculations or duplicate punching.",
+        "Counter service teams need a clear way to record orders, payments, and kitchen requests.",
       solution:
-        "Ultra-fast touch terminal with physical keypad hotkeys. Cashiers select combos with one gesture, show a dynamic UPI QR code, and print a thermal receipt in under 8 seconds.",
+        "Aatmyam POS provides a browser-based screen for recording menu orders and payment methods.",
       highlights: [
-        "Sub-10 second order-to-payment cycle",
-        "Dynamic UPI QR code eliminating manual amount entry",
-        "Custom combo and modifier quick-selectors",
-        "Direct kitchen order token display"
+        "Menu-based order entry",
+        "Cash and manual UPI payment recording",
+        "Kitchen order status",
+        "Basic sales reports"
       ],
-      impactMetric: "35% faster counter throughput",
+      impactMetric: "Counter order workflow",
       accent: "#6E8F45"
     },
     {
       id: "cafe",
       title: "Cafés, Coffee Bars & Artisanal Bakeries",
       category: "Café",
-      tagline: "Ingredient batch yields, milk-type modifiers, and repeat loyalty.",
+      tagline: "Menu orders and recipe-linked stock tracking.",
       icon: Coffee,
       friction:
-        "Tracking syrup pumps, specialty milks (oat/almond), and batch-baked croissants in traditional POS systems is messy, leading to stock discrepancies and wasted inventory.",
+        "Cafés and bakeries may want to keep menu sales and ingredient records together.",
       solution:
-        "Veggie POS recipes account for gram-level coffee bean doses and specialty milk portions. Low-stock alerts remind baristas before morning espresso runs dry.",
+        "Recipe-linked inventory can help staff record ingredient use alongside menu sales.",
       highlights: [
-        "Modifier-based inventory deduction (Oat, Almond, Decaf)",
-        "Daily batch bakery yield tracking",
-        "Customer phone capture & repeat loyalty rewards",
-        "Morning peak hour sales acceleration"
+        "Menu and ingredient records",
+        "Recipe-linked inventory",
+        "Stock threshold alerts",
+        "Sales reporting"
       ],
-      impactMetric: "Zero morning rush stockouts",
+      impactMetric: "Menu and inventory workflow",
       accent: "#6E8F45"
     },
     {
       id: "cloud-kitchen",
-      title: "Cloud Kitchens & Delivery Hubs",
+      title: "Single-Kitchen Delivery Operations",
       category: "Delivery",
-      tagline: "Multi-brand dispatch, strict prep station routing, and packaging control.",
+      tagline: "Order recording and kitchen preparation status.",
       icon: Layers,
       friction:
-        "Managing multiple virtual brands from a single kitchen creates chaotic prep lines, wrong delivery packaging, and missing items in courier bags.",
+        "Delivery-focused teams need to pass order details to the kitchen and track preparation status.",
       solution:
-        "Centralize all brand menus into one master dispatch station. Orders automatically route to specific chef lines (Fryer, Grill, Packing) with clear visual brand badges.",
+        "Aatmyam POS records delivery orders and makes their kitchen status visible to staff.",
       highlights: [
-        "Multi-brand routing on single kitchen hardware",
-        "Packaging material (boxes, cutlery) BOM tracking",
-        "Order dispatch status tracking for riders",
-        "Item-level margin calculations including packaging"
+        "Order entry",
+        "Kitchen order status",
+        "Menu and inventory management",
+        "Basic sales reports"
       ],
-      impactMetric: "99.8% order fulfillment accuracy",
+      impactMetric: "Kitchen order workflow",
       accent: "#6E8F45"
-    },
-    {
-      id: "multi-outlet",
-      title: "Multi-Outlet Chains & Growing Groups",
-      category: "Enterprise",
-      tagline: "Centralized menu control, outlet benchmarking, and role hierarchies.",
-      icon: Building,
-      friction:
-        "Owners lose visibility across multiple branches. Recipe costs drift, prices are updated inconsistently, and store managers use unauthorized discounts.",
-      solution:
-        "The SaaS Owner Console lets you push menu price updates to all branches in one click, compare store performance side-by-side, and lock critical actions behind owner PINs.",
-      highlights: [
-        "Centralized menu distribution and price tiers",
-        "Multi-outlet comparative revenue and margin dashboard",
-        "Universal staff role permissions and audit logs",
-        "Consolidated group purchasing insights"
-      ],
-      impactMetric: "100% centralized menu governance",
-      accent: "#D97706"
     }
   ];
 
@@ -132,7 +112,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
 
   return (
     <div className="bg-[#FBF9F5] text-[#1C1E1B] min-h-screen">
-      
+
       {/* 1. SOLUTIONS HEADER */}
       <section className="pt-28 pb-16 md:pt-36 md:pb-24 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -146,7 +126,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
               <span className="text-[#6E8F45] italic">Tuned</span> for your floor.
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              Every hospitality concept faces different bottlenecks. Discover how Veggie POS adapts to table turn dynamics, counter queues, recipe batches, and multi-outlet governance.
+              Every hospitality concept faces different bottlenecks. Discover how Aatmyam POS adapts to table turn dynamics, counter queues, recipe batches, and restaurant operations.
             </p>
           </div>
         </div>
@@ -155,7 +135,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
       {/* 2. FORMAT FILTER BAR & STORY CARDS */}
       <section className="py-16 border-b border-[#EAE5DA]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
+
           {/* Filter Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
             <span className="text-xs font-mono font-bold text-[#787F74] uppercase mr-2 shrink-0">
@@ -166,8 +146,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
               { label: "Dine-In & Casual", key: "dine-in" },
               { label: "QSR & Counter", key: "counter" },
               { label: "Café & Bakery", key: "café" },
-              { label: "Cloud Kitchen", key: "delivery" },
-              { label: "Multi-Outlet Groups", key: "enterprise" }
+              { label: "Cloud Kitchen", key: "delivery" }
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -193,7 +172,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
                   className="bg-[#F4F0E8] border border-[#EAE5DA] rounded-3xl p-6 sm:p-10 transition-all duration-200 hover:shadow-md"
                 >
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                    
+
                     {/* Left Details */}
                     <div className="lg:col-span-7 space-y-6">
                       <div className="space-y-2">
@@ -228,7 +207,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
                         <div className="p-4 bg-[#EBF2E4] rounded-2xl border border-[#D5E3C8] space-y-1.5">
                           <p className="text-xs font-mono font-bold text-[#567234] flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            THE VEGGIE POS RESOLUTION:
+                            THE AATMYAM POS RESOLUTION:
                           </p>
                           <p className="text-xs text-[#2E4A1C] leading-relaxed">
                             {item.solution}
@@ -287,7 +266,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
             Not sure which configuration fits your concept?
           </h2>
           <p className="text-sm text-[#5A6056] leading-relaxed">
-            Our hospitality specialists can map your existing floor plan, kitchen pass, and recipe inventory directly into Veggie POS during a free 15-minute consultation.
+            Our hospitality specialists can map your existing floor plan, kitchen pass, and recipe inventory directly into Aatmyam POS during a free 15-minute consultation.
           </p>
           <div className="pt-2">
             <button

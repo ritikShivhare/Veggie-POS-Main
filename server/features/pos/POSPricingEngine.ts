@@ -1,3 +1,4 @@
+import {getSubscription} from '../billing/SubscriptionLifecycle';
 import { MenuRepository } from "./MenuRepository";
 import { CustomerRepository } from "../crm/CustomerRepository";
 import { SettingsRepository } from "../shared/SettingsRepository";
@@ -93,21 +94,6 @@ export class POSPricingEngine {
     }
 
     if (!rawOrder.items || !Array.isArray(rawOrder.items) || rawOrder.items.length === 0) {
-      if (rawOrder.total !== undefined) {
-        const directTotal = Number(rawOrder.total);
-        if (isNaN(directTotal) || directTotal < 0) {
-          throw new FinancialValidationError("INVALID_PRICE", "Total cannot be negative or invalid.", 400);
-        }
-        return {
-          validatedItems: [],
-          subtotal: directTotal,
-          tax: 0,
-          discount: 0,
-          total: directTotal,
-          inventoryDeductions: [],
-          updatedIngredients: []
-        };
-      }
       throw new FinancialValidationError("EMPTY_ORDER", "Order must contain at least one item.", 400);
     }
 
@@ -184,7 +170,7 @@ export class POSPricingEngine {
 
       // Authoritative unit price comes directly from the database menu item
       const unitPrice = authoritativeMenuItem.price;
-      if (unitPrice < 0) {
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) {
         throw new FinancialValidationError("INVALID_PRICE", `Authoritative price for '${authoritativeMenuItem.name}' is negative.`, 500);
       }
 
@@ -192,7 +178,7 @@ export class POSPricingEngine {
       const clientPrice = (item as any).price ?? (item as any).unitPrice;
       if (clientPrice !== undefined && clientPrice !== null) {
         const parsedClientPrice = Number(clientPrice);
-        if (isNaN(parsedClientPrice) || parsedClientPrice < 0) {
+        if (!Number.isFinite(parsedClientPrice) || parsedClientPrice < 0) {
           throw new FinancialValidationError("INVALID_PRICE", `Price for '${authoritativeMenuItem.name}' cannot be negative or invalid.`, 400);
         }
         if (Math.abs(parsedClientPrice - unitPrice) > 0.05) {
@@ -241,14 +227,8 @@ export class POSPricingEngine {
 
     // 3. Authoritative Tax Calculation (Based on tenant settings or order tax context)
     const settings = (await settingsRepo.get(tenantId)) || ({} as any);
-    let gstRate = 0;
-    if (settings && (settings as any).gstPercentage !== undefined) {
-      gstRate = Number((settings as any).gstPercentage) / 100;
-    } else if (rawOrder.tax !== undefined && Number(rawOrder.tax) > 0) {
-      gstRate = 0.05;
-    } else {
-      gstRate = 0;
-    }
+    const gstRate = Number(settings.gstPercentage ?? 5) / 100;
+    if (!Number.isFinite(gstRate) || gstRate < 0 || gstRate > 0.3) throw new FinancialValidationError("INVALID_TAX_RATE","Restaurant GST setting is invalid.");
     const calculatedTax = Number((calculatedSubtotal * gstRate).toFixed(2));
 
     // 4. Validate Discounts (Loyalty points & manual discount)
@@ -260,6 +240,7 @@ export class POSPricingEngine {
       const customers = (await customerRepo.getAll(tenantId)) || [];
       const customer = customers.find((c) => c.id === customerId);
 
+      if (!customer) throw new FinancialValidationError("CUSTOMER_NOT_FOUND","Customer does not belong to this restaurant.",404);
       if (customer) {
         if (rawOrder.redeemPoints) {
           // 1 point = 1 INR discount, capped at bill amount
@@ -331,7 +312,7 @@ export class POSPricingEngine {
           // Authoritatively verify the managerPin against StaffRepository in constant-time
           const staffList = (await staffRepo.getAll(tenantId)) || [];
           const authorizedStaff = staffList.filter(
-            (s) => s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("apply_discount" as any)
+            (s) => s.status!=="inactive" && s.status!=="suspended" && (s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("apply_discount" as any))
           );
           const authorizer = await findStaffByPinConstantTime(authorizedStaff, String(rawOrder.managerPin));
           if (!authorizer) {
@@ -377,7 +358,7 @@ export class POSPricingEngine {
     if (!rawOrder.recalculateTotals) {
       if (rawOrder.total !== undefined) {
         const clientTotal = Number(rawOrder.total);
-        if (isNaN(clientTotal) || clientTotal < 0) {
+        if (!Number.isFinite(clientTotal) || clientTotal < 0) {
           throw new FinancialValidationError("INVALID_PRICE", "Total cannot be negative or NaN.", 400);
         }
         if (Math.abs(clientTotal - calculatedTotal) > 0.05) {
@@ -391,7 +372,7 @@ export class POSPricingEngine {
 
       if (rawOrder.subtotal !== undefined) {
         const clientSubtotal = Number(rawOrder.subtotal);
-        if (isNaN(clientSubtotal) || clientSubtotal < 0) {
+        if (!Number.isFinite(clientSubtotal) || clientSubtotal < 0) {
           throw new FinancialValidationError("INVALID_PRICE", "Subtotal cannot be negative or NaN.", 400);
         }
         if (Math.abs(clientSubtotal - calculatedSubtotal) > 0.05) {
@@ -407,7 +388,7 @@ export class POSPricingEngine {
     // 6. Validate payment amount if supplied
     if (rawOrder.paymentAmount !== undefined && rawOrder.paymentAmount !== null) {
       const pAmt = Number(rawOrder.paymentAmount);
-      if (isNaN(pAmt) || pAmt < 0) {
+      if (!Number.isFinite(pAmt) || pAmt < 0) {
         throw new FinancialValidationError("INVALID_PAYMENT_AMOUNT", "Payment amount must be a positive number.", 400);
       }
       if (Math.abs(pAmt - calculatedTotal) > 0.05) {
@@ -420,8 +401,9 @@ export class POSPricingEngine {
     }
 
     // 6. Server-Authoritative Inventory Requirements & Deduction Check
-    const recipes = (await recipeRepo.getAll(tenantId)) || [];
-    const ingredients = (await ingredientRepo.getAll(tenantId)) || [];
+    const inventoryEnabled = !(await getSubscription(tenantId)).inventoryFrozen;
+    const recipes = inventoryEnabled ? (await recipeRepo.getAll(tenantId)) || [] : [];
+    const ingredients = inventoryEnabled ? (await ingredientRepo.getAll(tenantId)) || [] : [];
     const ingredientMap = new Map<string, Ingredient>();
     for (const ing of ingredients) {
       ingredientMap.set(ing.id, { ...ing });
@@ -441,6 +423,7 @@ export class POSPricingEngine {
             ri.unit,
             ingUnit
           );
+          if (!ing || !Number.isFinite(convertedPerPortion) || convertedPerPortion <= 0) throw new FinancialValidationError("INVALID_RECIPE","Recipe references a missing ingredient or invalid quantity.");
           const needed = convertedPerPortion * ci.quantity;
           const current = requiredIngredientQuantities.get(ri.ingredientId) || {
             name: ri.ingredientId,
@@ -474,7 +457,7 @@ export class POSPricingEngine {
 
     // Prepare atomic inventory deductions if autoDeductStock is enabled (defaults to true)
     const inventoryDeductions: AuthoritativeOrderCalculation["inventoryDeductions"] = [];
-    if (settings.autoDeductStock !== false) {
+    if (settings.autoDeductStock !== false && inventoryEnabled) {
       for (const [ingId, req] of requiredIngredientQuantities.entries()) {
         const ing = ingredientMap.get(ingId);
         if (ing) {
@@ -484,10 +467,10 @@ export class POSPricingEngine {
           ing.updated_at = new Date().toISOString();
           ing.version = (ing.version || 1) + 1;
 
-          inventoryDeductions.push({
+          if (previousStock !== newStock) inventoryDeductions.push({
             ingredientId: ing.id,
             ingredientName: ing.name,
-            quantityDeducted: req.required,
+            quantityDeducted: Number((previousStock-newStock).toFixed(4)),
             previousStock,
             newStock
           });

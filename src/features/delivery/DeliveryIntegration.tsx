@@ -45,7 +45,7 @@ export default function DeliveryIntegration({
   // Swiggy & Zomato general connection switches
   const [swiggyActive, setSwiggyActive] = useState(true);
   const [zomatoActive, setZomatoActive] = useState(true);
-  
+
   // Simulated incoming online orders
   const [onlineOrders, setOnlineOrders] = useState<SimulatedOnlineOrder[]>([
     {
@@ -208,10 +208,10 @@ export default function DeliveryIntegration({
 
   return (
     <div className="h-full flex flex-col xl:flex-row overflow-hidden bg-slate-50" id="delivery-tab-root">
-      
+
       {/* LEFT COLUMN: ACTIVE CHANNELS & ON/OFF Stock SWITCHES (Slide 8 Feature) */}
       <div className="w-full xl:w-[450px] border-r border-slate-200 flex flex-col bg-white shrink-0">
-        
+
         {/* Outlet Switches */}
         <div className="p-4 border-b border-slate-100 space-y-3.5 bg-slate-50/50">
           <div className="flex items-center justify-between">
@@ -358,7 +358,7 @@ export default function DeliveryIntegration({
             onlineOrders.map((o) => {
               const isSelected = selectedOrderId === o.id;
               const isSwiggy = o.channel === "Swiggy";
-              
+
               // Status Badge Styles
               let statusClass = "bg-slate-100 text-slate-700";
               if (o.status === "New") statusClass = "bg-amber-100 text-amber-800 border border-amber-200 font-black animate-pulse";

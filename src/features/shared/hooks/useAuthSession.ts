@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { StaffMember, Shift } from "../types";
+import { offlineRepository,OutboxProcessor } from "../services/offline";
 import { ApiClient } from "../services/api";
 
 interface UseAuthSessionProps {
@@ -29,7 +30,7 @@ export function useAuthSession({
 
   useEffect(() => {
     if (currentStaff) {
-      localStorage.setItem("veggiepos_current_staff", JSON.stringify(currentStaff));
+      localStorage.setItem("veggiepos_current_staff", JSON.stringify(((s:any)=>{const {pin,passwordHash,password,...safe}=s;return safe;})(currentStaff)));
     } else {
       localStorage.removeItem("veggiepos_current_staff");
     }
@@ -62,6 +63,13 @@ export function useAuthSession({
   // Production-level Secure Session Idle Timeout and Keep-Alive Engine
   const lastActivityRef = useRef<number>(Date.now());
   const idleTimeoutMinutesRef = useRef<number>(60);
+  const trackedSessionRef = useRef<string | null>(null);
+  // A newly authenticated PIN session must never inherit elapsed idle time
+  // from a previous staff member, previous session, or an old mobile tab.
+  if (trackedSessionRef.current !== currentSessionId) {
+    trackedSessionRef.current = currentSessionId;
+    lastActivityRef.current = Date.now();
+  }
 
   useEffect(() => {
     if (!currentStaff || !currentSessionId) {
@@ -98,7 +106,7 @@ export function useAuthSession({
       headers["x-session-id"] = currentSessionId;
     }
 
-    fetch("/api/auth/sessions-data?tenantId=" + requestTenantId, { headers, credentials: "include" })
+    if (["Owner","SaaS Owner"].includes(currentStaff.role)) fetch("/api/auth/sessions-data?tenantId=" + requestTenantId, { headers, credentials: "include" })
       .then(res => res.json())
       .then(data => {
         if (data.success && data.securitySettings) {
@@ -188,6 +196,9 @@ export function useAuthSession({
 
   // Handle Employee Login
   const handleLoginSuccess = (staff: StaffMember, sessionId?: string, _loggedInTenant?: any) => {
+    lastActivityRef.current = Date.now();
+    setShowIdleWarning(false);
+    setIdleCountdown(30);
     setCurrentStaff(staff);
     if (sessionId) {
       setCurrentSessionId(sessionId);
@@ -219,28 +230,28 @@ export function useAuthSession({
   };
 
   // Clock In / Clock Out shift actions
-  const handleShiftAction = () => {
-    if (!currentStaff) return;
-
-    if (activeShift) {
-      const updatedShifts = shifts.map((s) =>
-        s.id === activeShift.id
-          ? { ...s, endTime: new Date().toISOString(), status: "Completed" as const }
-          : s
-      );
-      setShifts(updatedShifts);
-      alert(`Successfully clocked out. Shift duration: ${getShiftDurationString(activeShift.startTime)}`);
-    } else {
-      const newShift: Shift = {
-        id: `sh-${Date.now()}`,
-        staffId: currentStaff.id,
-        staffName: currentStaff.name,
-        role: currentStaff.role,
-        startTime: new Date().toISOString(),
-        status: "Active"
-      };
-      setShifts([...shifts, newShift]);
-      alert("Welcome to duty! Shift started successfully.");
+  const shiftStartInFlightRef = useRef(false);
+  const handleShiftAction=async()=>{
+    if(!currentStaff || shiftStartInFlightRef.current) return;
+    if(activeShift || shifts.some(s => s.staffId === currentStaff.id && s.status === "Active" && !s.endTime)) {
+      alert("This staff member already has an active shift. Refresh duty logs before starting another.");
+      return;
+    }
+    shiftStartInFlightRef.current = true;
+    try {
+      const existing = await offlineRepository.getShifts(activeTenantId);
+      if(existing.some(s => s.staffId === currentStaff.id && s.status === "Active" && !s.endTime)) {
+        alert("An active duty shift is already saved on this device.");
+        return;
+      }
+      const shift:Shift={id:crypto.randomUUID(),staffId:currentStaff.id,staffName:currentStaff.name,role:currentStaff.role,startTime:new Date().toISOString(),status:"Active"};
+      await offlineRepository.recordShiftOffline(activeTenantId,shift);
+      setShifts([...shifts,shift]);
+      await OutboxProcessor.triggerDrain(activeTenantId);
+    } catch(error:any) {
+      alert(`Shift was not saved: ${error.message}`);
+    } finally {
+      shiftStartInFlightRef.current = false;
     }
   };
 

@@ -1,3 +1,4 @@
+import {createRequireSuperAdmin} from "./features/auth/SuperAdminAuth";
 import express from "express";
 import crypto from "crypto";
 import { MenuRepository } from "./features/pos/MenuRepository";
@@ -22,7 +23,7 @@ import { BackgroundJobsService } from "./features/jobs/BackgroundJobsService";
 import { NotificationService } from "./features/notifications/NotificationService";
 import { EventBus } from "./features/shared/EventBus";
 import { AuditLogService } from "./features/shared/AuditLogService";
-import { Database } from "./features/shared/database";
+import { Database,handleApiError } from "./features/shared/database";
 import { SessionService, SESSION_COOKIE_NAME } from "./features/auth/SessionService";
 import { MonitoringService } from "./features/shared/MonitoringService";
 import { IdempotencyService } from "./features/shared/IdempotencyService";
@@ -85,41 +86,7 @@ export async function getGlobalTenantsList(): Promise<any[]> {
   const db = Database.getInstance();
   let list = await db.getObject<any[]>("veg-main-001", "global_tenants_list");
   if (!list) {
-    list = [
-      {
-        id: "t-1",
-        name: "Main Veggie Bistro",
-        tenantId: "veg-main-001",
-        status: "active",
-        created: "2026-01-15",
-        region: "North India / Delhi",
-        ownerName: "Rahul Sharma",
-        email: "rahul@veggiebistro.com",
-        ownerPhone: "9876543210"
-      },
-      {
-        id: "t-2",
-        name: "Connaught Place Express",
-        tenantId: "veg-cp-002",
-        status: "active",
-        created: "2026-03-22",
-        region: "North India / Delhi",
-        ownerName: "Amit Verma",
-        email: "amit@veggiebistro.com",
-        ownerPhone: "9123456789"
-      },
-      {
-        id: "t-3",
-        name: "Reetesh Dhaba",
-        tenantId: "veg-reetesh-dhaba",
-        status: "active",
-        created: "2026-07-04",
-        region: "North India / Delhi",
-        ownerName: "Reetesh",
-        email: "reetesh@dhaba.com",
-        ownerPhone: "9999911111"
-      }
-    ];
+    list = [];
     await db.saveObject("veg-main-001", "global_tenants_list", list);
   }
   return list;
@@ -163,9 +130,8 @@ export const PUBLIC_ROUTES = [
   { method: "POST", path: "/api/auth/logout" },
   { method: "GET", path: "/api/auth/tenant-info" },
   { method: "GET", path: "/api/auth/staff-directory" },
-  { method: "POST", path: "/api/saas-admin/login" },
-  { method: "POST", path: "/api/webhooks/stripe" },
-  { method: "POST", path: "/api/monitoring/report-error" },
+  { method: "POST", path: "/api/saas-admin/exchange" },
+  { method: "POST", path: "/api/webhooks/cashfree" },
   { method: "POST", path: "/api/copilot-chat" }
 ];
 
@@ -195,6 +161,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     return next();
   }
 
+  try {
   const querySessionId =
     process.env.NODE_ENV !== "production" && typeof req.query?.sessionId === "string"
       ? (req.query.sessionId as string)
@@ -259,34 +226,36 @@ export const authMiddleware = async (req: express.Request, res: express.Response
     });
   }
 
-  // Anti-Spoofing: Client-sent tenantId cannot override or contradict session tenant
-  const clientProvidedTenant =
-    (req.headers["x-tenant-id"] as string) ||
-    (req.query?.tenantId as string) ||
-    (req.body?.tenantId as string);
-
-  if (clientProvidedTenant && clientProvidedTenant !== tenantId) {
-    const isSaaSAdmin = session.role === "SaaS Owner" || tenantId === "saas-admin";
-    if (!isSaaSAdmin) {
-      const isOutboxRoute = req.originalUrl?.includes("/sync/outbox") || req.path?.includes("/sync/outbox");
-      const error = isOutboxRoute ? "CROSS_TENANT_VIOLATION" : "TENANT_MISMATCH";
-      return res.status(403).json({
-        success: false,
-        error,
-        message: `Tenant isolation violation: Client-provided tenantId (${clientProvidedTenant}) does not match authenticated session tenant (${tenantId}).`
-      });
-    }
+  // Validate every supplied tenant claim, not just the highest-priority header.
+  // A valid x-tenant-id must not mask a conflicting query or body tenantId.
+  const tenantClaims = [
+    req.headers["x-tenant-id"],
+    req.query?.tenantId,
+    req.body?.tenantId
+  ].flatMap(value => Array.isArray(value) ? value : value == null ? [] : [value]);
+  const isSaaSAdmin = session.role === "SaaS Owner" || tenantId === "saas-admin";
+  if (!isSaaSAdmin && tenantClaims.some(claim => typeof claim !== "string" || claim !== tenantId)) {
+    const isOutboxRoute = req.originalUrl?.includes("/sync/outbox") || req.path?.includes("/sync/outbox");
+    const error = isOutboxRoute ? "CROSS_TENANT_VIOLATION" : "TENANT_MISMATCH";
+    return res.status(403).json({
+      success: false,
+      error,
+      message: "Tenant isolation violation: supplied tenant identifier does not match the authenticated session."
+    });
   }
 
   // Branch verification: validate x-branch-id if provided
   const clientBranchId = (req.headers["x-branch-id"] as string) || (req.body?.branchId as string) || "main";
-  (req as any).branchId = clientBranchId;
+  if (clientBranchId !== "main") return res.status(400).json({success:false,error:"UNSUPPORTED_BRANCH",message:"This version supports one outlet per restaurant."});
+  (req as any).branchId = "main";
 
   (req as any).tenantId = tenantId;
   (req as any).session = session;
+  (req as any).user = { id: session.userId, name: session.userName, role: session.role, permissions: session.permissions };
 
   // 403 Forbidden check for suspended tenants
-  if (suspendedTenants.has(tenantId)) {
+  const registeredTenant=(await getGlobalTenantsList()).find(t=>t.tenantId===tenantId);
+  if (registeredTenant?.status === "suspended") {
     return res.status(403).json({
       success: false,
       error: "SUSPENDED_TENANT",
@@ -298,8 +267,8 @@ export const authMiddleware = async (req: express.Request, res: express.Response
   const sub = await getSubscription(tenantId);
   (req as any).subscription = sub;
 
-  const isMutation = ["POST", "PUT", "DELETE"].includes(req.method);
-  if (sub.isReadOnly && isMutation) {
+  const isMutation = ["POST", "PUT", "PATCH", "DELETE"].includes(req.method);
+  if (sub.isReadOnly && isMutation && !/\/billing\//.test(req.path)) {
     return res.status(403).json({
       success: false,
       error: "READ_ONLY_MODE",
@@ -308,6 +277,7 @@ export const authMiddleware = async (req: express.Request, res: express.Response
   }
 
   next();
+  } catch(error) {handleApiError(res,error);}
 };
 
 /**
@@ -328,7 +298,7 @@ export const requireRole = (...allowedRoles: string[]) => {
 
     const role = session.role;
     const isSuperOrOwner = role === "Owner" || role === "SaaS Owner";
-    if (isSuperOrOwner || allowedRoles.includes(role)) {
+    if (role === "SaaS Owner" || (role === "Owner" && !allowedRoles.includes("SaaS Owner")) || allowedRoles.includes(role)) {
       return next();
     }
 
@@ -395,46 +365,7 @@ export const requirePermission = (...requiredPermissions: string[]) => {
 };
 
 // SaaS Super-Admin Management Middleware with Anti-CSRF
-export const adminAuthMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const headerSessionId =
-    (req.headers["x-session-id"] as string) ||
-    (typeof req.headers["authorization"] === "string" && req.headers["authorization"].startsWith("Bearer ")
-      ? req.headers["authorization"].substring(7).trim()
-      : undefined);
-
-  const cookieSessionId = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
-
-  if (!headerSessionId) {
-    return res.status(401).json({
-      success: false,
-      error: "UNAUTHORIZED",
-      message: cookieSessionId
-        ? "Anti-CSRF Protection: 'x-session-id' header is mandatory for admin endpoints."
-        : "Super-Admin session ID required."
-    });
-  }
-
-  if (cookieSessionId && cookieSessionId !== headerSessionId) {
-    return res.status(401).json({
-      success: false,
-      error: "UNAUTHORIZED",
-      message: "Security violation: 'x-session-id' header does not match active admin cookie."
-    });
-  }
-
-  const sessionId = headerSessionId;
-  
-  try {
-    const session = await sessionService.validateAndTouchSession("saas-admin", sessionId);
-    if (!session || session.role !== "SaaS Owner") {
-      return res.status(403).json({ success: false, error: "FORBIDDEN", message: "Only SaaS Owner can access these super-admin methods." });
-    }
-    (req as any).session = session;
-    next();
-  } catch (error: any) {
-    return res.status(500).json({ success: false, error: error.message });
-  }
-};
+export const adminAuthMiddleware = createRequireSuperAdmin(sessionService);
 
 // TOTP Helpers
 export function base32tohex(base32: string): string {

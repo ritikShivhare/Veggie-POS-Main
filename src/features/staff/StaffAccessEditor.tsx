@@ -1,0 +1,65 @@
+import React,{useEffect,useRef,useState} from 'react';
+import {StaffMember} from '../shared/types';
+import {ApiClient} from '../shared/services/api';
+import {isActiveStaff} from '../shared/staffStatus';
+
+interface Props {tenantId:string;staffList:StaffMember[];currentStaffId:string;onSaved:(staff:StaffMember)=>void;onDeleted:(id:string)=>void;onOwnChange:()=>void;}
+const visiblePermissions=['billing','inventory','reports'] as const;
+function StaffAccessRow({tenantId,staff,currentStaffId,onSaved,onDeleted,onOwnChange}:Omit<Props,'staffList'> & {staff:StaffMember}) {
+  const mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+  const [pin,setPin]=useState(''),[permissions,setPermissions]=useState(staff.permissions.filter(permission=>permission!=='settings')),[version,setVersion]=useState(staff.version || 1);
+  const [dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[conflict,setConflict]=useState(false);
+  useEffect(()=>{if(!dirty){setPermissions(staff.permissions.filter(permission=>permission!=='settings'));setVersion(staff.version || 1);}},[staff.version,staff.permissions,dirty]);
+  const refresh=async()=>{
+    setBusy(true);setError('');
+    try {
+      const response=await ApiClient.authenticatedFetch(`/api/staff/${encodeURIComponent(staff.id)}`,{headers:{'x-tenant-id':tenantId}});const result=await response.json();
+      if(!response.ok || !result.success || !result.data) throw new Error(result.message || 'Could not load the latest staff record.');
+      if(!mounted.current) return;
+      onSaved(result.data);setPermissions(result.data.permissions.filter((permission:string)=>permission!=='settings'));setVersion(result.data.version || 1);setPin('');setDirty(false);setConflict(false);setMessage('Latest permissions loaded. Review and enter your changes again.');
+    }catch(e:any){setError(e.message);}finally{setBusy(false);}
+  };
+  const save=async()=>{
+    if(busy || conflict || !dirty) return;
+    setError('');setMessage('');
+    if(pin && !/^\d{4,6}$/.test(pin)){setError('Enter a complete 4–6 digit PIN, or leave PIN empty to keep it unchanged.');return;}
+    setBusy(true);
+    try {
+      const response=await ApiClient.authenticatedFetch(`/api/staff/${encodeURIComponent(staff.id)}`,{method:'PUT',headers:{'Content-Type':'application/json','x-tenant-id':tenantId},body:JSON.stringify({version,...(pin?{pin}:{}),...(staff.role!=='Owner'?{permissions:permissions.filter(permission=>permission!=='settings')}:{})})});
+      const result=await response.json();
+      if(response.status===409){setConflict(true);throw new Error('This staff record changed elsewhere. Load the latest record and review before saving again.');}
+      if(!response.ok || !result.success || !result.data) throw new Error(result.message || result.error || 'Staff changes were not saved.');
+      if(!mounted.current) return;
+      onSaved(result.data);setVersion(result.data.version || 1);setPin('');setDirty(false);setMessage('Staff changes saved.');
+      if(staff.id===currentStaffId && pin) onOwnChange();
+    }catch(e:any){setError(e.message || 'Could not save staff changes.');}finally{setBusy(false);}
+  };
+  const remove=async()=>{
+    if(busy || staff.role==='Owner' || !window.confirm(`Deactivate ${staff.name}? Historical records will be kept.`)) return;
+    setBusy(true);setError('');setMessage('');
+    try {
+      const response=await ApiClient.authenticatedFetch(`/api/staff/${encodeURIComponent(staff.id)}`,{method:'DELETE',headers:{'x-tenant-id':tenantId}});const result=await response.json();
+      if(!response.ok || !result.success) throw new Error(result.message || result.error || 'Staff was not deactivated.');
+      if(!mounted.current) return;
+      onDeleted(staff.id);
+    }catch(e:any){setError(e.message);}finally{setBusy(false);}
+  };
+  return <section className="border border-slate-200 bg-slate-50/50 rounded-xl p-4 sm:p-5 space-y-4 text-sm text-slate-700" aria-label={`Access for ${staff.name}`}>
+    <h4 className="flex flex-wrap items-center gap-2 text-sm font-bold text-slate-800 border-b border-slate-200 pb-3">{staff.name} <span className="rounded-md bg-white border border-slate-200 px-2 py-0.5 text-xs font-medium text-slate-500">{staff.role}</span></h4>
+    <label className="block text-sm font-semibold text-slate-700">New PIN for {staff.name}
+      <input type="password" inputMode="numeric" autoComplete="new-password" maxLength={6} value={pin} disabled={busy} placeholder="Leave blank to keep PIN" onChange={e=>{setPin(e.target.value.replace(/\D/g,'').slice(0,6));setDirty(true);setMessage('');}} className="mt-2 block w-full sm:max-w-xs rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"/>
+    </label>
+    <div className="flex flex-wrap gap-2">{visiblePermissions.map(permission=><label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium capitalize" key={permission}>
+      <input className="h-4 w-4 accent-blue-600" type="checkbox" checked={permissions.includes(permission)} disabled={busy || staff.role==='Owner'} onChange={e=>{setPermissions(p=>e.target.checked?[...p,permission]:p.filter(v=>v!==permission));setDirty(true);setMessage('');}}/> {permission}
+    </label>)}</div>
+    {staff.role==='Owner' && <p className="text-xs">Owner access is protected. Saving your own new PIN requires signing in again.</p>}
+    <button type="button" disabled={!dirty || busy || conflict} onClick={save} className="w-full sm:w-auto rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2.5 disabled:opacity-50 transition-colors">{busy?'Saving…':`Save changes for ${staff.name}`}</button>
+    {conflict && <button type="button" disabled={busy} onClick={refresh} className="border border-slate-300 bg-white rounded-lg px-3 py-2.5 font-semibold">Load latest record</button>}
+    {staff.role!=='Owner' && <button type="button" disabled={busy} onClick={remove} className="ml-0 sm:ml-3 px-3 py-2.5 text-red-700 font-semibold hover:bg-red-50 rounded-lg">Deactivate {staff.name}</button>}
+    {error && <p role="alert" className="text-red-700">{error}</p>}{message && <p role="status" className="text-green-700">{message}</p>}
+  </section>;
+}
+export default function StaffAccessEditor(props:Props) {
+  return <div className="space-y-4">{props.staffList.filter(isActiveStaff).map(staff=><StaffAccessRow key={props.tenantId+':'+staff.id} {...props} staff={staff}/>)}</div>;
+}

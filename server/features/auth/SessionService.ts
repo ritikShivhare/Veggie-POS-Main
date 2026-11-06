@@ -1,5 +1,11 @@
+import {getSubscription} from '../billing/SubscriptionLifecycle';
+import { isActiveStaff } from "../../../src/features/shared/staffStatus";
 import crypto from "crypto";
+import { StaffRepository } from "../staff/StaffRepository";
+import { EventEmitter } from "node:events";
+export const sessionEvents = new EventEmitter();
 import { Database } from "../shared/database";
+import {isTrustedSuperAdminSession, type SuperAdminIdentity} from './SuperAdminAuth';
 
 export const SESSION_COOKIE_NAME = "veggiepos_session";
 
@@ -24,7 +30,7 @@ export function getSessionCookieOptions(req?: any): CookieSecurityOptions {
   return {
     httpOnly: true,
     secure: isHttps,
-    sameSite: isHttps ? "none" : "lax",
+    sameSite: "lax",
     path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
   };
@@ -42,7 +48,7 @@ export function getClearCookieOptions(req?: any): CookieSecurityOptions {
   return {
     httpOnly: true,
     secure: isHttps,
-    sameSite: isHttps ? "none" : "lax",
+    sameSite: "lax",
     path: "/"
   };
 }
@@ -55,12 +61,15 @@ export function generateSecureSessionId(): string {
 }
 
 export interface UserSession {
+  superAdminIdentity?: SuperAdminIdentity;
   sessionId: string;
   userId: string;
   userName: string;
   role: string;
   tenantId: string;
   permissions?: string[];
+  authVersion?: number;
+  securityVersion?: number;
   ipAddress: string;
   device: {
     os: string;
@@ -268,9 +277,17 @@ export class SessionService {
    * Validate a session token/ID and touch its lastActivityTimestamp
    */
   public async validateAndTouchSession(tenantId: string, sessionId: string): Promise<UserSession | null> {
+    return this.db.runTransaction(tenantId, async () => {
     const sessions = await this.getActiveSessions(tenantId);
     const session = sessions.find(s => s.sessionId === sessionId);
-    if (!session) return null;
+    if (!session || session.securityVersion !== 2) return null;
+    if ((session.role === 'SaaS Owner' || tenantId === 'saas-admin') && !isTrustedSuperAdminSession(session)) return null;
+    if (session.role !== "SaaS Owner") {
+      await getSubscription(tenantId);
+      const staff=await new StaffRepository().getById(tenantId,session.userId);
+      if (!staff || !isActiveStaff(staff) || staff.role !== session.role || session.authVersion !== (staff.version || 1)) return null;
+      session.permissions = staff.permissions || [];
+    }
 
     const now = new Date();
     const expires = new Date(session.expiresAt);
@@ -286,12 +303,9 @@ export class SessionService {
     session.lastActivityAt = now.toISOString();
     session.expiresAt = new Date(now.getTime() + settings.sessionTimeoutMinutes * 60 * 1000).toISOString();
 
-    try {
-      await this.db.saveObject(tenantId, "system_active_sessions", sessions);
-    } catch {
-      // Non-blocking touch save during DB downtime so session stays valid in memory
-    }
+    await this.db.saveObject(tenantId,"system_active_sessions",sessions);
     return session;
+    });
   }
 
   /**
@@ -304,8 +318,10 @@ export class SessionService {
     role: string,
     ipAddress: string,
     userAgent: string,
-    permissions?: string[]
+    permissions?: string[],
+    superAdminIdentity?: SuperAdminIdentity
   ): Promise<UserSession> {
+    return this.db.runTransaction(tenantId, async () => {
     const settings = await this.getSecuritySettings(tenantId);
     const deviceDetails = this.parseUserAgent(userAgent);
     
@@ -321,12 +337,15 @@ export class SessionService {
             : ["billing", "orders"]);
     
     const newSession: UserSession = {
+      ...(superAdminIdentity ? {superAdminIdentity} : {}),
       sessionId: crypto.randomBytes(32).toString("base64url"),
       userId,
       userName,
       role,
       tenantId,
-      permissions: resolvedPermissions,
+      permissions: permissions ?? resolvedPermissions,
+      authVersion: (await new StaffRepository().getById(tenantId,userId))?.version || 1,
+      securityVersion: 2,
       ipAddress: ipAddress || "127.0.0.1",
       device: {
         ...deviceDetails,
@@ -361,6 +380,7 @@ export class SessionService {
     this.registerSessionTenant(newSession.sessionId, tenantId);
 
     return newSession;
+    });
   }
 
   /**
@@ -563,6 +583,7 @@ export class SessionService {
    * Forcefully revoke a session (logout device/token)
    */
   public async revokeSession(tenantId: string, sessionId: string): Promise<boolean> {
+    return this.db.runTransaction(tenantId, async () => {
     const sessions = await this.getActiveSessions(tenantId);
     const filtered = sessions.filter(s => s.sessionId !== sessionId);
     
@@ -571,24 +592,29 @@ export class SessionService {
 
     if (filtered.length !== sessions.length) {
       await this.db.saveObject(tenantId, "system_active_sessions", filtered);
+      this.db.afterCommit(()=>sessionEvents.emit("revoked",sessionId));
       return true;
     }
     return false;
+    });
   }
 
   /**
    * Clear or terminate all active sessions for a tenant (except maybe current, but handles bulk)
    */
   public async revokeAllSessions(tenantId: string): Promise<void> {
+    return this.db.runTransaction(tenantId,async()=>{
     try {
       const sessions = await this.getActiveSessions(tenantId);
       for (const s of sessions) {
         this.unregisterSessionTenant(s.sessionId);
+        this.db.afterCommit(()=>sessionEvents.emit("revoked",s.sessionId));
       }
     } catch (err) {
       console.error("[SessionService] Error cleaning index in revokeAllSessions:", err);
     }
     await this.db.saveObject(tenantId, "system_active_sessions", []);
+    });
   }
 
   /**
@@ -598,6 +624,7 @@ export class SessionService {
     tenantId: string,
     entry: Omit<LoginHistoryEntry, "id" | "timestamp" | "tenantId">
   ): Promise<void> {
+    return this.db.runTransaction(tenantId, async () => {
     const history = (await this.db.getObject<LoginHistoryEntry[]>(tenantId, "system_login_history")) || [];
     
     const newRecord: LoginHistoryEntry = {
@@ -610,6 +637,7 @@ export class SessionService {
     history.unshift(newRecord);
     // Persist only last 200 entries
     await this.db.saveObject(tenantId, "system_login_history", history.slice(0, 200));
+    });
   }
 
   /**

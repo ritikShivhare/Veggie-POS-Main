@@ -1,4 +1,7 @@
-import React, { useState, useEffect } from "react";
+import {startVisiblePolling} from '../utils/visiblePolling';
+import {useAppContext} from '../context/AppContext';
+import { ApiClient } from "../services/api";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Bell,
   CheckCircle2,
@@ -40,6 +43,9 @@ interface DispatchLog {
 }
 
 export default function NotificationCenter() {
+  const {currentStaff}=useAppContext();
+  const canCompose=['Owner','Manager'].includes(currentStaff?.role || '');
+  const canViewLogs=currentStaff?.role==='Owner';
   const [notifications, setNotifications] = useState<InAppNotification[]>([]);
   const [dispatchLogs, setDispatchLogs] = useState<DispatchLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -56,10 +62,12 @@ export default function NotificationCenter() {
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<any[] | null>(null);
 
+  const polling=useRef(false);
   const fetchNotificationData = async (silent = false) => {
+    if(polling.current)return;polling.current=true;
     if (!silent) setRefreshing(true);
     try {
-      const res = await fetch("/api/notifications");
+      const res = await ApiClient.authenticatedFetch("/api/notifications");
       const data = await res.json();
       if (data.success) {
         setNotifications(data.notifications || []);
@@ -69,19 +77,17 @@ export default function NotificationCenter() {
       console.error("Error retrieving notifications:", err);
     } finally {
       setLoading(false);
-      setRefreshing(false);
+      setRefreshing(false);polling.current=false;
     }
   };
 
   useEffect(() => {
-    fetchNotificationData();
-    const interval = setInterval(() => fetchNotificationData(true), 8000);
-    return () => clearInterval(interval);
+    return startVisiblePolling(fetchNotificationData, 8000);
   }, []);
 
   const handleMarkAsRead = async (id: string) => {
     try {
-      const res = await fetch("/api/notifications/read", {
+      const res = await ApiClient.authenticatedFetch("/api/notifications/read", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
@@ -100,7 +106,7 @@ export default function NotificationCenter() {
 
   const handleMarkAllAsRead = async () => {
     try {
-      const res = await fetch("/api/notifications/read-all", { method: "POST" });
+      const res = await ApiClient.authenticatedFetch("/api/notifications/read-all", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         setNotifications(prev => prev.map(n => ({ ...n, read: true })));
@@ -112,7 +118,7 @@ export default function NotificationCenter() {
 
   const handleDeleteNotification = async (id: string) => {
     try {
-      const res = await fetch("/api/notifications", {
+      const res = await ApiClient.authenticatedFetch("/api/notifications", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
@@ -129,7 +135,7 @@ export default function NotificationCenter() {
   const handleClearLogs = async () => {
     if (!window.confirm("Confirm clearing the multi-channel dispatch log history?")) return;
     try {
-      const res = await fetch("/api/notifications/clear-logs", { method: "POST" });
+      const res = await ApiClient.authenticatedFetch("/api/notifications/clear-logs", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         setDispatchLogs([]);
@@ -154,7 +160,7 @@ export default function NotificationCenter() {
     setSendResult(null);
 
     try {
-      const res = await fetch("/api/notifications/send", {
+      const res = await ApiClient.authenticatedFetch("/api/notifications/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -207,19 +213,19 @@ export default function NotificationCenter() {
 
   return (
     <div className="h-full p-4 sm:p-6 bg-[#f8fafc] overflow-y-auto space-y-6">
-      
+
       {/* HEADER SECTION */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
             <Bell className="w-5 h-5 text-pink-600 animate-swing" />
-            Central Notification Orchestrator
+            Central Notification Center
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Enterprise multi-channel dispatch hub linking In-App inbox queues, transactional Email templates, and high-priority SMS gateway protocols.
+            Your assigned order, service and stock alerts. Owners can configure recipients in Settings.
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => fetchNotificationData(false)}
@@ -287,8 +293,8 @@ export default function NotificationCenter() {
             </span>
           )}
         </button>
-        
-        <button
+
+        {canCompose && <button
           onClick={() => { setActiveTab("compose"); setSendResult(null); }}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             activeTab === "compose" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
@@ -296,9 +302,9 @@ export default function NotificationCenter() {
         >
           <Send className="w-4 h-4 text-indigo-600" />
           Dispatch Lab
-        </button>
+        </button>}
 
-        <button
+        {canViewLogs && <button
           onClick={() => { setActiveTab("history"); setSendResult(null); }}
           className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
             activeTab === "history" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-800 hover:bg-white/50"
@@ -306,12 +312,12 @@ export default function NotificationCenter() {
         >
           <Clock className="w-4 h-4 text-emerald-600" />
           Gateway Logs
-        </button>
+        </button>}
       </div>
 
       {/* MAIN VIEWPORT BODY */}
       <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden min-h-[400px] flex flex-col">
-        
+
         {/* TAB 1: INBOX */}
         {activeTab === "inbox" && (
           <div className="flex-1 flex flex-col">
@@ -333,7 +339,7 @@ export default function NotificationCenter() {
                 <Bell className="w-10 h-10 text-slate-200" />
                 <p className="font-bold text-slate-600 text-sm">Your inbox is crystal clear</p>
                 <p className="text-xs text-slate-400 max-w-xs">
-                  Background jobs and automated events will broadcast messages here in real-time. Use the **Dispatch Lab** to test immediately.
+                  No alerts assigned to you yet. Order and stock alerts appear here when you are a recipient.
                 </p>
               </div>
             ) : (
@@ -399,7 +405,7 @@ export default function NotificationCenter() {
                           </button>
                         </div>
                       </div>
-                      
+
                       <p className="text-xs text-slate-600 leading-relaxed max-w-3xl">
                         {item.message}
                       </p>
@@ -412,9 +418,9 @@ export default function NotificationCenter() {
         )}
 
         {/* TAB 2: DISPATCH LAB */}
-        {activeTab === "compose" && (
+        {canCompose && activeTab === "compose" && (
           <div className="p-6 max-w-3xl mx-auto w-full space-y-6">
-            
+
             <div className="border-b border-slate-100 pb-4">
               <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-pink-600 animate-pulse" />
@@ -590,7 +596,7 @@ export default function NotificationCenter() {
         )}
 
         {/* TAB 3: GATEWAY AUDIT HISTORY */}
-        {activeTab === "history" && (
+        {canViewLogs && activeTab === "history" && (
           <div className="flex-1 flex flex-col">
             <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider font-mono">

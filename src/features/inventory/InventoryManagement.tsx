@@ -11,7 +11,6 @@ import {
   Plus,
   Edit2,
   Trash2,
-  Settings2,
   TrendingUp,
   AlertTriangle,
   CheckCircle,
@@ -36,7 +35,6 @@ interface InventoryManagementProps {
   onUpdateRecipes: (updated: Recipe[]) => void;
   onUpdateMenuItems: (updated: MenuItem[]) => void;
   onAddPurchase: (purchase: Purchase) => void;
-  onUpdateSettings: (updated: InventorySettings) => void;
 }
 
 export default function InventoryManagement({
@@ -49,10 +47,9 @@ export default function InventoryManagement({
   onUpdateIngredients,
   onUpdateRecipes,
   onUpdateMenuItems,
-  onAddPurchase,
-  onUpdateSettings
+  onAddPurchase
 }: InventoryManagementProps) {
-  const [activeSubTab, setActiveSubTab] = useState<"raw" | "recipes" | "purchases" | "reports" | "settings" | "menu">("raw");
+  const [activeSubTab, setActiveSubTab] = useState<"raw" | "recipes" | "purchases" | "reports" | "menu">("raw");
 
   // Form Modals
   const [showAddIngredientModal, setShowAddIngredientModal] = useState(false);
@@ -558,20 +555,12 @@ export default function InventoryManagement({
           >
             Stock Reports
           </button>
-          <button
-            onClick={() => setActiveSubTab("settings")}
-            className={`px-3 py-1.5 rounded-lg font-semibold transition ${
-              activeSubTab === "settings" ? "bg-emerald-500 text-white" : "text-slate-400 hover:text-white"
-            }`}
-          >
-            Stock Rules
-          </button>
         </div>
       </div>
 
       {/* Main Inner Views */}
       <div className="flex-1 overflow-y-auto pr-1">
-        
+
         {/* SUBTAB 1: RAW MATERIALS */}
         {activeSubTab === "raw" && (
           <div className="space-y-4">
@@ -1110,138 +1099,6 @@ export default function InventoryManagement({
           </div>
         )}
 
-        {/* SUBTAB 5: STOCK RULES SETTINGS */}
-        {activeSubTab === "settings" && (
-          <div className="max-w-xl bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow space-y-6">
-            <h2 className="text-base font-display font-bold text-white border-b border-slate-800 pb-3 flex items-center gap-2">
-              <Settings2 className="w-5 h-5 text-emerald-400" />
-              Inventory & Rules Configuration
-            </h2>
-
-            <div className="space-y-4 divide-y divide-slate-800/40 text-sm">
-              <div className="flex items-center justify-between py-3">
-                <div>
-                  <h3 className="font-semibold text-white">Auto-Deduct Stock on Orders</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Automatically subtract ingredients from inventory ledger when checkout completes.</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.autoDeductStock}
-                  onChange={(e) => onUpdateSettings({ ...settings, autoDeductStock: e.target.checked })}
-                  className="w-4 h-4 accent-emerald-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-3 pt-4">
-                <div>
-                  <h3 className="font-semibold text-white">Block Orders if Stock Insufficient</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Prevent checking out orders if recipe ingredients currentStock levels are empty.</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.blockOrdersIfInsufficient}
-                  onChange={(e) => onUpdateSettings({ ...settings, blockOrdersIfInsufficient: e.target.checked })}
-                  className="w-4 h-4 accent-emerald-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-3 pt-4">
-                <div>
-                  <h3 className="font-semibold text-white">Manager Can Add Purchases</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Allow employees with "Manager" role accounts to record vendor supply purchase invoices.</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.managerCanAddPurchases}
-                  onChange={(e) => onUpdateSettings({ ...settings, managerCanAddPurchases: e.target.checked })}
-                  className="w-4 h-4 accent-emerald-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-3 pt-4">
-                <div>
-                  <h3 className="font-semibold text-white">Manager Can Edit Recipes</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Allow Manager roles to map/modify recipe ingredient weights for menu items.</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.managerCanEditRecipes}
-                  onChange={(e) => onUpdateSettings({ ...settings, managerCanEditRecipes: e.target.checked })}
-                  className="w-4 h-4 accent-emerald-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-3 pt-4">
-                <div>
-                  <h3 className="font-semibold text-white">KDS Audio Status Alerts</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Use browser speech synthesis to read order announcements aloud on state changes.</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.kdsSoundAlerts}
-                  onChange={(e) => onUpdateSettings({ ...settings, kdsSoundAlerts: e.target.checked })}
-                  className="w-4 h-4 accent-emerald-500"
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-3 pt-4">
-                <div>
-                  <h3 className="font-semibold text-white">Require Quick PIN Screen</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Prompt the keypad login screen immediately when the terminal is idle or locking.</p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={settings.quickPinRequired}
-                  onChange={(e) => onUpdateSettings({ ...settings, quickPinRequired: e.target.checked })}
-                  className="w-4 h-4 accent-emerald-500"
-                />
-              </div>
-
-              <div className="py-3 pt-4 border-t border-slate-800">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold text-white">Restaurant GST % Tax Rate</h3>
-                  <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                    {settings.gstPercentage ?? 5}% Active
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mb-3">Adjust the tax percentage rate applied to POS bills and receipts.</p>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    value={settings.gstPercentage ?? 5}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      onUpdateSettings({
-                        ...settings,
-                        gstPercentage: isNaN(val) ? 0 : Math.max(0, Math.min(100, val))
-                      });
-                    }}
-                    className="w-28 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-xl font-mono text-sm font-bold text-white focus:outline-none focus:border-emerald-500"
-                  />
-                  <div className="flex gap-1.5">
-                    {[0, 5, 12, 18, 28].map((rate) => (
-                      <button
-                        key={rate}
-                        type="button"
-                        onClick={() => onUpdateSettings({ ...settings, gstPercentage: rate })}
-                        className={`px-2 py-1 rounded-lg text-xs font-bold font-mono transition border cursor-pointer ${
-                          (settings.gstPercentage ?? 5) === rate
-                            ? "bg-emerald-500 text-slate-950 border-emerald-500"
-                            : "bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600"
-                        }`}
-                      >
-                        {rate}%
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
       </div>
 

@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import { Database } from "../shared/database";
 
 export type NotificationChannel = "in-app" | "email" | "sms";
@@ -41,11 +41,11 @@ export interface DispatchLog {
  * (e.g. Gmail SMTP, Twilio, Resend, Amazon SES)
  */
 export interface EmailProvider {
-  sendEmail(to: string, subject: string, htmlBody: string): Promise<{ success: boolean; providerId: string }>;
+  sendEmail(to: string, subject: string, htmlBody: string): Promise<{ success: boolean; providerId: string; provider?: string }>;
 }
 
 export interface SMSProvider {
-  sendSMS(to: string, message: string): Promise<{ success: boolean; providerId: string }>;
+  sendSMS(to: string, message: string): Promise<{ success: boolean; providerId: string; provider?: string }>;
 }
 
 function isPlaceholderCredential(val?: string): boolean {
@@ -71,7 +71,7 @@ function isPlaceholderCredential(val?: string): boolean {
  * Option 1: Free Nodemailer SMTP Email Provider (Gmail App Password / Free SMTP)
  */
 class SmtpEmailProvider implements EmailProvider {
-  private transporter: nodemailer.Transporter | null = null;
+  private transporter: Transporter | null = null;
 
   constructor() {
     const user = process.env.SMTP_USER || process.env.GMAIL_USER;
@@ -136,13 +136,13 @@ class SmtpEmailProvider implements EmailProvider {
     try {
       const fromEmail = process.env.SMTP_USER || process.env.GMAIL_USER;
       const info = await this.transporter.sendMail({
-        from: `"VeggiePOS" <${fromEmail}>`,
+        from: `"Aatmyam POS" <${fromEmail}>`,
         to,
         subject,
         html: htmlBody
       });
       console.log(`[SMTP Email Provider] Real Email sent to ${to}. ID: ${info.messageId}`);
-      return { success: true, providerId: info.messageId };
+      return { success: true, providerId: info.messageId, provider: "SMTP" };
     } catch (error: any) {
       console.warn("[SMTP Email Provider] Error dispatching email via SMTP:", error?.message || error);
       return { success: false, providerId: "" };
@@ -156,7 +156,8 @@ class SmtpEmailProvider implements EmailProvider {
 class ResendEmailProvider implements EmailProvider {
   async sendEmail(to: string, subject: string, htmlBody: string) {
     const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
+    const from=process.env.EMAIL_FROM || process.env.RESEND_FROM;
+    if (!apiKey || !from || /onboarding@resend\.dev/i.test(from)) {
       return { success: false, providerId: "" };
     }
 
@@ -168,8 +169,9 @@ class ResendEmailProvider implements EmailProvider {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
+        signal: AbortSignal.timeout(10000),
         body: JSON.stringify({
-          from: "VeggiePOS <onboarding@resend.dev>",
+          from,
           to: [to],
           subject: subject,
           html: htmlBody
@@ -184,7 +186,7 @@ class ResendEmailProvider implements EmailProvider {
 
       const data = await response.json() as { id: string };
       console.log(`[Resend Email Provider] Email successfully dispatched. Resend ID: ${data.id}`);
-      return { success: true, providerId: data.id };
+      return { success: true, providerId: data.id, provider:"Resend" };
     } catch (error: any) {
       console.warn("[Resend Email Provider] Network error during dispatch:", error);
       return { success: false, providerId: "" };
@@ -232,12 +234,8 @@ class CompositeEmailProvider implements EmailProvider {
   }
 }
 
-class MockTwilioProvider implements SMSProvider {
-  async sendSMS(to: string, message: string) {
-    console.log(`[Twilio Integration] Dispatching SMS to ${to}...`);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    return { success: true, providerId: `tw-sms-${Date.now()}-${Math.floor(Math.random() * 1000)}` };
-  }
+class UnconfiguredSMSProvider implements SMSProvider {
+  async sendSMS(_to:string,_message:string) {return {success:false,providerId:"",provider:"Not configured"};}
 }
 
 export class NotificationService {
@@ -249,7 +247,7 @@ export class NotificationService {
   private constructor() {
     this.db = Database.getInstance();
     this.emailProvider = new CompositeEmailProvider();
-    this.smsProvider = new MockTwilioProvider();
+    this.smsProvider = new UnconfiguredSMSProvider();
   }
 
   public static getInstance(): NotificationService {
@@ -288,10 +286,10 @@ export class NotificationService {
               results.push({ channel: "email", status: "failed", detail: "Missing recipient email address" });
               break;
             }
-            const bodyToSend = payload.htmlBody || `<p>${message}</p>`;
+            const bodyToSend = payload.htmlBody || `<p>${message.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c] || c))}</p>`;
             const emailRes = await this.emailProvider.sendEmail(recipientEmail, title, bodyToSend);
             if (emailRes.success) {
-              results.push({ channel: "email", status: "success", detail: `Delivered via Resend (Ref: ${emailRes.providerId})` });
+              results.push({ channel: "email", status: "success", detail: `Accepted by ${emailRes.provider || "email provider"} (Ref: ${emailRes.providerId})` });
               logs.push({
                 id: `log-${Date.now()}-${Math.random()}`,
                 timestamp: new Date().toISOString(),
@@ -299,11 +297,11 @@ export class NotificationService {
                 status: "dispatched",
                 recipient: recipientEmail,
                 subjectOrTitle: title,
-                messageBody: message,
-                providerUsed: "Resend"
+                messageBody: /verification|otp/i.test(title) ? "Verification message (content redacted)" : message,
+                providerUsed: emailRes.provider || "Email"
               });
             } else {
-              results.push({ channel: "email", status: "failed", detail: "Resend email transmission failed" });
+              results.push({ channel: "email", status: "failed", detail: "Email provider rejected or could not send the message" });
             }
             break;
 
@@ -322,7 +320,7 @@ export class NotificationService {
                 status: "dispatched",
                 recipient: recipientPhone,
                 subjectOrTitle: title,
-                messageBody: message,
+                messageBody: /verification|otp/i.test(title) ? "Verification message (content redacted)" : message,
                 providerUsed: "Twilio (Mock-Active)"
               });
             } else {
@@ -357,36 +355,26 @@ export class NotificationService {
     return (await this.db.getObject<InAppNotification[]>(tenantId, "system_notifications")) || [];
   }
 
-  /**
-   * Mark specific in-app notification as read
-   */
-  public async markAsRead(tenantId: string, id: string): Promise<boolean> {
-    const list = await this.getInAppNotifications(tenantId);
-    const item = list.find((n) => n.id === id);
-    if (!item) return false;
-    item.read = true;
-    await this.db.saveObject(tenantId, "system_notifications", list);
-    return true;
+  public canView(notification:any, actor:{userId:string;role:string}):boolean {
+    const visible=Array.isArray(notification.recipientIds)
+      ? notification.recipientIds.includes(actor.userId)
+      : ['Owner','Manager'].includes(actor.role);
+    return visible && !(notification.dismissedBy || []).includes(actor.userId);
   }
-
-  /**
-   * Mark all in-app notifications as read
-   */
-  public async markAllAsRead(tenantId: string): Promise<void> {
-    const list = await this.getInAppNotifications(tenantId);
-    list.forEach((n) => { n.read = true; });
-    await this.db.saveObject(tenantId, "system_notifications", list);
+  public async getInbox(tenantId:string,actor:{userId:string;role:string}) {
+    return (await this.getInAppNotifications(tenantId)).filter(n=>this.canView(n,actor)).map((n:any)=>{
+      const {recipientIds,readBy,dismissedBy,eventKey,...safe}=n;
+      return {...safe,read:(readBy || []).includes(actor.userId)};
+    });
   }
-
-  /**
-   * Delete specific in-app notification
-   */
-  public async deleteNotification(tenantId: string, id: string): Promise<boolean> {
-    const list = await this.getInAppNotifications(tenantId);
-    const filtered = list.filter((n) => n.id !== id);
-    if (filtered.length === list.length) return false;
-    await this.db.saveObject(tenantId, "system_notifications", filtered);
-    return true;
+  public async updateInbox(tenantId:string,actor:{userId:string;role:string},action:'read'|'read-all'|'dismiss',id?:string):Promise<boolean> {
+    return this.db.runTransaction(tenantId,async()=>{
+      const list=await this.getInAppNotifications(tenantId);let changed=false;
+      for(const n of list as any[]) if(this.canView(n,actor) && (action==='read-all' || n.id===id)) {
+        const key=action==='dismiss'?'dismissedBy':'readBy';n[key]=[...new Set([...(n[key] || []),actor.userId])];changed=true;
+      }
+      if(changed)await this.db.saveObject(tenantId,'system_notifications',list);return changed;
+    });
   }
 
   /**
@@ -409,6 +397,7 @@ export class NotificationService {
     tenantId: string,
     notification: Omit<InAppNotification, "id" | "timestamp" | "read">
   ): Promise<string> {
+    return this.db.runTransaction(tenantId,async()=>{
     const id = `notify-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const list = await this.getInAppNotifications(tenantId);
 
@@ -420,9 +409,10 @@ export class NotificationService {
     };
 
     list.unshift(newNotification);
-    // Maintain maximum 50 recent notifications
-    await this.db.saveObject(tenantId, "system_notifications", list.slice(0, 50));
+    // Maintain maximum 100 recent notifications
+    await this.db.saveObject(tenantId, "system_notifications", list.slice(0, 100));
     return id;
+    });
   }
 
   private async saveDispatchLogs(tenantId: string, newLogs: DispatchLog[]): Promise<void> {
