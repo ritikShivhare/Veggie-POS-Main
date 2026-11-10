@@ -190,8 +190,8 @@ router.post("/billing/create-portal-session", authMiddleware, requireRole("Owner
   }
 });
 
-// 4. Actual Stripe Webhook Endpoint (handles signature checking if configured)
-router.post("/webhooks/stripe", express.raw({ type: "application/json" }), async (req, res) => {
+// 4. Stripe webhook: signature verification is mandatory on both URL aliases.
+router.post(["/stripe/webhook", "/webhooks/stripe"], express.raw({ type: "application/json" }), async (req, res) => {
   const stripe = getStripeClient();
   if (!stripe) {
     return res.status(400).send("Stripe SDK is not configured.");
@@ -202,12 +202,10 @@ router.post("/webhooks/stripe", express.raw({ type: "application/json" }), async
   let event: any;
 
   try {
-    if (webhookSecret && sig) {
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    } else {
-      // Direct parse fallback for development testing/forwarding without signature verification
-      event = JSON.parse(req.body.toString());
+    if (!webhookSecret || typeof sig !== "string" || !Buffer.isBuffer(req.body)) {
+      return res.status(400).send("Webhook signing secret, signature and raw body are required.");
     }
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
   } catch (err: any) {
     console.error("Stripe Webhook Parsing / Signature Verification Failed:", err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -221,7 +219,7 @@ router.post("/webhooks/stripe", express.raw({ type: "application/json" }), async
     let subscriptionId: string | undefined;
     let status: string | undefined;
     let tenantId: string | undefined;
-    let plan: "free" | "pro" | "enterprise" = "free";
+    let plan: "free" | "pro" | "enterprise" | undefined;
 
     // Handle the specific subscription lifecycle events
     switch (event.type) {

@@ -96,11 +96,10 @@ export async function findStaffByPinConstantTime(
 export function verifyMasterVerificationCode(inputCode: string): boolean {
   if (!inputCode) return false;
   const clean = inputCode.trim();
-  if (clean === "123456") return true;
 
   const masterSecret = process.env.MASTER_VERIFICATION_CODE;
   if (!masterSecret || !masterSecret.trim()) {
-    return clean === "123456";
+    return false;
   }
-  return constantTimeStringCompare(clean, masterSecret.trim()) || clean === "123456";
+  return constantTimeStringCompare(clean, masterSecret.trim());
 }

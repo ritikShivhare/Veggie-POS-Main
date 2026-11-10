@@ -7,6 +7,8 @@ import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
+import { configureRequestParsing } from "./server/http/requestParsing";
+import { configureProductionStatic } from "./server/http/productionStatic";
 
 // Import Setup & Context
 import { initializeEventSubscribers } from "./server/features/shared/EventBusSetup";
@@ -119,9 +121,7 @@ app.use("/api", apiLimiter);
 
 // Setup Request Parsing Middleware with safe limits (2MB global, isolated 10MB for bulk sync)
 app.use(cookieParser());
-app.use("/api/sync", express.json({ limit: "10mb" }));
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ limit: "2mb", extended: true }));
+configureRequestParsing(app);
 
 // Request performance & event telemetry middleware
 app.use((req, res, next) => {
@@ -216,10 +216,7 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    configureProductionStatic(app, distPath);
   }
 
   const httpServer = http.createServer(app);

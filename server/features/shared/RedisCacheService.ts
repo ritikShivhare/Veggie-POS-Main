@@ -43,19 +43,13 @@ export class RedisCacheService {
         });
       } else if (redisHost) {
         const cleanedRawPassword = (redisPassword || "").trim().replace(/^["']|["']$/g, "");
-        // Resolve password: if host is the user's provided cloud instance and password was misconfigured with an Upstash token
-        const effectivePassword =
-          redisHost.includes("osier-credit-fowl") && (!cleanedRawPassword || cleanedRawPassword.includes("UPSTASH_"))
-            ? "co82HGxYMtxByzNviLQ5RnDKw60T89Qu"
-            : cleanedRawPassword;
-
         const effectiveUsername = process.env.REDIS_USERNAME || "default";
 
         this.client = new Redis({
           host: redisHost,
           port: redisPort || 6379,
           username: effectiveUsername,
-          password: effectivePassword || undefined,
+          password: cleanedRawPassword || undefined,
           connectTimeout: 5000,
           maxRetriesPerRequest: 1,
           retryStrategy(times) {

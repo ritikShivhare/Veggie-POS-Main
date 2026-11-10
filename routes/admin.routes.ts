@@ -127,9 +127,7 @@ router.post("/saas-admin/login", async (req, res) => {
     }
 
     let isPasswordMatch = false;
-    if (inputPin === "admin123" || inputPin === "superadmin") {
-      isPasswordMatch = true;
-    } else if (hashToUse) {
+    if (hashToUse && typeof inputPin === "string") {
       isPasswordMatch = await bcrypt.compare(inputPin, hashToUse);
     }
 
@@ -142,10 +140,11 @@ router.post("/saas-admin/login", async (req, res) => {
     }
 
     // Generate fresh random 6-digit Email OTP on backend
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const targetEmail = (req.body.email && typeof req.body.email === "string" && req.body.email.includes("@"))
-      ? req.body.email.trim()
-      : (process.env.EMAIL_ALERT_ADDRESS || process.env.SMTP_USER || "shivritik53@gmail.com");
+    const targetEmail = (process.env.EMAIL_ALERT_ADDRESS || process.env.SMTP_USER || process.env.GMAIL_USER || "").trim();
+    if (!targetEmail || !targetEmail.includes("@")) {
+      return res.status(503).json({ success: false, error: "ADMIN_EMAIL_UNAVAILABLE", message: "Admin verification email is not configured." });
+    }
+    const generatedOtp = crypto.randomInt(100000, 1000000).toString();
 
     const token = crypto.randomBytes(16).toString("hex");
 
@@ -188,36 +187,17 @@ router.post("/saas-admin/login", async (req, res) => {
         (c) => c.channel === "email" && c.status === "success"
       );
     } catch (sendErr) {
-      console.warn("[Admin Auth] Email notification failed, falling back to direct password authentication:", sendErr);
+      console.warn("[Admin Auth] Verification email delivery failed:", sendErr);
       emailSent = false;
     }
 
-    // If email failed or SMTP is not set up, authenticate immediately with password so owner is never locked out
+    // A valid password never substitutes for successful OTP delivery.
     if (!emailSent) {
       pendingAdminOtps.delete(token);
-
-      const session = await sessionService.createSession(
-        "saas-admin",
-        "s-saas-owner",
-        "SaaS Owner",
-        "SaaS Owner",
-        ip,
-        userAgent
-      );
-
-      res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
-
-      return res.json({
-        success: true,
-        message: "Authenticated successfully with Super-Admin credentials.",
-        session,
-        user: {
-          id: "s-saas-owner",
-          name: "SaaS Owner",
-          role: "SaaS Owner",
-          email: targetEmail,
-          permissions: ["billing", "inventory", "reports", "settings", "super_admin"]
-        }
+      return res.status(503).json({
+        success: false,
+        error: "OTP_DELIVERY_FAILED",
+        message: "Unable to deliver verification email. Please try again later."
       });
     }
 
@@ -233,78 +213,14 @@ router.post("/saas-admin/login", async (req, res) => {
   }
 });
 
-// Endpoint for SaaS Owner Google Authentication
-router.post("/saas-admin/google-login", async (req, res) => {
-  const { credential, email, name } = req.body;
-  const userAgent = (req.headers["user-agent"] as string) || "Unknown User Agent";
-  const ipAddress = req.ip || req.headers["x-forwarded-for"] || "127.0.0.1";
-  const ip = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
-
-  try {
-    let authenticatedEmail = (email || "").trim().toLowerCase();
-
-    // If Google JWT ID token was provided, parse token payload safely
-    if (credential && typeof credential === "string") {
-      try {
-        const parts = credential.split(".");
-        if (parts.length === 3) {
-          const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf8"));
-          if (payload.email) {
-            authenticatedEmail = payload.email.trim().toLowerCase();
-          }
-        }
-      } catch (e) {
-        console.warn("[Google Auth] Error decoding credential:", e);
-      }
-    }
-
-    const expectedOwnerEmail = (process.env.EMAIL_ALERT_ADDRESS || process.env.SMTP_USER || "shivritik53@gmail.com").trim().toLowerCase();
-
-    // Allow owner login
-    const isAuthorized =
-      !authenticatedEmail ||
-      authenticatedEmail === expectedOwnerEmail ||
-      authenticatedEmail === "shivritik53@gmail.com" ||
-      authenticatedEmail === "ritikshiv53@gmail.com" ||
-      authenticatedEmail.includes("ritikshiv") ||
-      authenticatedEmail.includes("shivritik");
-
-    if (!isAuthorized) {
-      return res.status(403).json({
-        success: false,
-        message: `Google Account (${authenticatedEmail}) is not authorized as SaaS Owner. Please use ${expectedOwnerEmail}.`
-      });
-    }
-
-    const session = await sessionService.createSession(
-      "saas-admin",
-      "s-saas-owner",
-      name || "SaaS Owner",
-      "SaaS Owner",
-      ip,
-      userAgent
-    );
-
-    res.cookie(SESSION_COOKIE_NAME, session.sessionId, getSessionCookieOptions(req));
-
-    return res.json({
-      success: true,
-      message: "Google authentication successful.",
-      session,
-      user: {
-        id: "s-saas-owner",
-        name: name || "SaaS Owner",
-        role: "SaaS Owner",
-        email: authenticatedEmail || expectedOwnerEmail,
-        permissions: ["billing", "inventory", "reports", "settings", "super_admin"]
-      }
-    });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message || "Google authentication failed. Please try again."
-    });
-  }
+// Fail closed until a Google identity verifier (signature, issuer and audience) is configured.
+// Client-supplied emails and decoded JWT payloads are not proof of identity.
+router.post("/saas-admin/google-login", (_req, res) => {
+  res.status(401).json({
+    success: false,
+    error: "GOOGLE_AUTH_UNAVAILABLE",
+    message: "Verified Google sign-in is unavailable. Please use password and email verification."
+  });
 });
 
 // Endpoint to resend Super-Admin Email OTP
@@ -319,6 +235,10 @@ router.post("/saas-admin/resend-otp", async (req, res) => {
     }
 
     const record = pendingAdminOtps.get(challengeToken)!;
+    if (Date.now() > record.expiresAt) {
+      pendingAdminOtps.delete(challengeToken);
+      return res.status(401).json({ success: false, error: "OTP_EXPIRED", message: "Verification code expired. Please sign in again." });
+    }
 
     // Cooldown check (15 seconds)
     if (Date.now() - record.lastSentAt < 15000) {
@@ -330,7 +250,7 @@ router.post("/saas-admin/resend-otp", async (req, res) => {
     }
 
     // 1. Generate a completely new 6-digit OTP
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const newOtp = crypto.randomInt(100000, 1000000).toString();
 
     // 2. Replace previous OTP and update expiration to 10 minutes
     record.otp = newOtp;
@@ -367,10 +287,8 @@ router.post("/saas-admin/resend-otp", async (req, res) => {
     );
 
     if (!emailSent) {
-      return res.status(200).json({
-        success: true,
-        message: "Code refreshed. If email delivery is delayed, you can also sign in directly using Google Authentication."
-      });
+      pendingAdminOtps.delete(challengeToken);
+      return res.status(503).json({ success: false, error: "OTP_DELIVERY_FAILED", message: "Unable to deliver verification email. Please sign in again." });
     }
 
     return res.json({
@@ -378,7 +296,8 @@ router.post("/saas-admin/resend-otp", async (req, res) => {
       message: "Verification code sent to your email."
     });
   } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message || "Unable to send verification email. Please try again." });
+    pendingAdminOtps.delete(challengeToken);
+    res.status(503).json({ success: false, message: error.message || "Unable to send verification email. Please try again." });
   }
 });
 
