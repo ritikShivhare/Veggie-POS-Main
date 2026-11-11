@@ -119,6 +119,7 @@ const apiLimiter = rateLimit({
 // Apply rate limiting to API endpoints
 app.use("/api/auth/login", loginLimiter);
 app.use("/api", apiLimiter);
+app.use("/api", (_req, res, next) => { res.set("X-Robots-Tag", "noindex, nofollow"); next(); });
 
 // Setup Request Parsing Middleware with safe limits (2MB global, isolated 10MB for bulk sync)
 app.use(cookieParser());

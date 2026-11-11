@@ -1,3 +1,4 @@
+import {updateDocumentSeo} from "./seo";
 import React, { useState, useEffect } from "react";
 import { MarketingRoute } from "./types";
 import MarketingNav from "./components/MarketingNav";
@@ -25,7 +26,7 @@ export default function MarketingApp({
   onOpenSignup
 }: MarketingAppProps) {
   const [currentRoute, setCurrentRoute] = useState<MarketingRoute>(() => {
-    const path = window.location.pathname;
+    const path = typeof window === "undefined" ? initialRoute : window.location.pathname;
     const validRoutes: MarketingRoute[] = [
       "/",
       "/product",
@@ -41,6 +42,7 @@ export default function MarketingApp({
 
   useEffect(() => {
     const handlePopState = () => {
+      updateDocumentSeo();
       const path = window.location.pathname as MarketingRoute;
       const validRoutes: MarketingRoute[] = [
         "/",
@@ -61,9 +63,12 @@ export default function MarketingApp({
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
+  useEffect(() => { updateDocumentSeo(); }, [currentRoute]);
+
   const handleNavigate = (route: MarketingRoute) => {
     setCurrentRoute(route);
     window.history.pushState({}, "", route);
+    updateDocumentSeo();
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 

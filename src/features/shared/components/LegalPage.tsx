@@ -1,3 +1,4 @@
+import SiteLink from "../../marketing/components/SiteLink";
 import React from "react";
 import { Shield, FileText, RefreshCw, ArrowLeft, CheckCircle } from "lucide-react";
 
@@ -41,13 +42,13 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
           <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl -mr-20 -mt-20" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl -ml-20 -mb-20" />
 
-          <button
-            onClick={onBack}
+          <SiteLink href="/"
+            onNavigate={onBack}
             className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition mb-6 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-xl cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Aatmyam POS</span>
-          </button>
+          </SiteLink>
 
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center shadow-lg">

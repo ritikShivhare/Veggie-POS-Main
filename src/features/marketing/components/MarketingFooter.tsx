@@ -1,3 +1,4 @@
+import SiteLink from "./SiteLink";
 import React from "react";
 import { MarketingRoute } from "../types";
 import BrandLogo from "../../shared/components/BrandLogo";
@@ -45,18 +46,18 @@ export default function MarketingFooter({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={onOpenLogin}
+            <SiteLink href="/login"
+              onNavigate={onOpenLogin}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#181A18] hover:bg-[#2E332D] text-xs font-bold text-[#FBF9F5] border border-[#2E332D] transition cursor-pointer"
             >
               <span>Store Sign In</span>
-            </button>
-            <button
-              onClick={() => handleNav("/contact")}
+            </SiteLink>
+            <SiteLink href="/contact"
+              onNavigate={() => handleNav("/contact")}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#6E8F45] hover:bg-[#567234] text-xs font-bold text-[#FBF9F5] transition cursor-pointer"
             >
               <span>Schedule Walkthrough</span>
-            </button>
+            </SiteLink>
           </div>
         </div>
 
@@ -88,44 +89,44 @@ export default function MarketingFooter({
             </p>
             <ul className="space-y-2 text-xs">
               <li>
-                <button
-                  onClick={() => handleNav("/product")}
+                <SiteLink href="/product"
+                  onNavigate={() => handleNav("/product")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   Overview & Features
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => handleNav("/product")}
+                <SiteLink href="/product"
+                  onNavigate={() => handleNav("/product")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   Touch Terminal & PIN
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => handleNav("/product")}
+                <SiteLink href="/product"
+                  onNavigate={() => handleNav("/product")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   Live Kitchen KDS
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => handleNav("/product")}
+                <SiteLink href="/product"
+                  onNavigate={() => handleNav("/product")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   Recipe BOM Stock
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => handleNav("/pricing")}
+                <SiteLink href="/pricing"
+                  onNavigate={() => handleNav("/pricing")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   Pricing & Tiers
-                </button>
+                </SiteLink>
               </li>
             </ul>
           </div>
@@ -137,44 +138,44 @@ export default function MarketingFooter({
             </p>
             <ul className="space-y-2 text-xs">
               <li>
-                <button
-                  onClick={() => handleNav("/solutions")}
+                <SiteLink href="/solutions"
+                  onNavigate={() => handleNav("/solutions")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   Fine & Casual Dine
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => handleNav("/solutions")}
+                <SiteLink href="/solutions"
+                  onNavigate={() => handleNav("/solutions")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   QSR & Counter Service
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => handleNav("/solutions")}
+                <SiteLink href="/solutions"
+                  onNavigate={() => handleNav("/solutions")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   Café & Artisanal Bakery
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => handleNav("/solutions")}
+                <SiteLink href="/solutions"
+                  onNavigate={() => handleNav("/solutions")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   Cloud Kitchens
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => handleNav("/roi")}
+                <SiteLink href="/roi"
+                  onNavigate={() => handleNav("/roi")}
                   className="text-[#D97706] hover:text-[#FBBF24] transition font-semibold cursor-pointer"
                 >
                   ROI & Savings Model
-                </button>
+                </SiteLink>
               </li>
             </ul>
           </div>
@@ -186,52 +187,52 @@ export default function MarketingFooter({
             </p>
             <ul className="space-y-2 text-xs">
               <li>
-                <button
-                  onClick={() => handleNav("/about")}
+                <SiteLink href="/about"
+                  onNavigate={() => handleNav("/about")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   Operating Manifesto
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => handleNav("/resources")}
+                <SiteLink href="/resources"
+                  onNavigate={() => handleNav("/resources")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   Kitchen Field Notes
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => handleNav("/contact")}
+                <SiteLink href="/contact"
+                  onNavigate={() => handleNav("/contact")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   Book Walkthrough
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => onOpenLegal("terms")}
+                <SiteLink href="/terms"
+                  onNavigate={() => onOpenLegal("terms")}
                   className="text-[#A6AEA0] hover:text-[#FBF9F5] transition cursor-pointer"
                 >
                   Terms of Service
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => onOpenLegal("privacy")}
+                <SiteLink href="/privacy"
+                  onNavigate={() => onOpenLegal("privacy")}
                   className="text-[#A6AEA0] hover:text-[#FBF9F5] transition cursor-pointer"
                 >
                   Privacy Policy
-                </button>
+                </SiteLink>
               </li>
               <li>
-                <button
-                  onClick={() => onOpenLegal("refund-policy")}
+                <SiteLink href="/refund-policy"
+                  onNavigate={() => onOpenLegal("refund-policy")}
                   className="text-[#A6AEA0] hover:text-[#FBF9F5] transition cursor-pointer"
                 >
                   Refund Policy
-                </button>
+                </SiteLink>
               </li>
             </ul>
           </div>
@@ -242,12 +243,12 @@ export default function MarketingFooter({
           <p>© {new Date().getFullYear()} Aatmyam POS Technologies. Designed for hospitality craft & operational calm.</p>
           <div className="flex items-center gap-6">
             <span className="font-mono text-[11px] text-[#A6AEA0]">Version 4.8.2-Enterprise</span>
-            <button
-              onClick={onOpenLogin}
+            <SiteLink href="/login"
+              onNavigate={onOpenLogin}
               className="text-[#6E8F45] hover:underline font-semibold cursor-pointer"
             >
               Store Sign In →
-            </button>
+            </SiteLink>
           </div>
         </div>
       </div>

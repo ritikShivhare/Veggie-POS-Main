@@ -1,3 +1,4 @@
+import SiteLink from "./SiteLink";
 import React, { useState, useEffect } from "react";
 import { MarketingRoute } from "../types";
 import BrandLogo from "../../shared/components/BrandLogo";
@@ -59,22 +60,22 @@ export default function MarketingNav({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           {/* Brand Logo */}
-          <button
-            onClick={() => handleLinkClick("/")}
+          <SiteLink href="/"
+            onNavigate={() => handleLinkClick("/")}
             className="flex items-center gap-2.5 group text-left cursor-pointer focus:outline-hidden"
             id="brand-home-link"
           >
             <BrandLogo />
-          </button>
+          </SiteLink>
 
           {/* Desktop Navigation Links */}
           <nav className="hidden lg:flex items-center gap-1 bg-[#F4F0E8] px-3 py-1.5 rounded-full border border-[#EAE5DA]">
             {navLinks.map((link) => {
               const isActive = currentRoute === link.route;
               return (
-                <button
+                <SiteLink href={link.route}
                   key={link.route}
-                  onClick={() => handleLinkClick(link.route)}
+                  onNavigate={() => handleLinkClick(link.route)}
                   id={`nav-link-${link.route.replace("/", "") || "home"}`}
                   className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-all duration-150 cursor-pointer ${
                     isActive
@@ -83,39 +84,39 @@ export default function MarketingNav({
                   }`}
                 >
                   {link.label}
-                </button>
+                </SiteLink>
               );
             })}
           </nav>
 
           {/* Right Action CTAs */}
           <div className="hidden sm:flex items-center gap-3">
-            <button
-              onClick={onOpenLogin}
+            <SiteLink href="/login"
+              onNavigate={onOpenLogin}
               id="nav-signin-btn"
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-[#181A18] hover:text-[#6E8F45] bg-[#F4F0E8] hover:bg-[#EAE5DA] rounded-xl transition-all duration-150 border border-[#EAE5DA] cursor-pointer"
             >
               <span>Sign In</span>
-            </button>
+            </SiteLink>
 
-            <button
-              onClick={() => handleLinkClick("/contact")}
+            <SiteLink href="/contact"
+              onNavigate={() => handleLinkClick("/contact")}
               id="nav-book-demo-btn"
               className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer border border-[#2E332D]"
             >
               <span>Book Walkthrough</span>
               <ArrowRight className="w-3.5 h-3.5" />
-            </button>
+            </SiteLink>
           </div>
 
           {/* Mobile Hamburger Toggle */}
           <div className="flex lg:hidden items-center gap-2">
-            <button
-              onClick={onOpenLogin}
+            <SiteLink href="/login"
+              onNavigate={onOpenLogin}
               className="sm:hidden inline-flex items-center px-3 py-1.5 text-xs font-bold text-[#181A18] bg-[#F4F0E8] rounded-lg border border-[#EAE5DA]"
             >
               <span>Sign In</span>
-            </button>
+            </SiteLink>
 
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -136,9 +137,9 @@ export default function MarketingNav({
             {navLinks.map((link) => {
               const isActive = currentRoute === link.route;
               return (
-                <button
+                <SiteLink href={link.route}
                   key={link.route}
-                  onClick={() => handleLinkClick(link.route)}
+                  onNavigate={() => handleLinkClick(link.route)}
                   className={`w-full flex items-center justify-between px-4 py-3 text-sm font-semibold rounded-xl text-left transition ${
                     isActive
                       ? "bg-[#181A18] text-[#FBF9F5]"
@@ -147,29 +148,29 @@ export default function MarketingNav({
                 >
                   <span>{link.label}</span>
                   <ChevronRight className="w-4 h-4 opacity-60" />
-                </button>
+                </SiteLink>
               );
             })}
           </div>
 
           <div className="pt-4 border-t border-[#EAE5DA] space-y-2.5">
-            <button
-              onClick={() => {
+            <SiteLink href="/login"
+              onNavigate={() => {
                 setMobileMenuOpen(false);
                 onOpenLogin();
               }}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-[#181A18] bg-[#F4F0E8] rounded-xl border border-[#EAE5DA]"
             >
               <span>Sign In / Store Portal</span>
-            </button>
+            </SiteLink>
 
-            <button
-              onClick={() => handleLinkClick("/contact")}
+            <SiteLink href="/contact"
+              onNavigate={() => handleLinkClick("/contact")}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-[#FBF9F5] bg-[#181A18] rounded-xl border border-[#2E332D]"
             >
               <span>Book a 15-Min Walkthrough</span>
               <ArrowRight className="w-4 h-4" />
-            </button>
+            </SiteLink>
           </div>
         </div>
       )}

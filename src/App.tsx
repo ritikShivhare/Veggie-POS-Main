@@ -1,3 +1,4 @@
+import {updateDocumentSeo} from "./features/marketing/seo";
 import {startVisiblePolling} from './features/shared/utils/visiblePolling';
 import SyncQueueStatus from "./features/shared/components/SyncQueueStatus";
 import React, { useState, useEffect } from "react";
@@ -148,6 +149,14 @@ function AppContent() {
     window.addEventListener("popstate", handleLocationChange);
     return () => window.removeEventListener("popstate", handleLocationChange);
   }, []);
+
+  // Private app views can live at / after session restoration or signup.
+  useEffect(() => {
+    const update = () => updateDocumentSeo({privateView: !activeLegalPage && Boolean(currentStaff || showSignup || showAdminPanel || showTerminalLogin)});
+    update();
+    window.addEventListener("popstate", update);
+    return () => window.removeEventListener("popstate", update);
+  });
 
   // Bridge legacy toastMessage state calls to the new modern stackable toast service
   useEffect(() => {
