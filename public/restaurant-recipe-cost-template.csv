@@ -1,0 +1,11 @@
+﻿Ingredient,Base unit,Purchase price INR,Purchase quantity in base units,Quantity per serving,Serving cost INR
+Milk,ml,60,1000,180,=C2/D2*E2
+Coffee beans,g,800,1000,18,=C3/D3*E3
+Sugar,g,50,1000,8,=C4/D4*E4
+Takeaway cup,each,3,1,1,=C5/D5*E5
+Total serving cost,,,,,=SUM(F2:F5)
+Selling price INR,,120,,,
+Food cost percentage,,,,,=F6/C7*100
+
+Illustrative inputs only. Replace prices and quantities with your records.
+"Use consistent units and tax basis. Labor, rent and other overheads are not included."

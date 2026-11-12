@@ -1,3 +1,4 @@
+import SiteLink from "../components/SiteLink";
 import React, { useState } from "react";
 import { MarketingRoute } from "../types";
 import {
@@ -37,17 +38,17 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       description:
         "Staff can record table orders and item details in the POS.",
       statusColor: "bg-[#6E8F45]",
-      badge: "Instant Sync"
+      badge: "Order Entry"
     },
     {
       id: "02",
       station: "Kitchen Pass",
-      title: "KOT Fired to Cooking Stations",
+      title: "Kitchen Order Status",
       metric: "Kitchen order status",
       description:
         "Kitchen staff can view incoming orders and update their preparation status.",
       statusColor: "bg-[#6E8F45]",
-      badge: "Live Broadcast"
+      badge: "Kitchen Status"
     },
     {
       id: "03",
@@ -67,7 +68,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       description:
         "Owners can manage staff roles and permissions for restaurant operations.",
       statusColor: "bg-[#D97706]",
-      badge: "Saffron Audit Flag"
+      badge: "Staff Access"
     }
   ];
 
@@ -92,39 +93,39 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
               {/* Main Headline */}
               <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl text-[#181A18] tracking-tight leading-[1.12]">
-                Peak service, <br className="hidden sm:block" />
-                <span className="italic text-[#6E8F45]">without</span> the scramble.
+                Restaurant POS for <br className="hidden sm:block" />
+                <span className="italic text-[#6E8F45]">independent restaurants</span> and cafés in India.
               </h1>
 
               {/* Editorial Subhead */}
               <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed max-w-2xl">
-                Aatmyam POS is the calm operational command center for independent kitchens and single-outlet restaurants.
-                Order entry, kitchen status, recipe-linked inventory, and staff permissions for single-outlet restaurants.
+                Manage billing, kitchen tickets, recipe-linked inventory and staff permissions in one browser-based workspace.
+                Aatmyam POS currently supports one outlet per restaurant and is available in early access.
               </p>
 
               {/* Action Buttons & Assurance */}
               <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5">
-                <button
-                  onClick={() => onNavigate("/contact")}
+                <SiteLink
+                  href="/contact" onNavigate={() => onNavigate("/contact")}
                   id="hero-book-demo-btn"
                   className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-sm font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition-all duration-200 shadow-md hover:shadow-lg cursor-pointer border border-[#2E332D]"
                 >
-                  <span>Request a Product Walkthrough</span>
+                  <span>Book a 15-minute demo</span>
                   <ArrowRight className="w-4 h-4" />
-                </button>
+                </SiteLink>
 
-                <button
-                  onClick={() => onNavigate("/product")}
+                <SiteLink
+                  href="/product" onNavigate={() => onNavigate("/product")}
                   id="hero-explore-product-btn"
                   className="inline-flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-bold text-[#181A18] bg-[#F4F0E8] hover:bg-[#EAE5DA] rounded-xl transition-all duration-150 border border-[#EAE5DA] cursor-pointer"
                 >
                   <span>Explore Core Features</span>
                   <ArrowRight className="w-4 h-4 text-[#6E8F45]" />
-                </button>
+                </SiteLink>
               </div>
 
               <div className="pt-4 border-t border-[#EAE5DA] text-xs text-[#787F74]">
-                Aatmyam POS is in early access. Request a walkthrough to review the current product.
+                Peak service, without the scramble. Review the current early-access product in a walkthrough.
               </div>
             </div>
 
@@ -220,10 +221,10 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                     <div className="pt-2 flex items-center justify-between border-t border-[#2E332D]">
                       <span className="text-[11px] text-[#A6AEA0] flex items-center gap-1">
                         <QrCode className="w-3.5 h-3.5 text-[#6E8F45]" />
-                        Dynamic UPI QR Ready
+                        Configured UPI QR
                       </span>
                       <span className="px-2 py-1 bg-[#6E8F45] text-[#FBF9F5] rounded font-bold text-[10px]">
-                        Cashier: Rahul (PIN 3333)
+                        Cashier: Demo account
                       </span>
                     </div>
                   </div>
@@ -235,7 +236,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                       <span className="px-2 py-0.5 bg-[#D97706]/20 text-[#FBBF24] rounded font-mono font-bold">
                         KOT #1042 — Fired 2m ago
                       </span>
-                      <span className="text-[10px] text-[#A6AEA0] font-mono">Station: Curry & Tandoor</span>
+                      <span className="text-[10px] text-[#A6AEA0] font-mono">Kitchen order queue</span>
                     </div>
                     <ul className="space-y-2 text-[11px]">
                       <li className="flex items-center justify-between bg-[#181A18] p-2 rounded-lg border border-[#2E332D]">
@@ -277,9 +278,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 {interactiveTab === "owner" && (
                   <div className="space-y-3 bg-[#242823] p-4 rounded-2xl border border-[#2E332D] text-xs animate-in fade-in duration-200">
                     <div className="flex justify-between items-center pb-2 border-b border-[#2E332D]">
-                      <span className="text-xs font-bold text-[#FBF9F5]">Owner Leakage Guard</span>
+                      <span className="text-xs font-bold text-[#FBF9F5]">Owner Overview</span>
                       <span className="px-2 py-0.5 bg-[#D97706]/20 text-[#FBBF24] rounded font-mono text-[10px]">
-                        0 Suspicious Edits
+                        Role-based access
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
@@ -288,7 +289,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                         <p className="text-sm font-bold text-[#FBF9F5]">₹42,850</p>
                       </div>
                       <div className="p-2 bg-[#181A18] rounded border border-[#2E332D]">
-                        <p className="text-[#A6AEA0] text-[10px]">Cash In Drawer</p>
+                        <p className="text-[#A6AEA0] text-[10px]">Recorded Cash Sales</p>
                         <p className="text-sm font-bold text-[#84A955]">₹14,200 (Exact)</p>
                       </div>
                     </div>
@@ -298,13 +299,13 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
                 {/* Footer status */}
                 <div className="mt-4 pt-3 border-t border-[#2E332D] flex items-center justify-between text-[11px] text-[#A6AEA0]">
-                  <span>Zero proprietary hardware required</span>
-                  <button
-                    onClick={() => onNavigate("/product")}
-                    className="text-[#84A955] hover:underline font-bold cursor-pointer"
+                  <span>Review your device and printer setup</span>
+                  <SiteLink
+                    href="/product" onNavigate={() => onNavigate("/product")}
+                    className="inline-flex items-center justify-center text-[#84A955] hover:underline font-bold cursor-pointer"
                   >
                     Explore Product Specs →
-                  </button>
+                  </SiteLink>
                 </div>
               </div>
             </div>
@@ -322,10 +323,10 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               The Connected Restaurant Loop
             </span>
             <h2 className="font-serif text-3xl sm:text-4xl text-[#181A18] tracking-tight">
-              One punch. Every station updated instantly.
+              One order. A clear handoff for each team.
             </h2>
             <p className="text-sm text-[#5A6056]">
-              When front of house, kitchen line, and inventory communicate seamlessly, food leaves the pass faster and profit stops slipping through the cracks.
+              Record an order, review kitchen preparation status, track recipe-linked stock and manage staff access in the same restaurant workspace.
             </p>
           </div>
 
@@ -405,13 +406,13 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 Designed for the heat of the floor, not a boardroom slide deck.
               </h2>
             </div>
-            <button
-              onClick={() => onNavigate("/product")}
+            <SiteLink
+              href="/product" onNavigate={() => onNavigate("/product")}
               className="inline-flex items-center gap-2 text-xs font-bold text-[#181A18] hover:text-[#6E8F45] transition cursor-pointer"
             >
               <span>Explore all platform modules</span>
               <ArrowRight className="w-4 h-4" />
-            </button>
+            </SiteLink>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -422,20 +423,19 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 <Zap className="w-6 h-6" />
               </div>
               <h3 className="font-serif text-xl font-bold text-[#181A18]">
-                Counter Speed That Keeps Lines Moving
+                Order Entry & Payment Records
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
-                4-digit quick staff PIN switches, tactile physical keyboard hotkeys, and automatic UPI QR codes.
-                Your staff can punch a 5-item order and collect payment before other systems finish loading.
+                Enter menu orders and record cash or checked UPI payments. An outlet with a configured UPI ID can generate an amount-specific QR; staff still check receipt of the customer payment.
               </p>
               <ul className="space-y-2 text-xs text-[#1C1E1B] pt-2 border-t border-[#EAE5DA]">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#6E8F45]" />
-                  <span>One-time store pairing per tablet</span>
+                  <span>Staff access on configured devices</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#6E8F45]" />
-                  <span>Dynamic split bill & item modifiers</span>
+                  <span>Cash and manual UPI payment records</span>
                 </li>
               </ul>
             </div>
@@ -449,13 +449,12 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 Recipe-Linked BOM Inventory
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
-                Raw ingredients link directly to menu items. As dishes sell, inventory calculates theoretical vs. physical consumption,
-                flagging over-portioning and kitchen shrinkage before the month ends.
+                Link menu items to measured recipes and ingredient records. Review stock changes, purchases and low-stock thresholds on plans with advanced inventory.
               </p>
               <ul className="space-y-2 text-xs text-[#1C1E1B] pt-2 border-t border-[#EAE5DA]">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#6E8F45]" />
-                  <span>Automated per-dish cost calculations</span>
+                  <span>Recipe and ingredient records</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#6E8F45]" />
@@ -470,20 +469,19 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <h3 className="font-serif text-xl font-bold text-[#181A18]">
-                Owner Freedom & Saffron Leakage Signals
+                Staff Access & Owner Reports
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
-                Step away from the cash counter with confidence. Role-based permissions lock bill edits and discounts behind owner authorization,
-                giving you a real-time pulse of revenue from anywhere.
+                Assign staff roles and permissions for the tasks at your outlet. Owners can review recorded sales activity and manage access to restaurant operations.
               </p>
               <ul className="space-y-2 text-xs text-[#1C1E1B] pt-2 border-t border-[#EAE5DA]">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#6E8F45]" />
-                  <span>Cash drawer open event logs</span>
+                  <span>Individual staff PINs and permissions</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#6E8F45]" />
-                  <span>Shift end cash reconciliation audits</span>
+                  <span>Available sales reports</span>
                 </li>
               </ul>
             </div>
@@ -503,26 +501,26 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 <span>FORMAT COMPATIBILITY</span>
               </div>
               <h2 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-[#FBF9F5]">
-                Tuned for fine dining, fast counters, and 20-location groups alike.
+                Workflows for independent restaurants, cafés and counters.
               </h2>
               <p className="text-sm text-[#A6AEA0] leading-relaxed">
-                See how Aatmyam POS adapts to your specific floor layout, kitchen stations, and inventory workflows.
+                Explore table, counter, café and kitchen workflows for one restaurant outlet.
               </p>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0">
-              <button
-                onClick={() => onNavigate("/solutions")}
-                className="w-full sm:w-auto px-6 py-3.5 text-xs font-bold text-[#181A18] bg-[#FBF9F5] hover:bg-[#6E8F45] hover:text-[#FBF9F5] rounded-xl transition duration-150 cursor-pointer"
+              <SiteLink
+                href="/solutions" onNavigate={() => onNavigate("/solutions")}
+                className="inline-flex items-center justify-center w-full sm:w-auto px-6 py-3.5 text-xs font-bold text-[#181A18] bg-[#FBF9F5] hover:bg-[#6E8F45] hover:text-[#FBF9F5] rounded-xl transition duration-150 cursor-pointer"
               >
                 View Format Solutions
-              </button>
-              <button
-                onClick={() => onNavigate("/roi")}
-                className="w-full sm:w-auto px-6 py-3.5 text-xs font-bold text-[#D97706] bg-[#242823] hover:bg-[#2E332D] rounded-xl border border-[#D97706]/40 transition duration-150 cursor-pointer"
+              </SiteLink>
+              <SiteLink
+                href="/roi" onNavigate={() => onNavigate("/roi")}
+                className="inline-flex items-center justify-center w-full sm:w-auto px-6 py-3.5 text-xs font-bold text-[#D97706] bg-[#242823] hover:bg-[#2E332D] rounded-xl border border-[#D97706]/40 transition duration-150 cursor-pointer"
               >
                 Calculate Your Outlet ROI
-              </button>
+              </SiteLink>
             </div>
           </div>
 
@@ -536,21 +534,21 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             Ready to bring calm and control to your kitchen floor?
           </h2>
           <p className="text-sm text-[#5A6056] leading-relaxed">
-            Schedule a 15-minute operational walkthrough. We’ll show you how Aatmyam POS handles your exact menu, recipes, and table layouts without costly hardware migrations.
+            Bring your menu, recipes and device requirements to a 15-minute walkthrough. Review the available workflows and current early-access setup process for one outlet.
           </p>
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              onClick={() => onNavigate("/contact")}
-              className="px-7 py-3.5 text-sm font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition duration-200 shadow-md cursor-pointer border border-[#2E332D]"
+            <SiteLink
+              href="/contact" onNavigate={() => onNavigate("/contact")}
+              className="inline-flex items-center justify-center px-7 py-3.5 text-sm font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition duration-200 shadow-md cursor-pointer border border-[#2E332D]"
             >
               Schedule Your Walkthrough
-            </button>
-            <button
-              onClick={() => onNavigate("/pricing")}
-              className="px-6 py-3.5 text-sm font-bold text-[#181A18] bg-[#F4F0E8] hover:bg-[#EAE5DA] rounded-xl border border-[#EAE5DA] transition cursor-pointer"
+            </SiteLink>
+            <SiteLink
+              href="/pricing" onNavigate={() => onNavigate("/pricing")}
+              className="inline-flex items-center justify-center px-6 py-3.5 text-sm font-bold text-[#181A18] bg-[#F4F0E8] hover:bg-[#EAE5DA] rounded-xl border border-[#EAE5DA] transition cursor-pointer"
             >
               Review Transparent Pricing
-            </button>
+            </SiteLink>
           </div>
         </div>
       </section>

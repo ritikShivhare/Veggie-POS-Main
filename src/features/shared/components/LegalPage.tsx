@@ -64,7 +64,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
         {/* Document Body */}
         <div className="p-8 sm:p-12 prose prose-slate max-w-none text-slate-650 leading-relaxed text-sm space-y-8">
           <div className="text-xs text-slate-400 font-mono flex items-center justify-between pb-4 border-b border-slate-100">
-            <span>Effective Date: July 3, 2026</span>
+            <span>Updated: November 12, 2026</span>
             <span>Product data practices</span>
           </div>
 
@@ -80,7 +80,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">2. Multi-Tenant Service & Account Security</h3>
                 <p>
-                  Aatmyam POS isolates data utilizing advanced multi-tenant technology. Each restaurant is assigned a unique <code className="bg-slate-100 text-pink-600 px-1 py-0.5 rounded text-xs font-mono">Tenant ID</code>. You are solely responsible for maintaining the confidentiality of your administrative credentials, including your 5-digit Owner PIN passcode and any employee 4-digit PINs.
+                  Aatmyam POS isolates data utilizing advanced multi-tenant technology. Each restaurant is assigned a unique <code className="bg-slate-100 text-pink-600 px-1 py-0.5 rounded text-xs font-mono">Tenant ID</code>. You are solely responsible for maintaining the confidentiality of your administrative credentials, including owner credentials and individual staff PINs.
                 </p>
               </section>
 
@@ -156,7 +156,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">3. How Your Data is Isolated & Shared</h3>
                 <p>
-                  Restaurant access is checked by the application server. Hosting and database providers process stored records; configured email services send verification messages. If enabled, AI providers process submitted chat or report data. The service owner must identify the providers used in this deployment.
+                  Restaurant access is checked by the application server. Hosting and database providers process stored records; configured email services send verification messages. If enabled, AI providers process submitted chat or report data. Contact the service operator for information about the providers enabled for your account.
                 </p>
               </section>
 
@@ -195,7 +195,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">1. SaaS Subscription Cycle</h3>
                 <p>
-                  Aatmyam POS is offered as a flexible SaaS subscription product billed either monthly or annually. Your subscription commences immediately upon registration and credentials generation.
+                  Paid Aatmyam POS plans use 30-day subscription cycles for one outlet. Paid access starts after backend payment verification. Review Billing for the current plan, order allowance, cycle dates and paid-access expiry.
                 </p>
               </section>
 
@@ -205,7 +205,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
                   We strive for exceptional quality. If you find Aatmyam POS does not meet your restaurant's billing workflows or you experience technical issues, you may request a refund under the following conditions:
                 </p>
                 <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
-                  <li><b>Guarantee Window:</b> Refund requests must be initiated via email within <b>7 calendar days</b> of your initial premium registration.</li>
+                  <li><b>Guarantee Window:</b> Refund requests must be raised with the service operator within <b>7 calendar days</b> of your initial paid activation.</li>
                   <li><b>Proof of Operational Incompatibility:</b> A brief explanation of the incompatibility helps us continuously refine our features.</li>
                   <li><b>Processing:</b> Approved refunds will be processed back to the original UPI, card, or banking payment source within 5 to 7 business days.</li>
                 </ul>
@@ -214,11 +214,11 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">3. Subscription Cancellation</h3>
                 <p>
-                  You can cancel your active Aatmyam POS account subscription directly from your administrative dashboard or billing section. Once cancelled:
+                  Paid cycles are purchased through checkout; this product does not automatically charge for the next paid cycle. To stop renewing, do not purchase another cycle. Review your current paid-access expiry in Billing:
                 </p>
                 <ul className="list-disc pl-5 space-y-1 text-slate-600">
-                  <li>You will not be billed for subsequent billing cycles;</li>
-                  <li>Your terminal will remain active until the end of your current pre-paid cycle;</li>
+                  <li>A new paid cycle requires another verified payment;</li>
+                  <li>Paid-plan access follows the current paid period and subscription limits;</li>
                   <li>Before cancellation, we recommend downloading your complete operational records using our <b>"Export My Data"</b> tool to maintain historic reports.</li>
                 </ul>
               </section>

@@ -1,3 +1,4 @@
+import SiteLink from "../components/SiteLink";
 import React from "react";
 import { MarketingRoute } from "../types";
 import {
@@ -28,19 +29,19 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
       number: "02",
       title: "Every Gram Accounts for Profit",
       description:
-        "Restaurants don't fail from lack of passion; they fail from untracked ingredient leakage and portion creep. By linking raw materials to live recipes (BOM), we turn inventory from a stressful monthly chore into an automatic daily margin protector."
+        "Measured recipes and consistent ingredient records help an owner understand stock use. Aatmyam supports recipe-linked inventory on eligible plans; reports depend on the quantities and records entered by the restaurant."
     },
     {
       number: "03",
       title: "Owner Freedom Through Clear Data",
       description:
-        "You shouldn't have to stand over the cash register for 14 hours a day just to trust your daily reconciliation. Role-based PIN security, cash drawer pop logs, and live mobile reports give owners complete operational peace of mind from anywhere."
+        "Individual staff access and role-based permissions help separate restaurant responsibilities. Owners can review available sales reports and recorded activity without treating a report as automatic bank reconciliation."
     },
     {
       number: "04",
-      title: "Zero Hardware Traps",
+      title: "Check the Whole Setup",
       description:
-        "We reject proprietary $2,000 POS hardware leases and forced credit card processor lock-ins. Aatmyam POS runs cleanly in standard browsers on iPads, Android tablets, laptops, and phones with standard ESC/POS thermal printers."
+        "Aatmyam runs in a web browser. Device and printer suitability should be checked for the outlet, including operating system, paper format and connection. We explain current requirements during an early-access walkthrough."
     }
   ];
 
@@ -59,8 +60,8 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             <span className="text-[#6E8F45] italic">hardest working room</span> in hospitality.
           </h1>
           <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-            Aatmyam POS was born out of a simple observation: modern restaurant operators are caught between archaic, clunky desktop software from the 1990s and bloated SaaS platforms that take percentage cuts of every order.
-            We set out to build a calm, precise, and transparent operational command center.
+            Aatmyam POS is early-access software for independent restaurants and cafés in India, with one outlet per restaurant account.
+            Its focus is keeping order entry, kitchen preparation status, ingredient records and staff access in a shared workspace.
           </p>
         </div>
       </section>
@@ -81,13 +82,13 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
 
             <div className="md:col-span-8 space-y-4 text-xs sm:text-sm text-[#5A6056] leading-relaxed">
               <p>
-                Spend an evening in any busy commercial kitchen and you’ll immediately see why generic SaaS design fails. Hands are wet. The pass is loud. Servers are juggling three tables while punching takeaway orders.
+                An independent outlet needs a clear way to pass orders from the counter to the kitchen and review the resulting records. The people working each stage should understand which actions are theirs.
               </p>
               <p>
-                In that environment, multi-level dropdown menus and delayed sync spinners are unacceptable. Tools must be tactile, fast, and unforgivingly dependable.
+                We develop around order entry, preparation status, recipe-linked inventory and individual staff access. Current features and plan allowances are described on the product and pricing pages.
               </p>
               <p>
-                We built Aatmyam POS with an editorial Harvest Command aesthetic—subtle warm neutrals, high-contrast typography, and purposeful saffron warning signals. No purple gradients, no flashing notifications, just clean operational visibility.
+                A walkthrough is an opportunity to check your menu, order volume and devices against the current product. Early access means confirming the setup and limitations before relying on it during service.
               </p>
             </div>
           </div>
@@ -143,18 +144,18 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             Experience how Aatmyam POS simplifies table service, kitchen lines, and inventory accounting. Schedule a personalized walkthrough with our hospitality team.
           </p>
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              onClick={() => onNavigate("/contact")}
-              className="px-7 py-3.5 text-sm font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition duration-200 shadow-md cursor-pointer border border-[#2E332D]"
+            <SiteLink
+              href="/contact" onNavigate={() => onNavigate("/contact")}
+              className="inline-flex items-center justify-center px-7 py-3.5 text-sm font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition duration-200 shadow-md cursor-pointer border border-[#2E332D]"
             >
               Book an Operational Walkthrough
-            </button>
-            <button
-              onClick={() => onNavigate("/solutions")}
-              className="px-6 py-3.5 text-sm font-bold text-[#181A18] bg-[#F4F0E8] hover:bg-[#EAE5DA] rounded-xl border border-[#EAE5DA] transition cursor-pointer"
+            </SiteLink>
+            <SiteLink
+              href="/solutions" onNavigate={() => onNavigate("/solutions")}
+              className="inline-flex items-center justify-center px-6 py-3.5 text-sm font-bold text-[#181A18] bg-[#F4F0E8] hover:bg-[#EAE5DA] rounded-xl border border-[#EAE5DA] transition cursor-pointer"
             >
               Explore Format Solutions
-            </button>
+            </SiteLink>
           </div>
         </div>
       </section>

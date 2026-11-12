@@ -1,3 +1,4 @@
+import SiteLink from "../components/SiteLink";
 import React, { useState } from "react";
 import { MarketingRoute } from "../types";
 import {
@@ -252,13 +253,13 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
 
               {/* Action */}
               <div className="pt-2">
-                <button
-                  onClick={() => onNavigate("/contact")}
+                <SiteLink
+                  href="/contact" onNavigate={() => onNavigate("/contact")}
                   className="w-full py-3.5 text-xs font-bold text-[#181A18] bg-[#FBF9F5] hover:bg-[#6E8F45] hover:text-[#FBF9F5] rounded-xl transition duration-150 flex items-center justify-center gap-2 shadow-md cursor-pointer"
                 >
                   <span>Discuss this scenario</span>
                   <ArrowRight className="w-4 h-4" />
-                </button>
+                </SiteLink>
               </div>
 
             </div>

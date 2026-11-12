@@ -1,6 +1,9 @@
 import {updateDocumentSeo} from "./seo";
 import React, { useState, useEffect } from "react";
-import { MarketingRoute } from "./types";
+import { isMarketingRoute, type MarketingRoute } from "./types";
+import { MARKETING_GUIDES } from "../../../shared/marketing-guides";
+import GuidePage from "./pages/GuidePage";
+import CafePage from "./pages/CafePage";
 import MarketingNav from "./components/MarketingNav";
 import MarketingFooter from "./components/MarketingFooter";
 import HomePage from "./pages/HomePage";
@@ -27,34 +30,14 @@ export default function MarketingApp({
 }: MarketingAppProps) {
   const [currentRoute, setCurrentRoute] = useState<MarketingRoute>(() => {
     const path = typeof window === "undefined" ? initialRoute : window.location.pathname;
-    const validRoutes: MarketingRoute[] = [
-      "/",
-      "/product",
-      "/solutions",
-      "/roi",
-      "/pricing",
-      "/about",
-      "/resources",
-      "/contact"
-    ];
-    return validRoutes.includes(path as MarketingRoute) ? (path as MarketingRoute) : initialRoute;
+    return isMarketingRoute(path) ? path : initialRoute;
   });
 
   useEffect(() => {
     const handlePopState = () => {
       updateDocumentSeo();
-      const path = window.location.pathname as MarketingRoute;
-      const validRoutes: MarketingRoute[] = [
-        "/",
-        "/product",
-        "/solutions",
-        "/roi",
-        "/pricing",
-        "/about",
-        "/resources",
-        "/contact"
-      ];
-      if (validRoutes.includes(path)) {
+      const path = window.location.pathname;
+      if (isMarketingRoute(path)) {
         setCurrentRoute(path);
       }
     };
@@ -73,7 +56,11 @@ export default function MarketingApp({
   };
 
   const renderActivePage = () => {
+    const guide = MARKETING_GUIDES.find(item => item.path === currentRoute);
+    if (guide) return <GuidePage guide={guide} onNavigate={handleNavigate} />;
     switch (currentRoute) {
+      case "/solutions/cafes":
+        return <CafePage onNavigate={handleNavigate} />;
       case "/product":
         return <ProductPage onNavigate={handleNavigate} />;
       case "/solutions":

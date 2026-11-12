@@ -1,3 +1,5 @@
+import { MARKETING_GUIDES } from "./marketing-guides";
+
 /** Public search metadata. Never derive canonical hosts from request headers or credentials. */
 export const SITE_ORIGIN = "https://aatmyam-marketing-preview.onrender.com";
 export const PUBLIC_PAGES = [
@@ -21,6 +23,13 @@ export const PUBLIC_PAGES = [
     title: "POS Software for Restaurants, Cafes & Counters | Aatmyam",
     description:
       "See how Aatmyam POS supports restaurant, cafe and counter workflows with connected ordering, kitchen tickets, billing and inventory tools.",
+  },
+  {
+    path: "/solutions/cafes",
+    label: "Cafés",
+    title: "Cafe POS Software for Independent Cafes in India | Aatmyam",
+    description:
+      "Review Aatmyam POS for a single cafe: counter billing, kitchen status, recipe-linked stock, staff access, plan allowances and device requirements.",
   },
   {
     path: "/roi",
@@ -78,6 +87,12 @@ export const PUBLIC_PAGES = [
     description:
       "Review the Aatmyam POS refund and cancellation policy for subscriptions and associated services.",
   },
+  ...MARKETING_GUIDES.map(guide => ({
+    path: guide.path,
+    label: guide.title,
+    title: `${guide.title} | Aatmyam POS`,
+    description: guide.summary,
+  })),
 ] as const;
 export const APP_PATHS = ["/login", "/signup", "/terminal"] as const;
 const privateQueries = [
@@ -156,7 +171,7 @@ export function renderSeoHead(
       }
     : resolved;
   const image = SITE_ORIGIN + "/aatmyam-logo.webp";
-  const graph = [
+  const graph: Record<string, unknown>[] = [
     {
       "@type": "Organization",
       "@id": SITE_ORIGIN + "/#organization",
@@ -192,6 +207,29 @@ export function renderSeoHead(
       about: { "@id": SITE_ORIGIN + "/#software" },
     },
   ];
+  const guide = MARKETING_GUIDES.find(item => item.path === seo.path);
+  if (guide && seo.indexable) {
+    graph.push({
+      "@type": "Article",
+      "@id": seo.canonical + "#article",
+      headline: guide.title,
+      description: guide.summary,
+      datePublished: guide.updatedAt,
+      dateModified: guide.updatedAt,
+      mainEntityOfPage: { "@id": seo.canonical + "#webpage" },
+      author: { "@id": SITE_ORIGIN + "/#organization" },
+      publisher: { "@id": SITE_ORIGIN + "/#organization" },
+    });
+    graph.push({
+      "@type": "BreadcrumbList",
+      "@id": seo.canonical + "#breadcrumbs",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: SITE_ORIGIN + "/" },
+        { "@type": "ListItem", position: 2, name: "Resources", item: SITE_ORIGIN + "/resources" },
+        { "@type": "ListItem", position: 3, name: guide.title, item: seo.canonical },
+      ],
+    });
+  }
   const meta = (name: string, value: string, property = false) =>
     `<meta data-aatmyam-seo ${property ? "property" : "name"}="${name}" content="${escapeHtml(value)}">`;
   return [

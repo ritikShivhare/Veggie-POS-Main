@@ -1,3 +1,4 @@
+import SiteLink from "../components/SiteLink";
 import React, { useState } from "react";
 import { MarketingRoute } from "../types";
 import {
@@ -34,24 +35,25 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
       title: "Order Entry & Billing",
       tagline: "Record menu orders and payment methods.",
       description:
-        "Staff can enter restaurant orders and record cash or manual UPI payments.",
+        "Staff can enter orders and record cash or checked UPI payments. Configuring the outlet UPI ID enables an amount-specific QR; customer payment confirmation remains a staff step.",
       features: [
         "Table-based order entry",
         "Menu item and quantity selection",
         "Cash and manual UPI payment recording",
+        "Amount-specific QR with a configured outlet UPI ID",
         "Order status available to staff"
       ],
       icon: Terminal,
       codePreview: {
-        header: "TERMINAL_DISPATCH // OUTLET_01",
+        header: "ORDER EXAMPLE // ONE OUTLET",
         metric: "Illustrative sample data",
         lines: [
           "TABLE: T-12 [Dine-In, 4 Pax]",
           "+ 2x Butter Chicken (Special)",
           "+ 4x Garlic Naan (Crispy)",
-          "MODIFIER: 'Mild spice on gravy'",
-          "PAYMENT_MODE: UPI Dynamic QR [Rs. 1,480.00]",
-          "STATUS: CONFIRMED & KOT DISPATCHED"
+          "NOTE: 'Mild spice on gravy'",
+          "QR AMOUNT: Rs. 1,480.00 [Configured UPI ID]",
+          "PAYMENT: Staff checks receipt before recording"
         ]
       }
     },
@@ -68,14 +70,14 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
       ],
       icon: ChefHat,
       codePreview: {
-        header: "KDS_STATION_ROUTER // TANDOOR_LINE",
+        header: "KITCHEN ORDER EXAMPLE",
         metric: "Illustrative sample data",
         lines: [
           "TICKET #1048 [Table T-12] - 03m 12s",
           "-> 4x Garlic Naan [CRISPY / EXTRA BUTTER]",
           "TICKET #1049 [Takeaway #22] - 01m 45s",
           "-> 1x Paneer Tikka Platter",
-          "CHEF ACTION: [BUMP TO EXPO PASS]"
+          "CHEF ACTION: [MARK AS PREPARING]"
         ]
       }
     },
@@ -93,21 +95,21 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
       ],
       icon: Boxes,
       codePreview: {
-        header: "BOM_STOCK_ENGINE // AUTO_DEDUCT",
+        header: "RECIPE STOCK EXAMPLE",
         metric: "Illustrative sample data",
         lines: [
           "RECIPE: Paneer Butter Masala (1 Plate)",
-          "- Deduct Cottage Cheese: 200g [Batch #B-88]",
+          "- Deduct Cottage Cheese: 200g",
           "- Deduct Butter: 40g",
           "- Deduct Tomato Puree: 120ml",
           "STOCK_ALERT: Butter below threshold (2.1 kg rem.)",
-          "STATUS: PO AUTO-DRAFT CREATED"
+          "ACTION: Review stock and purchase records"
         ]
       }
     },
     {
       id: "staff",
-      title: "Staff Security & Shift Cash Reconciliation",
+      title: "Staff Roles & Permissions",
       tagline: "Manage restaurant roles and permissions.",
       description:
         "Owners can manage staff access for restaurant operations and review recorded sales activity.",
@@ -119,15 +121,15 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
       ],
       icon: ShieldCheck,
       codePreview: {
-        header: "SECURITY_AUDIT // SHIFT_CLOSING",
+        header: "STAFF ACCESS EXAMPLE",
         metric: "Illustrative sample data",
         lines: [
-          "STAFF: Rajesh K. [Cashier Shift #2]",
-          "START FLOAT: Rs. 3,000.00",
-          "CASH COLLECTED: Rs. 24,500.00",
-          "DRAWER POP EVENTS: 3 (All logged with PIN)",
-          "SYSTEM EXPECTED: Rs. 27,500.00",
-          "ACTUAL PHYSICAL COUNT: Rs. 27,500.00 [BALANCED]"
+          "STAFF: Sample cashier",
+          "ROLE: Cashier",
+          "ACCESS: Billing",
+          "SIGN IN: Individual staff PIN",
+          "OWNER ACTION: Review assigned permissions",
+          "SCOPE: One restaurant outlet"
         ]
       }
     },
@@ -144,14 +146,14 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
       ],
       icon: TrendingUp,
       codePreview: {
-        header: "COPILOT_INTELLIGENCE // LIVE_PULSE",
+        header: "OWNER REPORT EXAMPLE",
         metric: "Illustrative sample data",
         lines: [
           "TODAY GROSS: Sample amount",
           "PEAK HOUR: 20:00 - 21:30 (Avg. ticket: Rs. 920)",
           "MENU INSIGHT: Sample margin view",
-          "SUGGESTION: Prep 6L base gravy before 19:30 rush",
-          "STATUS: ALL 3 OUTLETS SYNCED"
+          "AI ACCESS: Plan and provider setup required",
+          "SCOPE: One restaurant outlet"
         ]
       }
     }
@@ -176,18 +178,18 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               Explore the current Aatmyam POS workflows for order entry, kitchen order status, inventory, and staff access.
             </p>
             <div className="pt-2 flex flex-wrap items-center gap-3">
-              <button
-                onClick={() => onNavigate("/contact")}
-                className="px-6 py-3 text-xs font-bold text-[#181A18] bg-[#FBF9F5] hover:bg-[#6E8F45] hover:text-[#FBF9F5] rounded-xl transition duration-150 cursor-pointer"
+              <SiteLink
+                href="/contact" onNavigate={() => onNavigate("/contact")}
+                className="inline-flex items-center justify-center px-6 py-3 text-xs font-bold text-[#181A18] bg-[#FBF9F5] hover:bg-[#6E8F45] hover:text-[#FBF9F5] rounded-xl transition duration-150 cursor-pointer"
               >
                 Request Live Walkthrough
-              </button>
-              <button
-                onClick={() => onNavigate("/pricing")}
-                className="px-5 py-3 text-xs font-bold text-[#FBF9F5] bg-[#242823] hover:bg-[#2E332D] rounded-xl border border-[#2E332D] transition cursor-pointer"
+              </SiteLink>
+              <SiteLink
+                href="/pricing" onNavigate={() => onNavigate("/pricing")}
+                className="inline-flex items-center justify-center px-5 py-3 text-xs font-bold text-[#FBF9F5] bg-[#242823] hover:bg-[#2E332D] rounded-xl border border-[#2E332D] transition cursor-pointer"
               >
                 View Plans & Pricing
-              </button>
+              </SiteLink>
             </div>
           </div>
         </div>
@@ -198,13 +200,27 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
 
           {/* Module Selector Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-[#2E332D]">
+          <div role="tablist" aria-label="Product features" className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none border-b border-[#2E332D]">
             {modules.map((mod, idx) => {
               const Icon = mod.icon;
               const isSelected = activeModule === idx;
               return (
                 <button
                   key={mod.id}
+                  id={`product-tab-${mod.id}`}
+                  role="tab"
+                  aria-controls={`product-panel-${mod.id}`}
+                  aria-selected={isSelected}
+                  tabIndex={isSelected ? 0 : -1}
+                  onKeyDown={(event) => {
+                    const next = event.key === "ArrowRight" ? (idx + 1) % modules.length
+                      : event.key === "ArrowLeft" ? (idx - 1 + modules.length) % modules.length
+                      : event.key === "Home" ? 0 : event.key === "End" ? modules.length - 1 : null;
+                    if (next === null) return;
+                    event.preventDefault();
+                    setActiveModule(next);
+                    document.getElementById(`product-tab-${modules[next].id}`)?.focus();
+                  }}
                   onClick={() => setActiveModule(idx)}
                   className={`px-4 py-3 rounded-xl text-xs font-bold font-mono transition-all duration-150 flex items-center gap-2 shrink-0 cursor-pointer ${
                     isSelected
@@ -220,24 +236,28 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
           </div>
 
           {/* Active Module Showcase Card */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-[#242823] border border-[#2E332D] rounded-3xl p-6 sm:p-10 shadow-2xl">
+          {modules.map((module, moduleIndex) => (
+          <div key={module.id} id={`product-panel-${module.id}`} role="tabpanel" tabIndex={0}
+            aria-labelledby={`product-tab-${module.id}`} hidden={activeModule !== moduleIndex}
+            style={activeModule === moduleIndex ? undefined : { display: "none" }}
+            className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-[#242823] border border-[#2E332D] rounded-3xl p-6 sm:p-10 shadow-2xl">
 
             {/* Left Description */}
             <div className="lg:col-span-7 space-y-6">
               <div className="space-y-2">
                 <span className="text-xs font-mono uppercase text-[#84A955] font-semibold">
-                  MODULE 0{activeModule + 1} // ARCHITECTURE DEEP DIVE
+                  MODULE 0{moduleIndex + 1} // CURRENT WORKFLOW
                 </span>
                 <h2 className="font-serif text-3xl sm:text-4xl font-bold text-[#FBF9F5]">
-                  {modules[activeModule].title}
+                  {module.title}
                 </h2>
                 <p className="text-sm font-mono text-[#D97706]">
-                  {modules[activeModule].tagline}
+                  {module.tagline}
                 </p>
               </div>
 
               <p className="text-sm text-[#A6AEA0] leading-relaxed">
-                {modules[activeModule].description}
+                {module.description}
               </p>
 
               <div className="space-y-3 pt-2">
@@ -245,7 +265,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
                   Key Capabilities:
                 </p>
                 <ul className="space-y-2">
-                  {modules[activeModule].features.map((feat, fIdx) => (
+                  {module.features.map((feat, fIdx) => (
                     <li key={fIdx} className="flex items-start gap-2.5 text-xs text-[#E0E5DC]">
                       <CheckCircle2 className="w-4 h-4 text-[#6E8F45] shrink-0 mt-0.5" />
                       <span>{feat}</span>
@@ -261,14 +281,14 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
                 <p className="mb-3 text-[10px] font-sans text-[#A6AEA0]">Illustrative interface only; figures shown are sample data, not restaurant results.</p>
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#2E332D]">
                   <span className="text-[11px] text-[#6E8F45] font-bold">
-                    {modules[activeModule].codePreview.header}
+                    {module.codePreview.header}
                   </span>
                   <span className="text-[10px] text-[#A6AEA0]">
-                    {modules[activeModule].codePreview.metric}
+                    {module.codePreview.metric}
                   </span>
                 </div>
                 <div className="space-y-2 text-[#E0E5DC] text-[11px] leading-relaxed">
-                  {modules[activeModule].codePreview.lines.map((line, lIdx) => (
+                  {module.codePreview.lines.map((line, lIdx) => (
                     <p
                       key={lIdx}
                       className={
@@ -291,6 +311,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
             </div>
 
           </div>
+          ))}
 
         </div>
       </section>
@@ -304,10 +325,10 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               The Full Service Loop
             </span>
             <h2 className="font-serif text-3xl sm:text-4xl text-[#FBF9F5] tracking-tight">
-              From diner greeting to midnight reconciliation.
+              From order entry to restaurant records.
             </h2>
             <p className="text-sm text-[#A6AEA0]">
-              Follow the journey of a single table order across the entire Aatmyam POS ecosystem.
+              Follow an illustrative order through counter, kitchen and owner review. These steps are examples, not measured service timings.
             </p>
           </div>
 
@@ -318,7 +339,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
                 <span className="w-7 h-7 rounded-lg bg-[#6E8F45] text-[#FBF9F5] flex items-center justify-center font-mono font-bold text-xs">
                   1
                 </span>
-                <span className="text-[11px] font-mono text-[#A6AEA0]">19:42 PM</span>
+                <span className="text-[11px] font-mono text-[#A6AEA0]">EXAMPLE STEP 1</span>
               </div>
               <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Order Captured</h3>
               <p className="text-xs text-[#A6AEA0] leading-relaxed">
@@ -331,11 +352,11 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
                 <span className="w-7 h-7 rounded-lg bg-[#6E8F45] text-[#FBF9F5] flex items-center justify-center font-mono font-bold text-xs">
                   2
                 </span>
-                <span className="text-[11px] font-mono text-[#A6AEA0]">19:42 PM (+0.1s)</span>
+                <span className="text-[11px] font-mono text-[#A6AEA0]">EXAMPLE STEP 2</span>
               </div>
               <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Kitchen Status Updated</h3>
               <p className="text-xs text-[#A6AEA0] leading-relaxed">
-                Kitchen stations receive split tickets. Chef acknowledges prep time timer.
+                Kitchen staff review incoming order details and update the supported preparation status.
               </p>
             </div>
 
@@ -344,7 +365,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
                 <span className="w-7 h-7 rounded-lg bg-[#6E8F45] text-[#FBF9F5] flex items-center justify-center font-mono font-bold text-xs">
                   3
                 </span>
-                <span className="text-[11px] font-mono text-[#A6AEA0]">20:15 PM</span>
+                <span className="text-[11px] font-mono text-[#A6AEA0]">EXAMPLE STEP 3</span>
               </div>
               <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Payment Recorded</h3>
               <p className="text-xs text-[#A6AEA0] leading-relaxed">
@@ -357,11 +378,11 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
                 <span className="w-7 h-7 rounded-lg bg-[#D97706] text-[#FBF9F5] flex items-center justify-center font-mono font-bold text-xs">
                   4
                 </span>
-                <span className="text-[11px] font-mono text-[#A6AEA0]">23:30 PM</span>
+                <span className="text-[11px] font-mono text-[#A6AEA0]">EXAMPLE STEP 4</span>
               </div>
-              <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Pantry & P&L Audit</h3>
+              <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Review Stock & Reports</h3>
               <p className="text-xs text-[#A6AEA0] leading-relaxed">
-                Ingredients depleted from pantry. Cash float verified. Day-end summary sent to owner.
+                Review recipe-linked stock changes and the available sales records for the outlet.
               </p>
             </div>
 
@@ -376,13 +397,13 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
 
           <div className="text-center max-w-2xl mx-auto space-y-3">
             <span className="text-xs font-mono uppercase tracking-widest text-[#84A955] font-bold">
-              Open Hardware Standard
+              Device & Printer Requirements
             </span>
             <h2 className="font-serif text-3xl sm:text-4xl text-[#FBF9F5] tracking-tight">
-              Run on the devices you already own.
+              Review the devices you want to use.
             </h2>
             <p className="text-sm text-[#A6AEA0]">
-              Never get trapped in expensive proprietary POS hardware leases. Aatmyam POS runs natively in modern web browsers and communicates with industry-standard peripherals.
+              Aatmyam is a browser-based POS. Compatibility depends on the device, browser, connection and required peripherals. Check your exact setup before relying on it during service.
             </p>
           </div>
 
@@ -391,36 +412,36 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
             <div className="bg-[#242823] p-6 rounded-2xl border border-[#2E332D] space-y-3">
               <Monitor className="w-8 h-8 text-[#6E8F45] mx-auto" />
               <h3 className="font-serif text-base font-bold text-[#FBF9F5]">Touchscreens & PCs</h3>
-              <p className="text-xs text-[#A6AEA0]">Windows, Mac, Linux, Android All-in-One touch terminals.</p>
+              <p className="text-xs text-[#A6AEA0]">Review the operating system and browser on your intended counter device.</p>
             </div>
 
             <div className="bg-[#242823] p-6 rounded-2xl border border-[#2E332D] space-y-3">
               <Smartphone className="w-8 h-8 text-[#6E8F45] mx-auto" />
               <h3 className="font-serif text-base font-bold text-[#FBF9F5]">Tablets & Phones</h3>
-              <p className="text-xs text-[#A6AEA0]">iPads, Android tablets, and staff smartphones for table-side service.</p>
+              <p className="text-xs text-[#A6AEA0]">Check screen size, browser and network access for the workflow you need.</p>
             </div>
 
             <div className="bg-[#242823] p-6 rounded-2xl border border-[#2E332D] space-y-3">
               <Printer className="w-8 h-8 text-[#6E8F45] mx-auto" />
               <h3 className="font-serif text-base font-bold text-[#FBF9F5]">Thermal Printers</h3>
-              <p className="text-xs text-[#A6AEA0]">ESC/POS standard 2-inch & 3-inch USB, LAN, and Wi-Fi printers.</p>
+              <p className="text-xs text-[#A6AEA0]">Confirm the printer model, paper width, connection and required setup.</p>
             </div>
 
             <div className="bg-[#242823] p-6 rounded-2xl border border-[#2E332D] space-y-3">
               <Lock className="w-8 h-8 text-[#D97706] mx-auto" />
               <h3 className="font-serif text-base font-bold text-[#FBF9F5]">Cash Drawers</h3>
-              <p className="text-xs text-[#A6AEA0]">Standard RJ11/RJ12 electronic cash drawers with pop logging.</p>
+              <p className="text-xs text-[#A6AEA0]">Check any printer and cash-drawer integration you intend to use.</p>
             </div>
 
           </div>
 
           <div className="pt-8 text-center">
-            <button
-              onClick={() => onNavigate("/contact")}
-              className="px-7 py-3.5 text-xs font-bold text-[#181A18] bg-[#6E8F45] hover:bg-[#567234] text-[#FBF9F5] rounded-xl transition duration-150 shadow-md cursor-pointer"
+            <SiteLink
+              href="/contact" onNavigate={() => onNavigate("/contact")}
+              className="inline-flex items-center justify-center px-7 py-3.5 text-xs font-bold text-[#181A18] bg-[#6E8F45] hover:bg-[#567234] text-[#FBF9F5] rounded-xl transition duration-150 shadow-md cursor-pointer"
             >
               Check Hardware Compatibility for Your Outlet →
-            </button>
+            </SiteLink>
           </div>
 
         </div>

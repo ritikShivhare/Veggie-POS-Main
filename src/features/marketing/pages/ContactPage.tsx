@@ -1,3 +1,4 @@
+import SiteLink from "../components/SiteLink";
 import React, { useState, useEffect, useRef } from "react";
 import { MarketingRoute, DemoRequest } from "../types";
 import {
@@ -174,7 +175,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
               <span className="text-[#6E8F45] italic">live walkthrough.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              Speak directly with a hospitality systems engineer. We’ll show you how Aatmyam POS runs your menu, kitchen tickets, and recipe stock without high-pressure sales tactics.
+              Request a walkthrough of the current order, kitchen, inventory and staff workflows. Bring your menu and device requirements so we can discuss the early-access setup for one outlet.
             </p>
           </div>
         </div>
@@ -238,18 +239,18 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                       <RefreshCw className="w-3.5 h-3.5" />
                       <span>Edit Walkthrough Request</span>
                     </button>
-                    <button
-                      onClick={() => onNavigate("/")}
-                      className="px-6 py-3 text-xs font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition cursor-pointer"
+                    <SiteLink
+                      href="/" onNavigate={() => onNavigate("/")}
+                      className="inline-flex items-center justify-center px-6 py-3 text-xs font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition cursor-pointer"
                     >
                       Return to Homepage
-                    </button>
-                    <button
-                      onClick={() => onNavigate("/pricing")}
-                      className="px-5 py-3 text-xs font-bold text-[#181A18] bg-[#FBF9F5] hover:bg-[#EAE5DA] rounded-xl border border-[#EAE5DA] transition cursor-pointer"
+                    </SiteLink>
+                    <SiteLink
+                      href="/pricing" onNavigate={() => onNavigate("/pricing")}
+                      className="inline-flex items-center justify-center px-5 py-3 text-xs font-bold text-[#181A18] bg-[#FBF9F5] hover:bg-[#EAE5DA] rounded-xl border border-[#EAE5DA] transition cursor-pointer"
                     >
                       Review Pricing Tiers
-                    </button>
+                    </SiteLink>
                   </div>
                 </div>
               ) : (
