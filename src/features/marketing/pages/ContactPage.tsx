@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { MarketingRoute, DemoRequest } from "../types";
 import {
   Calendar,
@@ -40,34 +40,37 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   const [createdLeadId, setCreatedLeadId] = useState<string | null>(null);
   const [previousSlotExpired, setPreviousSlotExpired] = useState<boolean>(false);
   const [expiredDateStr, setExpiredDateStr] = useState<string>("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const activeRequest = useRef<AbortController | null>(null);
 
-  // Check saved walkthrough booking on load: shows scheduled screen every time, or re-schedules when expired
+  // Browser storage can prefill a draft, but cannot confirm a saved enquiry.
   useEffect(() => {
     try {
       const stored = localStorage.getItem("veggiepos_walkthrough_lead");
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed && (parsed.restaurantName || parsed.fullName)) {
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          const savedDetails = Object.fromEntries(
+            Object.entries(parsed).filter(([key, value]) =>
+              Object.hasOwn(formData, key) && typeof value === "string"
+            )
+          ) as Partial<DemoRequest>;
+          if (!savedDetails.restaurantName && !savedDetails.fullName) return;
           const todayStr = new Date().toISOString().slice(0, 10);
-          const isExpired = parsed.preferredDate ? parsed.preferredDate < todayStr : false;
+          const isExpired = savedDetails.preferredDate ? savedDetails.preferredDate < todayStr : false;
 
           if (isExpired) {
-            // Preferred slot expired: pre-fill details so user can schedule again when required
             setPreviousSlotExpired(true);
-            setExpiredDateStr(parsed.preferredDate);
-            setFormData({
-              ...parsed,
-              preferredDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
-              preferredTime: parsed.preferredTime || "morning"
-            });
-            setCreatedLeadId(parsed.id || null);
-            setIsSubmitted(false);
-          } else {
-            // Slot is active: show walkthrough schedule like given picture
-            setFormData(parsed);
-            setCreatedLeadId(parsed.id || null);
-            setIsSubmitted(true);
+            setExpiredDateStr(savedDetails.preferredDate!);
           }
+          setFormData(current => ({
+            ...current,
+            ...savedDetails,
+            preferredDate: isExpired
+              ? new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+              : savedDetails.preferredDate || current.preferredDate,
+            preferredTime: savedDetails.preferredTime || current.preferredTime
+          }));
         }
       }
     } catch (err) {
@@ -75,43 +78,60 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
     }
   }, []);
 
+  useEffect(() => () => {
+    const request = activeRequest.current;
+    activeRequest.current = null;
+    request?.abort();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (activeRequest.current) return;
+    const request = new AbortController();
+    activeRequest.current = request;
+    const submittedDetails = { ...formData };
     setIsSubmitting(true);
+    setSubmitError(null);
+    const timeout = window.setTimeout(() => request.abort(), 15_000);
 
     try {
       const res = await fetch("/api/leads/walkthrough", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submittedDetails),
+        signal: request.signal
       });
       const data = await res.json();
-      const leadRecord = data.success && data.lead ? data.lead : {
-        ...formData,
-        id: `lead-${Date.now()}`
-      };
-      setCreatedLeadId(leadRecord.id);
-      setFormData(leadRecord);
-      try {
-        localStorage.setItem("veggiepos_walkthrough_lead", JSON.stringify(leadRecord));
-      } catch (storageErr) {}
-    } catch (err) {
-      console.warn("API lead submission fallback to simulated success:", err);
-      const fallback = { ...formData, id: `lead-${Date.now()}` };
-      setCreatedLeadId(fallback.id);
-      try {
-        localStorage.setItem("veggiepos_walkthrough_lead", JSON.stringify(fallback));
-      } catch (e) {}
-    } finally {
-      setIsSubmitting(false);
+      if (
+        request.signal.aborted || !res.ok || data?.success !== true ||
+        typeof data.lead?.id !== "string" || !data.lead.id.trim()
+      ) {
+        throw new Error("Walkthrough request was not confirmed.");
+      }
+      if (activeRequest.current !== request) return;
+      setCreatedLeadId(data.lead.id);
+      setFormData(submittedDetails);
       setIsSubmitted(true);
       setPreviousSlotExpired(false);
+      try {
+        localStorage.setItem("veggiepos_walkthrough_lead", JSON.stringify({ ...submittedDetails, id: data.lead.id }));
+      } catch (storageErr) {}
+    } catch {
+      if (activeRequest.current !== request) return;
+      setSubmitError("We couldn't confirm your walkthrough request. Your details are still here. Please try again.");
+    } finally {
+      window.clearTimeout(timeout);
+      if (activeRequest.current === request) {
+        activeRequest.current = null;
+        setIsSubmitting(false);
+      }
     }
   };
 
   const handleScheduleAgain = () => {
     setIsSubmitted(false);
     setPreviousSlotExpired(false);
+    setSubmitError(null);
     setFormData((prev) => ({
       ...prev,
       preferredDate: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
@@ -233,15 +253,15 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                   </div>
                 </div>
               ) : (
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Expired Slot Notice: pre-filled details so user can schedule again when required */}
+                <form onSubmit={handleSubmit} className="space-y-6" aria-busy={isSubmitting}>
+                  {/* Restored browser draft with an outdated preferred date */}
                   {previousSlotExpired && (
                     <div className="p-4 bg-amber-50 border border-amber-200/90 rounded-2xl text-xs text-amber-900 flex items-start gap-3 animate-in fade-in duration-150">
                       <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                       <div className="space-y-0.5">
-                        <p className="font-bold">Your previous walkthrough slot ({expiredDateStr}) has expired.</p>
+                        <p className="font-bold">Your saved preferred date ({expiredDateStr}) has passed.</p>
                         <p className="text-amber-700 text-[11px] leading-relaxed">
-                          Your restaurant details are already saved. Please select a fresh date and timing below to schedule again.
+                          Your details were restored from this browser. Choose a new preferred date and submit the form to request a walkthrough.
                         </p>
                       </div>
                     </div>
@@ -441,9 +461,15 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
 
                   {/* Submit Button */}
                   <div className="pt-2">
+                    {submitError && (
+                      <p id="walkthrough-submit-error" role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                        {submitError}
+                      </p>
+                    )}
                     <button
                       type="submit"
                       disabled={isSubmitting}
+                      aria-describedby={submitError ? "walkthrough-submit-error" : undefined}
                       className="w-full py-4 text-xs font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition duration-150 flex items-center justify-center gap-2 shadow-md cursor-pointer disabled:opacity-50"
                     >
                       {isSubmitting ? (
