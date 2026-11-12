@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import SiteLink from "../components/SiteLink";
 import { MarketingRoute } from "../types";
 import {
   UtensilsCrossed,
@@ -235,18 +236,18 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
                       <div className="pt-4 border-t border-[#EAE5DA] flex items-center justify-between">
                         <div>
                           <p className="text-[10px] font-mono uppercase text-[#787F74]">
-                            Verified Field Impact
+                            Workflow Covered
                           </p>
                           <p className="font-serif text-lg font-bold text-[#181A18]">
                             {item.impactMetric}
                           </p>
                         </div>
-                        <button
-                          onClick={() => onNavigate("/contact")}
-                          className="px-4 py-2 text-xs font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition duration-150 cursor-pointer"
+                        <SiteLink href={item.id === "cafe" ? "/solutions/cafes" : "/contact"}
+                          onNavigate={() => onNavigate(item.id === "cafe" ? "/solutions/cafes" : "/contact")}
+                          className="inline-flex items-center justify-center px-4 py-2 text-xs font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition duration-150 cursor-pointer"
                         >
                           Explore for Your Setup →
-                        </button>
+                        </SiteLink>
                       </div>
                     </div>
 
@@ -266,15 +267,15 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
             Not sure which configuration fits your concept?
           </h2>
           <p className="text-sm text-[#5A6056] leading-relaxed">
-            Our hospitality specialists can map your existing floor plan, kitchen pass, and recipe inventory directly into Aatmyam POS during a free 15-minute consultation.
+            Bring your menu, kitchen process and device requirements to a 15-minute walkthrough. Review the current workflows and single-outlet setup before deciding whether Aatmyam fits.
           </p>
           <div className="pt-2">
-            <button
-              onClick={() => onNavigate("/contact")}
-              className="px-7 py-3.5 text-sm font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition duration-200 shadow-md cursor-pointer border border-[#2E332D]"
+            <SiteLink
+              href="/contact" onNavigate={() => onNavigate("/contact")}
+              className="inline-flex items-center justify-center px-7 py-3.5 text-sm font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition duration-200 shadow-md cursor-pointer border border-[#2E332D]"
             >
               Book a Format Consultation
-            </button>
+            </SiteLink>
           </div>
         </div>
       </section>

@@ -77,7 +77,7 @@ export default function MarketingFooter({
               </span>
               <span className="flex items-center gap-1">
                 <Lock className="w-3.5 h-3.5 text-[#6E8F45]" />
-                Zero Hardware Lock-in
+                Browser-based POS
               </span>
             </div>
           </div>
@@ -154,8 +154,8 @@ export default function MarketingFooter({
                 </SiteLink>
               </li>
               <li>
-                <SiteLink href="/solutions"
-                  onNavigate={() => handleNav("/solutions")}
+                <SiteLink href="/solutions/cafes"
+                  onNavigate={() => handleNav("/solutions/cafes")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
                   Café & Artisanal Bakery
@@ -240,7 +240,7 @@ export default function MarketingFooter({
 
         {/* Bottom Strip */}
         <div className="pt-8 border-t border-[#2E332D] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#787F74]">
-          <p>© {new Date().getFullYear()} Aatmyam POS Technologies. Designed for hospitality craft & operational calm.</p>
+          <p>© {new Date().getFullYear()} Aatmyam POS. Designed for hospitality craft & operational calm.</p>
           <div className="flex items-center gap-6">
             <span className="font-mono text-[11px] text-[#A6AEA0]">Version 4.8.2-Enterprise</span>
             <SiteLink href="/login"

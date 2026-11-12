@@ -1,12 +1,13 @@
-export type MarketingRoute =
-  | "/"
-  | "/product"
-  | "/solutions"
-  | "/roi"
-  | "/pricing"
-  | "/about"
-  | "/resources"
-  | "/contact";
+import { GUIDE_PATHS } from "../../../shared/marketing-guides";
+
+export const MARKETING_ROUTES = [
+  "/", "/product", "/solutions", "/solutions/cafes", "/roi", "/pricing",
+  "/about", "/resources", "/contact", ...GUIDE_PATHS,
+] as const;
+export type MarketingRoute = typeof MARKETING_ROUTES[number];
+export function isMarketingRoute(path: string): path is MarketingRoute {
+  return MARKETING_ROUTES.some(route => route === path);
+}
 
 export interface DemoRequest {
   fullName: string;

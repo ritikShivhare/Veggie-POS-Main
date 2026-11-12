@@ -1,3 +1,4 @@
+import SiteLink from "../components/SiteLink";
 import React, { useState } from "react";
 import { MarketingRoute } from "../types";
 import {
@@ -38,7 +39,15 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
   const faqs = [
     {
       q: "How is the listed price billed?",
-      a: "Pro ₹999 and Elite ₹1,999 are all-inclusive prices for a 30-day subscription. Eligible restaurants can start a one-time 14-day trial with Owner + 10 staff, 250 orders, full inventory and 5 successful AI reports/day."
+      a: `Pro ₹${PLAN_LIMITS.pro.price.toLocaleString("en-IN")} and Elite ₹${PLAN_LIMITS.enterprise.price.toLocaleString("en-IN")} are all-inclusive prices for a 30-day subscription. Eligible restaurants can start a one-time 14-day trial with Owner + 10 staff, 250 orders, full inventory and 5 successful AI reports/day on a configured provider.`
+    },
+    {
+      q: "What counts toward the order allowance?",
+      a: `The allowance applies to order records in the 30-day subscription cycle, not only paid bills. Pro includes ${PLAN_LIMITS.pro.monthlyOrders} orders per cycle. Twenty orders every day for 30 days totals 600. Check your usage and cycle dates in Billing; reaching an allowance can block new order creation.`
+    },
+    {
+      q: "Does a UPI QR automatically verify a customer payment?",
+      a: "An outlet with a configured UPI ID can generate a QR containing the bill amount. Staff check receipt in the restaurant's bank or payment app, then record the payment in the POS. Cashfree verification of software-subscription payments is a separate workflow."
     },
     {
       q: "Do I need to buy expensive proprietary hardware from you?",
@@ -54,7 +63,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     },
     {
       q: "What happens if our restaurant internet disconnects during service?",
-      a: "Aatmyam POS uses local state caching in the browser. Active tables, orders, and local PIN terminals remain responsive, and data synchronizes to the cloud the moment connectivity is restored."
+      a: "Previously configured devices can retain cached records and queued changes for supported workflows. First sign-in, account operations and payment-provider verification require a connection. Reconnect and check the final saved state; test your intended device and workflow before service."
     }
   ];
 
@@ -71,7 +80,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
             </div>
             <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl tracking-tight text-[#181A18] leading-[1.12]">
               Simple, honest pricing. <br />
-              <span className="text-[#6E8F45] italic">No hidden percentages.</span>
+              <span className="text-[#6E8F45] italic">One outlet per plan.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
               Aatmyam POS is in early access. These 30-day plans use the same prices and limits as the app.
@@ -166,8 +175,8 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
 
                   {/* Plan CTA */}
                   <div className="pt-8 mt-6 border-t border-current/15">
-                    <button
-                      onClick={() => onNavigate("/contact")}
+                    <SiteLink
+                      href="/contact" onNavigate={() => onNavigate("/contact")}
                       className={`w-full py-3.5 text-xs font-bold rounded-xl transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
                         plan.popular
                           ? "bg-[#6E8F45] hover:bg-[#567234] text-[#FBF9F5] shadow-md"
@@ -176,7 +185,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                     >
                       <span>{plan.ctaText}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                    </SiteLink>
                   </div>
                 </div>
               );
@@ -208,6 +217,9 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                   className="bg-[#F4F0E8] border border-[#EAE5DA] rounded-2xl overflow-hidden transition"
                 >
                   <button
+                    id={`pricing-question-${idx}`}
+                    aria-expanded={isOpen}
+                    aria-controls={`pricing-faq-${idx}`}
                     onClick={() => setOpenFaq(isOpen ? null : idx)}
                     className="w-full p-5 text-left flex items-center justify-between gap-4 cursor-pointer focus:outline-hidden"
                   >
@@ -221,11 +233,11 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                     )}
                   </button>
 
-                  {isOpen && (
-                    <div className="px-5 pb-5 text-xs sm:text-sm text-[#5A6056] leading-relaxed border-t border-[#EAE5DA] pt-3">
-                      {faq.a}
-                    </div>
-                  )}
+                  <div id={`pricing-faq-${idx}`} role="region" aria-labelledby={`pricing-question-${idx}`}
+                    hidden={!isOpen} style={isOpen ? undefined : { display: "none" }}
+                    className="px-5 pb-5 text-xs sm:text-sm text-[#5A6056] leading-relaxed border-t border-[#EAE5DA] pt-3">
+                    {faq.a}
+                  </div>
                 </div>
               );
             })}
@@ -233,14 +245,14 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
 
           <div className="pt-8 text-center">
             <p className="text-xs text-[#787F74]">
-              Have a custom multi-chain setup or special franchise requirement?
+              Need help checking order volume, devices or the current setup?
             </p>
-            <button
-              onClick={() => onNavigate("/contact")}
-              className="mt-2 text-xs font-bold text-[#6E8F45] hover:underline cursor-pointer"
+            <SiteLink
+              href="/contact" onNavigate={() => onNavigate("/contact")}
+              className="inline-flex items-center justify-center mt-2 text-xs font-bold text-[#6E8F45] hover:underline cursor-pointer"
             >
-              Talk directly with our solutions architecture team →
-            </button>
+              Discuss your single-outlet requirements →
+            </SiteLink>
           </div>
 
         </div>
