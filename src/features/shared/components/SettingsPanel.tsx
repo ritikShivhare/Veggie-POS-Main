@@ -111,7 +111,7 @@ export default function SettingsPanel({
     const rawVpa = (upiInputVpa || activeTenant.vpa || "").trim();
     if(!rawVpa) {setQrPreviewUrl(null);return;}
     const vpa = rawVpa;
-    const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam POS").trim());
+    const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam Pos").trim());
     const amt = parseFloat(testAmount) > 0 ? parseFloat(testAmount).toFixed(2) : "1.00";
     const note = encodeURIComponent(`Test QR - ${activeTenant.name}`);
     const uri = `upi://pay?pa=${vpa}&pn=${name}&am=${amt}&cu=INR&tn=${note}`;
@@ -257,7 +257,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Production Monitoring & Alerting",
       gdprPrivacy: "GDPR Privacy & Data Portability",
       staffCredentials: "Staff Credentials & Permissions Control",
-      settingsTitle: "Aatmyam POS Administration Settings",
+      settingsTitle: "Aatmyam Pos Administration Settings",
       generalTab: "General Settings",
       passwordTab: "Change PIN / Password",
       languageTab: "Language Change",
@@ -291,7 +291,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Monitoreo de Producción y Alertas",
       gdprPrivacy: "Privacidad GDPR y Portabilidad de Datos",
       staffCredentials: "Credenciales de Personal y Control de Permisos",
-      settingsTitle: "Configuración Administrativa de Aatmyam POS",
+      settingsTitle: "Configuración Administrativa de Aatmyam Pos",
       generalTab: "Configuración General",
       passwordTab: "Cambiar PIN / Contraseña",
       languageTab: "Cambiar Idioma",
@@ -308,7 +308,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Surveillance de Production et Alertes",
       gdprPrivacy: "Confidentialité GDPR et Portabilité des Données",
       staffCredentials: "Identifiants du Personnel et Contrôle des Permissions",
-      settingsTitle: "Paramètres d'Administration Aatmyam POS",
+      settingsTitle: "Paramètres d'Administration Aatmyam Pos",
       generalTab: "Paramètres Généraux",
       passwordTab: "Modifier le PIN / Mot de passe",
       languageTab: "Changer de Langue",
@@ -675,7 +675,7 @@ export default function SettingsPanel({
                     onClick={() => {
                       const vpa = (upiInputVpa || activeTenant.vpa || "").trim();
                       if (!vpa) return;
-                      const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam POS").trim());
+                      const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam Pos").trim());
                       const amt = parseFloat(testAmount) > 0 ? parseFloat(testAmount).toFixed(2) : "1.00";
                       const uri = `upi://pay?pa=${vpa}&pn=${name}&am=${amt}&cu=INR&tn=TestQR`;
                       navigator.clipboard?.writeText(uri);

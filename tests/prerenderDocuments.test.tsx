@@ -44,7 +44,7 @@ it("generates real public content without JS while retaining an empty private sh
     ).window.document;
     expect(shell.querySelector("#root")?.textContent).toBe("");
     expect(await readFile(path.join(directory, "llms.txt"), "utf8")).toContain(
-      "# Aatmyam POS",
+      "# Aatmyam Pos",
     );
   } finally {
     await rm(root, { recursive: true, force: true });

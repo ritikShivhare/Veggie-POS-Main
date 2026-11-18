@@ -25,7 +25,7 @@ export default function GuidePage({ guide, onNavigate }: Props) {
           </div>
           <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl tracking-tight text-[#181A18] leading-[1.12]">{guide.title}</h1>
           <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">{guide.summary}</p>
-          <p className="text-xs font-mono text-[#787F74]">By Aatmyam POS · Updated <time dateTime={guide.updatedAt}>{updated}</time> · {guideReadTime(guide)}</p>
+          <p className="text-xs font-mono text-[#787F74]">By Aatmyam Pos · Updated <time dateTime={guide.updatedAt}>{updated}</time> · {guideReadTime(guide)}</p>
         </div>
       </section>
       <article className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-12">
@@ -80,7 +80,7 @@ export default function GuidePage({ guide, onNavigate }: Props) {
         </section>
         <div className="p-6 sm:p-8 bg-[#181A18] rounded-3xl border border-[#2E332D] text-[#FBF9F5] space-y-4">
           <h2 className="font-serif text-2xl">See the current workflow for your outlet</h2>
-          <p className="text-sm text-[#A6AEA0] leading-relaxed">Aatmyam POS is in early access. Bring your menu, order volume and device requirements to a walkthrough so you can check product fit.</p>
+          <p className="text-sm text-[#A6AEA0] leading-relaxed">Aatmyam Pos is in early access. Bring your menu, order volume and device requirements to a walkthrough so you can check product fit.</p>
           <SiteLink href="/contact" onNavigate={() => onNavigate("/contact")} className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#6E8F45] text-[#FBF9F5] text-sm font-bold">Book a walkthrough<ArrowRight className="w-4 h-4" /></SiteLink>
         </div>
       </article>

@@ -53,7 +53,7 @@ describe("Public search documents", () => {
     expect(
       data["@graph"].some(
         (x: any) =>
-          x["@type"] === "SoftwareApplication" && x.name === "Aatmyam POS",
+          x["@type"] === "SoftwareApplication" && x.name === "Aatmyam Pos",
       ),
     ).toBe(true);
     expect(JSON.stringify(data)).not.toMatch(/aggregateRating|reviewRating/);

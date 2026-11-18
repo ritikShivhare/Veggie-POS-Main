@@ -509,7 +509,7 @@ export default function POSBilling({
     const isDemoVpa = !configuredVpa || configuredVpa === "veggiepos@upi";
     if (isDemoVpa) {setUpiQrDataUrl(null);return;}
     const vpa = configuredVpa;
-    const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Aatmyam POS").trim();
+    const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Aatmyam Pos").trim();
     const brandName = encodeURIComponent(merchantName);
     const note = encodeURIComponent(`Order ${billingOrder?.orderNumber || "Bill"}`);
     const upiUri = `upi://pay?pa=${vpa}&pn=${brandName}&am=${currentAmount.toFixed(2)}&cu=INR&tn=${note}`;
@@ -1540,7 +1540,7 @@ export default function POSBilling({
                 const configuredVpa = (settings.upiVpa || activeTenant?.vpa || "").trim();
                 const isUnconfigured = !configuredVpa || configuredVpa === "veggiepos@upi";
                 const activeVpa = !isUnconfigured ? configuredVpa : "veggiepos@upi";
-                const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Aatmyam POS").trim();
+                const merchantName = (settings.upiMerchantName || activeTenant?.upiMerchantName || activeTenant?.name || "Aatmyam Pos").trim();
 
                 return (
                   <div className="border-t border-slate-200/60 pt-3 flex flex-col items-center text-center space-y-2.5">
@@ -2149,7 +2149,7 @@ export default function POSBilling({
                 <div className="text-center pt-2 space-y-0.5 text-[9px] text-slate-600">
                   <p className="font-semibold">Thank you for dining with us!</p>
                   <p>Have a wonderful day ahead.</p>
-                  <p className="font-mono text-[8px] text-slate-400 mt-1">*** POWERED BY AATMYAM POS ***</p>
+                  <p className="font-mono text-[8px] text-slate-400 mt-1">*** POWERED BY Aatmyam Pos ***</p>
                 </div>
               </div>
             </div>

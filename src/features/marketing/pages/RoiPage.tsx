@@ -65,7 +65,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
               In food service, profit isn’t just made on the menu price—it’s protected in the kitchen and at the register.
-              Use this scenario calculator with your own estimates. It does not predict or guarantee savings from Aatmyam POS.
+              Use this scenario calculator with your own estimates. It does not predict or guarantee savings from Aatmyam Pos.
             </p>
           </div>
         </div>
@@ -171,7 +171,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
               <div className="p-3 bg-[#FBF9F5] rounded-xl border border-[#EAE5DA] flex items-start gap-2 text-[11px] text-[#787F74]">
                 <Info className="w-4 h-4 text-[#6E8F45] shrink-0 mt-0.5" />
                 <span>
-                  Results are hypothetical calculations from the values you enter. Aatmyam POS has not validated these estimates against restaurant customer results.
+                  Results are hypothetical calculations from the values you enter. Aatmyam Pos has not validated these estimates against restaurant customer results.
                 </span>
               </div>
 
@@ -222,7 +222,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
 
                 <div className="flex items-center justify-between p-3 bg-[#181A18] rounded-xl border border-[#2E332D] text-[#A6AEA0]">
                   <div className="flex items-center gap-2">
-                    <span>4. Aatmyam POS SaaS Subscription</span>
+                    <span>4. Aatmyam Pos SaaS Subscription</span>
                   </div>
                   <span className="font-bold text-[#E57373]">
                     -{formatCurrency(estimatedSaaSMonthlyCost)}

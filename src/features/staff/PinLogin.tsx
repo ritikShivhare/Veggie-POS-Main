@@ -16,6 +16,8 @@ import {
   Sparkles
 } from "lucide-react";
 import QrScannerModal from "./components/QrScannerModal";
+import { Dialog } from "../shared/components/ui/Dialog";
+import { InputField } from "../shared/components/ui/FormControls";
 
 interface PinLoginProps {
   staffList?: StaffMember[];
@@ -370,15 +372,15 @@ export default function PinLogin({
         isShaking ? "animate-shake" : ""
       }`}>
         <div className="text-center mb-4">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-[#181A18] text-[#FBF9F5] rounded-2xl shadow-md mb-3 font-serif text-2xl font-bold border border-[#2E332D]">
-            V
+          <div aria-label="Aatmyam Pos" className="inline-flex items-center justify-center w-14 h-14 bg-[#181A18] text-[#FBF9F5] rounded-2xl shadow-md mb-3 font-serif text-2xl font-bold border border-[#2E332D]">
+            A
           </div>
           <h1 className="text-xl font-serif font-bold tracking-tight text-[#181A18]">
             {restaurantName}
           </h1>
 
           <div className="flex items-center justify-center gap-1.5 mt-1">
-            <span className="text-[10px] uppercase font-mono font-bold text-[#787F74] tracking-wider">
+            <span className="text-[10px] uppercase font-mono font-bold text-[#5A6056] tracking-wider">
               Staff POS Terminal Keypad
             </span>
           </div>
@@ -388,16 +390,16 @@ export default function PinLogin({
             <button
               type="button"
               onClick={() => setShowSwitchStoreModal(true)}
-              className="inline-flex items-center gap-1 px-3 py-1 bg-[#FBF9F5] hover:bg-[#EAE5DA] text-[#1C1E1B] border border-[#EAE5DA] rounded-xl text-[11px] font-bold transition cursor-pointer"
+              className="min-h-11 inline-flex items-center gap-1 px-3 py-2 bg-[#FBF9F5] hover:bg-[#EAE5DA] text-[#1C1E1B] border border-[#EAE5DA] rounded-xl text-[11px] font-bold transition cursor-pointer"
               id="pin-login-switch-store-modal-btn"
             >
-              <Store className="w-3 h-3 text-[#787F74]" />
+              <Store className="w-3 h-3 text-[#5A6056]" />
               <span>Switch Outlet</span>
             </button>
             <button
               type="button"
               onClick={() => setShowScannerModal(true)}
-              className="inline-flex items-center gap-1 px-3 py-1 bg-[#EBF2E4] hover:bg-[#D5E3C8] text-[#567234] border border-[#D5E3C8] rounded-xl text-[11px] font-bold transition cursor-pointer"
+              className="min-h-11 inline-flex items-center gap-1 px-3 py-2 bg-[#EBF2E4] hover:bg-[#D5E3C8] text-[#567234] border border-[#D5E3C8] rounded-xl text-[11px] font-bold transition cursor-pointer"
               id="pin-login-open-qr-scanner-btn"
             >
               <Camera className="w-3 h-3" />
@@ -426,7 +428,7 @@ export default function PinLogin({
               <p className="text-xs text-[#9B1C1C]/90 font-mono font-bold">
                 Unlocks in: <span className="text-base text-[#9B1C1C] underline">{formatCountdown(cooldownSeconds)}</span>
               </p>
-              <p className="text-[11px] text-[#787F74] leading-tight">
+              <p className="text-[11px] text-[#5A6056] leading-tight">
                 {lockTier >= 2
                   ? "A security alert has been dispatched to the restaurant owner."
                   : "Too many failed attempts. Keypad is cooling down."}
@@ -456,7 +458,7 @@ export default function PinLogin({
               </div>
             )}
 
-            <div className="flex items-center gap-1.5 mb-2 text-[#787F74] font-bold text-[10px] uppercase font-mono tracking-widest">
+            <div className="flex items-center gap-1.5 mb-2 text-[#5A6056] font-bold text-[10px] uppercase font-mono tracking-widest">
               <Keyboard className="w-3.5 h-3.5" />
               <span>Enter 4-6 Digit PIN</span>
             </div>
@@ -465,6 +467,8 @@ export default function PinLogin({
               <label htmlFor="staff-pin-input" className="sr-only">Staff PIN</label>
               <input
                 id="staff-pin-input"
+                aria-invalid={Boolean(error) || undefined}
+                aria-describedby={error ? "pin-login-error" : undefined}
                 type="password"
                 inputMode="numeric"
                 autoComplete="off"
@@ -483,12 +487,13 @@ export default function PinLogin({
                     autoSubmitTimerRef.current = setTimeout(() => triggerLogin(nextPin), nextPin.length === 6 ? 40 : 500);
                   }
                 }}
-                className="w-full rounded-lg border border-slate-300 p-2 text-center text-sm tracking-widest disabled:opacity-50"
+                className="min-h-11 w-full rounded-lg border border-slate-300 p-2 text-center text-base tracking-widest disabled:opacity-50"
               />
             </form>
             <form onSubmit={passwordLogin} className="w-full mb-3 flex gap-2">
-              <input type="password" autoComplete="current-password" placeholder="Owner password (optional)" value={ownerPassword} onChange={e=>setOwnerPassword(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-slate-300 p-2 text-xs" />
-              <button disabled={isSubmitting || !ownerPassword} className="rounded-lg bg-slate-800 px-3 text-white text-xs disabled:opacity-50">Login</button>
+              <label htmlFor="owner-password-login" className="sr-only">Owner password</label>
+              <input id="owner-password-login" aria-invalid={Boolean(error) || undefined} aria-describedby={error ? "pin-login-error" : undefined} type="password" autoComplete="current-password" placeholder="Owner password" value={ownerPassword} onChange={e=>setOwnerPassword(e.target.value)} className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 p-2 text-base" />
+              <button disabled={isSubmitting || !ownerPassword} className="min-h-11 rounded-lg bg-slate-800 px-3 text-white text-sm disabled:opacity-50">Login</button>
             </form>
             {/* Password Dot Indicators */}
             <div className="flex space-x-3 mb-3">
@@ -508,7 +513,7 @@ export default function PinLogin({
 
             {/* Error Message */}
             {error && (
-              <div className="flex items-center space-x-2 text-[#9B1C1C] text-xs mb-3 font-medium text-center bg-[#FDF2F2] px-3 py-1.5 rounded-xl border border-[#F8D7DA] w-full justify-center">
+              <div id="pin-login-error" role="alert" className="flex items-center space-x-2 text-[#9B1C1C] text-xs mb-3 font-medium text-center bg-[#FDF2F2] px-3 py-1.5 rounded-xl border border-[#F8D7DA] w-full justify-center">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span className="text-[11px] leading-tight">{error}</span>
               </div>
@@ -568,214 +573,64 @@ export default function PinLogin({
         {onBackToLanding && (
           <button
             onClick={onBackToLanding}
-            className="mt-4 w-full py-2.5 border border-[#EAE5DA] hover:border-[#D5D0C5] text-[#5A6056] hover:text-[#181A18] font-bold text-xs rounded-xl transition bg-white cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+            className="min-h-11 mt-4 w-full py-2.5 border border-[#EAE5DA] hover:border-[#D5D0C5] text-[#5A6056] hover:text-[#181A18] font-bold text-xs rounded-xl transition bg-white cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
             id="pin-login-back-to-landing-btn"
           >
-            ← Back to Aatmyam POS Website
+            ← Back to Aatmyam Pos Website
           </button>
         )}
       </div>
 
-      {/* EMERGENCY OWNER MASTER UNLOCK MODAL */}
-      {showEmergencyUnlockModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="absolute inset-0" onClick={() => setShowEmergencyUnlockModal(false)} />
-          <div className="relative w-full max-w-md bg-[#F4F0E8] border border-[#EAE5DA] rounded-3xl p-6 shadow-2xl z-10 animate-scale-up">
-            <div className="flex items-center justify-between pb-3 border-b border-[#EAE5DA]">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-[#181A18] text-white flex items-center justify-center font-bold">
-                  <KeyRound className="w-4 h-4 text-[#6E8F45]" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[#181A18]">Owner Master Override</h3>
-                  <p className="text-[10px] text-[#787F74]">Clear lockout and reset PIN rate limiting</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowEmergencyUnlockModal(false)}
-                className="p-1 rounded-lg text-[#787F74] hover:text-[#181A18] hover:bg-[#EAE5DA] transition"
-              >
-                <X className="w-4 h-4" />
+      <Dialog open={showEmergencyUnlockModal} onOpenChange={setShowEmergencyUnlockModal}
+        title="Owner Master Override" description="Use your registered Owner credentials to unlock this device.">
+        {overrideSuccessMsg ? <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-800">{overrideSuccessMsg}</p> : (
+          <form onSubmit={handleEmergencyUnlock} className="space-y-4">
+            <InputField id="owner-override-pin" label="Owner PIN or master key" type="password" autoComplete="off"
+              placeholder="Enter your Owner PIN" value={overrideMasterPin} onChange={(event) => setOverrideMasterPin(event.target.value)} autoFocus />
+            <InputField id="owner-override-email" label="Registered Owner email" type="email" autoComplete="email"
+              placeholder="Enter your registered email" value={overrideOwnerEmail} onChange={(event) => setOverrideOwnerEmail(event.target.value)} />
+            {overrideError && <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{overrideError}</p>}
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" disabled={isOverriding || !overrideMasterPin || !overrideOwnerEmail}
+                id="pin-login-submit-unlock-override-btn" className="min-h-11 flex-1 rounded-xl bg-app-primary px-4 py-3 text-sm font-bold text-white disabled:opacity-50">
+                {isOverriding ? "Verifying Authority..." : "Unlock Terminal Now"}
               </button>
+              <button type="button" onClick={() => setShowEmergencyUnlockModal(false)} className="min-h-11 rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700">Cancel</button>
             </div>
+          </form>
+        )}
+      </Dialog>
 
-            {overrideSuccessMsg ? (
-              <div className="my-4 p-4 bg-[#EBF2E4] border border-[#D5E3C8] text-[#567234] rounded-2xl text-xs text-center font-bold flex items-center justify-center gap-2">
-                <ShieldCheck className="w-4 h-4" />
-                <span>{overrideSuccessMsg}</span>
-              </div>
-            ) : (
-              <form onSubmit={handleEmergencyUnlock} className="mt-4 space-y-3">
-                <p className="text-xs text-[#5A6056] leading-relaxed">
-                  Enter your registered <strong>Owner Email</strong> and <strong>Owner PIN or Master Key</strong> to unlock this device.
-                </p>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-mono font-bold text-[#787F74]">
-                    Owner Master PIN
-                  </label>
-                  <input
-                    type="password"
-                    placeholder="Enter Owner PIN (e.g. 11111 or 12345)"
-                    value={overrideMasterPin}
-                    onChange={(e) => setOverrideMasterPin(e.target.value)}
-                    className="w-full bg-[#FBF9F5] border border-[#EAE5DA] rounded-xl py-2.5 px-3 text-xs focus:outline-hidden focus:border-[#6E8F45] text-[#181A18] font-mono"
-                    autoFocus
-                  />
-                </div>
-
-                <div className="relative flex items-center justify-center my-2">
-                  <div className="border-t border-[#EAE5DA] w-full" />
-                  <span className="bg-[#F4F0E8] px-2 text-[10px] font-mono text-[#787F74] uppercase">AND</span>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] uppercase font-mono font-bold text-[#787F74]">
-                    Owner Registered Email
-                  </label>
-                  <input
-                    type="email"
-                    placeholder="e.g. rahul@veggiebistro.com"
-                    value={overrideOwnerEmail}
-                    onChange={(e) => setOverrideOwnerEmail(e.target.value)}
-                    className="w-full bg-[#FBF9F5] border border-[#EAE5DA] rounded-xl py-2.5 px-3 text-xs focus:outline-hidden focus:border-[#6E8F45] text-[#181A18]"
-                  />
-                </div>
-
-                {overrideError && (
-                  <div className="p-2.5 bg-[#FDF2F2] border border-[#F8D7DA] text-[#9B1C1C] rounded-xl text-xs font-medium flex items-center gap-2">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>{overrideError}</span>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2 pt-2">
-                  <button
-                    type="submit"
-                    disabled={isOverriding}
-                    className="flex-1 py-2.5 bg-[#181A18] hover:bg-[#6E8F45] text-[#FBF9F5] rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
-                    id="pin-login-submit-unlock-override-btn"
-                  >
-                    {isOverriding ? (
-                      <span>Verifying Authority...</span>
-                    ) : (
-                      <>
-                        <Unlock className="w-3.5 h-3.5" />
-                        <span>Unlock Terminal Now</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowEmergencyUnlockModal(false)}
-                    className="py-2.5 px-3 bg-[#FBF9F5] hover:bg-[#EAE5DA] text-[#5A6056] rounded-xl text-xs font-bold transition border border-[#EAE5DA]"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            )}
+      <Dialog open={showSwitchStoreModal} onOpenChange={setShowSwitchStoreModal}
+        title="Switch Restaurant Outlet" description="Change or disconnect the store saved on this device."
+        footer={<div className="space-y-2">
+          <button type="button" onClick={() => {
+            if (onClearSavedStore) onClearSavedStore();
+            else { localStorage.removeItem("veggiepos_saved_store_code"); localStorage.removeItem("veggiepos_active_tenant_id"); onBackToLanding?.(); }
+            setShowSwitchStoreModal(false);
+          }} id="pin-login-clear-saved-store-btn"
+            className="min-h-11 w-full rounded-xl border border-rose-200 bg-rose-50 px-3 py-3 text-sm font-bold text-rose-800 hover:bg-rose-100">
+            Disconnect This Device & Return to Website
+          </button>
+          <p className="text-xs text-slate-600">Only the saved store on this device is cleared.</p>
+        </div>}>
+        <form onSubmit={handleManualSwitchSubmit} className="space-y-4">
+          <InputField id="switch-store-code-input" label="Store code or restaurant name"
+            placeholder="Enter code or restaurant name" value={manualStoreCodeInput}
+            onChange={(event) => setManualStoreCodeInput(event.target.value)} error={switchError || undefined} autoFocus />
+          <div className="grid grid-cols-1 min-[380px]:grid-cols-2 gap-2">
+            <button type="submit" disabled={isSwitching || !manualStoreCodeInput.trim()}
+              className="min-h-11 rounded-xl bg-app-primary px-3 py-3 text-sm font-bold text-white hover:bg-app-primary-hover disabled:opacity-50"
+              id="pin-login-submit-switch-store-btn">
+              {isSwitching ? "Connecting Outlet..." : "Connect Outlet & Save"}
+            </button>
+            <button type="button" onClick={() => { setShowSwitchStoreModal(false); setShowScannerModal(true); }}
+              className="min-h-11 flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-3 py-3 text-sm font-bold text-slate-800 hover:bg-slate-100">
+              <Camera aria-hidden="true" className="h-4 w-4" /> Scan QR
+            </button>
           </div>
-        </div>
-      )}
-
-      {/* SWITCH RESTAURANT / OUTLET MODAL */}
-      {showSwitchStoreModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="absolute inset-0" onClick={() => setShowSwitchStoreModal(false)} />
-          <div className="relative w-full max-w-md bg-[#F4F0E8] border border-[#EAE5DA] rounded-3xl p-6 shadow-2xl z-10 animate-scale-up">
-            <div className="flex items-center justify-between pb-3 border-b border-[#EAE5DA]">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-[#EBF2E4] text-[#567234] flex items-center justify-center font-bold">
-                  <Store className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[#181A18]">Switch Restaurant Outlet</h3>
-                  <p className="text-[10px] text-[#787F74]">Change or disconnect paired store</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowSwitchStoreModal(false)}
-                className="p-1 rounded-lg text-[#787F74] hover:text-[#181A18] hover:bg-[#EAE5DA] transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleManualSwitchSubmit} className="mt-4 space-y-3">
-              <div>
-                <label className="text-[10px] uppercase tracking-wider text-[#787F74] font-bold font-mono">
-                  Enter New Store Code or Restaurant Name
-                </label>
-                <div className="mt-1 relative">
-                  <input
-                    type="text"
-                    placeholder="e.g. veg-reetesh-dhaba or veg-main-001"
-                    value={manualStoreCodeInput}
-                    onChange={(e) => setManualStoreCodeInput(e.target.value)}
-                    className="w-full bg-[#FBF9F5] border border-[#EAE5DA] rounded-xl py-2.5 px-3 text-xs focus:outline-hidden focus:border-[#6E8F45] text-[#181A18] font-mono"
-                    autoFocus
-                  />
-                </div>
-              </div>
-
-              {switchError && (
-                <div className="p-2.5 bg-[#FDF2F2] border border-[#F8D7DA] text-[#9B1C1C] rounded-xl text-xs font-medium flex items-center gap-2">
-                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                  <span>{switchError}</span>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  type="submit"
-                  disabled={isSwitching}
-                  className="flex-1 py-2.5 bg-[#181A18] hover:bg-[#6E8F45] text-[#FBF9F5] rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50"
-                  id="pin-login-submit-switch-store-btn"
-                >
-                  {isSwitching ? "Connecting Outlet..." : "Connect Outlet & Save"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSwitchStoreModal(false);
-                    setShowScannerModal(true);
-                  }}
-                  className="py-2.5 px-3 bg-[#FBF9F5] hover:bg-[#EAE5DA] text-[#181A18] rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 border border-[#EAE5DA]"
-                >
-                  <Camera className="w-3.5 h-3.5 text-[#6E8F45]" />
-                  <span>Scan QR</span>
-                </button>
-              </div>
-            </form>
-
-            <div className="mt-5 pt-4 border-t border-[#EAE5DA]">
-              <p className="text-[11px] text-[#5A6056] font-medium mb-2">Device Storage Options:</p>
-              <button
-                type="button"
-                onClick={() => {
-                  if (onClearSavedStore) {
-                    onClearSavedStore();
-                  } else {
-                    localStorage.removeItem("veggiepos_saved_store_code");
-                    localStorage.removeItem("veggiepos_active_tenant_id");
-                    onBackToLanding?.();
-                  }
-                  setShowSwitchStoreModal(false);
-                }}
-                className="w-full py-2 bg-[#FDF2F2] hover:bg-[#FDE8E8] text-[#9B1C1C] border border-[#F8D7DA] rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5"
-                id="pin-login-clear-saved-store-btn"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span>Disconnect This Device & Return to Website</span>
-              </button>
-              <p className="text-[9px] text-[#787F74] text-center mt-1.5">
-                Clears this restaurant from device memory so you can select again from the homepage.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+        </form>
+      </Dialog>
 
       {/* QR Scanner Modal */}
       <QrScannerModal

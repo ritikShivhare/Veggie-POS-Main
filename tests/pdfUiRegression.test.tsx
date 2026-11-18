@@ -10,7 +10,13 @@ import AIReportsView from '../src/features/shared/components/AIReportsView';
 import CRMLoyalty from '../src/features/crm/CRMLoyalty';
 let host:HTMLDivElement, root:Root;
 const guest={id:'guest-1',name:'Guest',phone:'9876543210',loyaltyPoints:4,totalVisits:1,totalSpend:100,maxBillAmount:100,minBillAmount:100,comingSince:'2026-11-01',lastVisited:'2026-11-14'};
-beforeEach(() => { vi.clearAllMocks(); mocks.role='Owner'; (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true; host=document.createElement('div'); document.body.append(host); root=createRoot(host); });
+beforeEach(() => {
+ vi.clearAllMocks(); mocks.role='Owner'; (globalThis as any).IS_REACT_ACT_ENVIRONMENT=true;
+ // jsdom does not implement the native dialog lifecycle; Chromium covers focus.
+ Object.defineProperty(HTMLDialogElement.prototype,'showModal',{configurable:true,value:function(){this.setAttribute('open','');}});
+ Object.defineProperty(HTMLDialogElement.prototype,'close',{configurable:true,value:function(){this.removeAttribute('open');}});
+ host=document.createElement('div'); document.body.append(host); root=createRoot(host);
+});
 afterEach(async () => { await act(async () => root.unmount());host.remove(); });
 async function click(text:string) { await act(async () => { Array.from(host.querySelectorAll('button')).find(button=>button.textContent?.includes(text))!.click(); }); }
 it('switches report UI to English without Hindi labels or automatic AI requests', async () => {
@@ -48,5 +54,7 @@ it('opens actual visit details, including date, bill items and recorded loyalty'
  await act(async()=>root.render(<CRMLoyalty customers={[guest]} setCustomers={vi.fn()}/>));
  await act(async()=>(host.querySelector('#crm-total-visits') as HTMLButtonElement).click());
  expect(mocks.fetch).toHaveBeenCalledWith('/api/customers/guest-1/history');
- const dialog=host.querySelector('[role=dialog]')!;expect(dialog.textContent).toContain('Bill #001');expect(dialog.textContent).toContain('Paneer');expect(dialog.textContent).toContain('Points earned: 1 · Points used: 5');
+ const dialog=host.querySelector('dialog')!;expect(dialog.open).toBe(true);expect(dialog.textContent).toContain('Bill #001');expect(dialog.textContent).toContain('Paneer');expect(dialog.textContent).toContain('Points earned: 1 · Points used: 5');
+ await act(async()=>dialog.dispatchEvent(new Event('cancel',{cancelable:true})));
+ expect(dialog.open).toBe(false);
 });

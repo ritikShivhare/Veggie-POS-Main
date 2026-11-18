@@ -13,12 +13,12 @@ export function ToastContainer() {
     return unsubscribe;
   }, []);
 
-  if (toasts.length === 0) return null;
-
   return (
     <div
       id="global-toast-container"
-      className="fixed top-3 left-3 right-3 sm:top-6 sm:left-auto sm:right-6 z-[999999] flex flex-col gap-3 max-h-[calc(100dvh-1.5rem)] overflow-y-auto sm:w-full sm:max-w-sm pointer-events-none"
+      role="region"
+      aria-label="Notifications"
+      className="fixed top-[max(5rem,env(safe-area-inset-top))] left-3 right-3 sm:left-auto sm:right-6 z-[999999] flex flex-col gap-3 max-h-[calc(100dvh-6rem)] overflow-y-auto sm:w-full sm:max-w-sm pointer-events-none"
     >
       {toasts.map((item) => {
         let bgColor = "bg-white border-slate-200 text-slate-800 shadow-xl";
@@ -53,19 +53,22 @@ export function ToastContainer() {
           <div
             key={item.id}
             id={`toast-${item.id}`}
+            role={item.type === "error" ? "alert" : "status"}
+            aria-live={item.type === "error" ? "assertive" : "polite"}
+            aria-atomic="true"
             className={`pointer-events-auto flex gap-3 p-4 rounded-xl border transition-shadow duration-150 min-w-0 ${bgColor}`}
           >
             <div className={`mt-0.5 flex-shrink-0 ${iconColor}`}>
-              <IconComponent className="w-5 h-5" />
+              <IconComponent aria-hidden="true" className="w-5 h-5" />
             </div>
 
             <div className="flex-1 min-w-0 space-y-1">
               {item.title && (
-                <h4 className="text-xs font-bold tracking-wide uppercase opacity-90 leading-tight">
+                <h4 className="text-xs font-bold tracking-wide uppercase opacity-90 leading-tight break-words [overflow-wrap:anywhere]">
                   {item.title}
                 </h4>
               )}
-              <p className="text-sm font-medium leading-relaxed break-words">
+              <p className="text-sm font-medium leading-relaxed break-words [overflow-wrap:anywhere]">
                 {item.message}
               </p>
             </div>

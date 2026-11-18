@@ -200,7 +200,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
                       Walkthrough Request Received
                     </h2>
                     <p className="text-sm text-[#5A6056] max-w-md mx-auto leading-relaxed">
-                      Thank you, <span className="font-bold text-[#181A18]">{formData.fullName}</span>. We received your request to discuss Aatmyam POS for <span className="font-bold text-[#181A18]">{formData.restaurantName}</span>.
+                      Thank you, <span className="font-bold text-[#181A18]">{formData.fullName}</span>. We received your request to discuss Aatmyam Pos for <span className="font-bold text-[#181A18]">{formData.restaurantName}</span>.
                     </p>
                   </div>
 

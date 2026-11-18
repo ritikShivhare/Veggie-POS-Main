@@ -1,0 +1,14 @@
+id,priority,original_title,status,resolution_and_evidence,render_reverified
+S4-01,P1,QR और Switch Outlet dialogs में keyboard focus बाहर जाता है; Escape बंद नहीं करता,IMPLEMENTED_AND_LOCALLY_VERIFIED,"Native Dialog: real Chromium Tab/Escape/return focus; QR, Switch, emergency UI preserved",No new deployment
+S4-02,P1,दोनों dialogs के X close buttons का accessible name नहीं है,IMPLEMENTED_AND_LOCALLY_VERIFIED,"Shared labelled Close dialog button, min 44px",No new deployment
+S4-03,P1,Toast messages में live-region/status semantics नहीं हैं,IMPLEMENTED_AND_LOCALLY_VERIFIED,Error alert/assertive and other status/polite; max-five real toast service tested; real screen reader pending,No new deployment
+S4-04,P2,छोटे text और secondary labels का contrast कम है,IMPLEMENTED_AND_LOCALLY_VERIFIED,Login/PIN/QR and dashboard contrast corrected; targeted aXe passes,No new deployment
+S4-05,P2,कई controls परियोजना के 44px touch-height लक्ष्य से छोटे हैं,IMPLEMENTED_AND_LOCALLY_VERIFIED,Relevant login/PIN/QR targets >=44px; real Android keyboard pending,No new deployment
+S4-06,P2,Available Demo Outlets के दोनों shortcuts मौजूदा Preview में नहीं मिलते,IMPLEMENTED_AND_LOCALLY_VERIFIED,Hardcoded invalid demo shortcuts removed; Saved stores uses cached active tenants,No new deployment
+S4-07,P2,कुछ दृश्य field labels inputs से programmatically जुड़े नहीं हैं,IMPLEMENTED_AND_LOCALLY_VERIFIED,"Store, QR manual, switch, owner password labels and error links associated",No new deployment
+S4-08,P2,Zero sales के साथ static +100% Real badge,IMPLEMENTED_AND_LOCALLY_VERIFIED,Removed static badge; zero-sales and comparative empty-state tests,No new deployment
+S4-09,P2,Sidebar में पुरानी VEGGIEPOS branding,IMPLEMENTED_AND_LOCALLY_VERIFIED,Canonical Aatmyam Pos in visible branding; technical storage namespaces preserved,No new deployment
+S4-10,P2,KPI cards mobile पर compact 2×2 की जगह बड़े single-column cards हैं,IMPLEMENTED_AND_LOCALLY_VERIFIED,Three mobile widths show compact 2x2 grid; desktop four columns,No new deployment
+S4-11,P2,Paid Checkouts और Pending Orders की स्पष्ट अलग पहचान बाकी है,IMPLEMENTED_AND_LOCALLY_VERIFIED,Paid/pending/cancelled mixed fixture and unit tests; live and historical sales separate unpaid orders,No new deployment
+S4-12,P2,पीले निशान वाला Dashboard introduction अभी भी दिखता है,IMPLEMENTED_AND_LOCALLY_VERIFIED,PDF UI-02 marked paragraph removed,No new deployment
+S4-13,P2,PIN पर पीले निशान वाले STAFF शब्द और auto-submits badge बाकी हैं,IMPLEMENTED_AND_LOCALLY_VERIFIED,PDF UI-01 marked STAFF text/badge removed; PIN auto-submit behavior retained,No new deployment

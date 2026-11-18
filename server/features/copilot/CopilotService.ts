@@ -45,7 +45,7 @@ export class CopilotService {
         .map((h: any) => `${h.sender === "user" ? "User" : "Assistant"}: ${h.text}`)
         .join("\n");
 
-      const systemInstruction = `You are the Aatmyam POS help assistant. Current functionality: one outlet per restaurant, menu billing, manual Cash/UPI settlement, kitchen Pending/Preparing/Ready status, recipe stock deduction, purchase logging, staff PINs and roles, customer points, sales summaries. Offline commands work in an already logged-in browser tab and need later server acceptance. Login and session restoration require internet. Printing uses the browser print dialog; no automatic cash-drawer or ESC/POS connection is configured. Swiggy/Zomato and SMS are not integrated. Provider-managed backups require setup. Plans: ${pricingSummary}. Do not claim certification, accuracy, uptime or automatic refunds. Respond briefly in English or Hindi/Hinglish. For account, privacy and billing questions ask the restaurant owner or service administrator. User context: ${staffName}, ${tenantName}, ${staffRole}.`;
+      const systemInstruction = `You are the Aatmyam Pos help assistant. Current functionality: one outlet per restaurant, menu billing, manual Cash/UPI settlement, kitchen Pending/Preparing/Ready status, recipe stock deduction, purchase logging, staff PINs and roles, customer points, sales summaries. Offline commands work in an already logged-in browser tab and need later server acceptance. Login and session restoration require internet. Printing uses the browser print dialog; no automatic cash-drawer or ESC/POS connection is configured. Swiggy/Zomato and SMS are not integrated. Provider-managed backups require setup. Plans: ${pricingSummary}. Do not claim certification, accuracy, uptime or automatic refunds. Respond briefly in English or Hindi/Hinglish. For account, privacy and billing questions ask the restaurant owner or service administrator. User context: ${staffName}, ${tenantName}, ${staffRole}.`;
 
       // Try primary model gemini-3.8-flash, falling back to gemini-flash-latest if needed
       let chatResponseText: string | undefined;
@@ -119,13 +119,13 @@ User Prompt: ${prompt}`,
       return `Hello ${staffName}! How can I assist you with ${tenantName}'s operations today? You can ask about recipe setups, ingredients tracking, billing configurations, KOT, and table floor plans.`;
     }
     if (lowercasePrompt.includes("price") || lowercasePrompt.includes("plan") || lowercasePrompt.includes("cost") || lowercasePrompt.includes("subscription")) {
-      return `Aatmyam POS monthly plans:\n${pricingSummary}\nDeployment timing and device compatibility need to be checked for your setup.`;
+      return `Aatmyam Pos monthly plans:\n${pricingSummary}\nDeployment timing and device compatibility need to be checked for your setup.`;
     }
     if (lowercasePrompt.includes("kot") || lowercasePrompt.includes("kds") || lowercasePrompt.includes("kitchen")) {
-      return `Aatmyam POS Kitchen Order Tickets (KOT) feature visual station color-coding (Starters, Mains, Desserts), multi-course holding/firing, kitchen latency timers, and direct thermal printing via USB, Bluetooth, or LAN.`;
+      return `Aatmyam Pos Kitchen Order Tickets (KOT) feature visual station color-coding (Starters, Mains, Desserts), multi-course holding/firing, kitchen latency timers, and direct thermal printing via USB, Bluetooth, or LAN.`;
     }
     if (lowercasePrompt.includes("recipe") || lowercasePrompt.includes("ingredient") || lowercasePrompt.includes("stock") || lowercasePrompt.includes("inventory")) {
-      return `In Aatmyam POS, you map recipe weights in the 'Inventory & Recipes' tab. When an order is processed, ingredients are automatically deducted down to grams/milliliters based on your Recipe Bill of Materials (BOM). Store managers can log vendor supplies, while the Owner has full master editing rights.`;
+      return `In Aatmyam Pos, you map recipe weights in the 'Inventory & Recipes' tab. When an order is processed, ingredients are automatically deducted down to grams/milliliters based on your Recipe Bill of Materials (BOM). Store managers can log vendor supplies, while the Owner has full master editing rights.`;
     }
     if (lowercasePrompt.includes("table") || lowercasePrompt.includes("floor") || lowercasePrompt.includes("dine")) {
       return `Our Table Floor Plan features live color-coded table states (Vacant, Occupied, Dining, Billing) across customizable zones (Indoor, Patio, Terrace, Bar) with quick multi-server ordering.`;
@@ -134,7 +134,7 @@ User Prompt: ${prompt}`,
       return `The Online Order Aggregator provides a unified inbox for Swiggy, Zomato, and Direct Orders with one-click acceptance and automatic KOT dispatch to the kitchen.`;
     }
     if (lowercasePrompt.includes("hardware") || lowercasePrompt.includes("printer") || lowercasePrompt.includes("device")) {
-      return `Aatmyam POS is 100% browser-based (PWA) and runs on iPads, Android tablets, Windows/Mac laptops, and mobile phones. It connects to standard ESC/POS 58mm/80mm thermal receipt printers without proprietary hardware lock-ins.`;
+      return `Aatmyam Pos is 100% browser-based (PWA) and runs on iPads, Android tablets, Windows/Mac laptops, and mobile phones. It connects to standard ESC/POS 58mm/80mm thermal receipt printers without proprietary hardware lock-ins.`;
     }
     if (isImportant) {
       return `This concern involves technical configurations or operations parameters. I have flagged this as an "Administrative Issue" for log archiving. You can click "Log & Dispatch Transcript to Admin" below to instantly log this conversation.`;

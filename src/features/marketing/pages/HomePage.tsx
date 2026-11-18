@@ -100,7 +100,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               {/* Editorial Subhead */}
               <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed max-w-2xl">
                 Manage billing, kitchen tickets, recipe-linked inventory and staff permissions in one browser-based workspace.
-                Aatmyam POS currently supports one outlet per restaurant and is available in early access.
+                Aatmyam Pos currently supports one outlet per restaurant and is available in early access.
               </p>
 
               {/* Action Buttons & Assurance */}

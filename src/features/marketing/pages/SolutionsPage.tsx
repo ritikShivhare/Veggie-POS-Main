@@ -33,7 +33,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
       friction:
         "Staff may need to coordinate table orders, kitchen preparation, and billing during busy service.",
       solution:
-        "Aatmyam POS keeps table orders, kitchen preparation status, and billing in one restaurant workflow.",
+        "Aatmyam Pos keeps table orders, kitchen preparation status, and billing in one restaurant workflow.",
       highlights: [
         "Table-based order entry",
         "Kitchen order status",
@@ -52,7 +52,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
       friction:
         "Counter service teams need a clear way to record orders, payments, and kitchen requests.",
       solution:
-        "Aatmyam POS provides a browser-based screen for recording menu orders and payment methods.",
+        "Aatmyam Pos provides a browser-based screen for recording menu orders and payment methods.",
       highlights: [
         "Menu-based order entry",
         "Cash and manual UPI payment recording",
@@ -90,7 +90,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
       friction:
         "Delivery-focused teams need to pass order details to the kitchen and track preparation status.",
       solution:
-        "Aatmyam POS records delivery orders and makes their kitchen status visible to staff.",
+        "Aatmyam Pos records delivery orders and makes their kitchen status visible to staff.",
       highlights: [
         "Order entry",
         "Kitchen order status",
@@ -127,7 +127,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
               <span className="text-[#6E8F45] italic">Tuned</span> for your floor.
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              Every hospitality concept faces different bottlenecks. Discover how Aatmyam POS adapts to table turn dynamics, counter queues, recipe batches, and restaurant operations.
+              Every hospitality concept faces different bottlenecks. Discover how Aatmyam Pos adapts to table turn dynamics, counter queues, recipe batches, and restaurant operations.
             </p>
           </div>
         </div>
@@ -208,7 +208,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
                         <div className="p-4 bg-[#EBF2E4] rounded-2xl border border-[#D5E3C8] space-y-1.5">
                           <p className="text-xs font-mono font-bold text-[#567234] flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            THE AATMYAM POS RESOLUTION:
+                            THE Aatmyam Pos RESOLUTION:
                           </p>
                           <p className="text-xs text-[#2E4A1C] leading-relaxed">
                             {item.solution}

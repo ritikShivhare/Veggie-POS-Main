@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Customer, Order } from "../shared/types";
 import { useAppContext } from "../shared/context/AppContext";
 import { displayOrderNumber } from "../../../shared/orderNumber";
+import { Dialog } from "../shared/components/ui/Dialog";
 import {
   Search,
   Plus,
@@ -556,13 +557,9 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
         </div>
       )}
 
-      {historyOpen && <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
-        <section role="dialog" aria-modal="true" aria-labelledby="guest-history-title" className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
-          <header className="p-4 border-b flex items-center justify-between gap-3">
-            <h2 id="guest-history-title" className="font-bold text-slate-900">Guest History · {selectedCustomer?.name}</h2>
-            <button type="button" onClick={() => setHistoryOpen(false)} className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold">Done</button>
-          </header>
-          <div className="p-4 overflow-y-auto space-y-3">
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen} title={`Guest History · ${selectedCustomer?.name || "Guest"}`} className="max-w-2xl"
+        footer={<button type="button" onClick={() => setHistoryOpen(false)} className="min-h-11 rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold">Done</button>}>
+          <div className="space-y-3">
             {historyLoading ? <p role="status">Loading visits…</p> : historyError ? <div role="alert"><p>{historyError}</p><button type="button" onClick={() => { setHistoryOpen(false); }} className="underline">Close and retry</button></div> : history.length === 0 ? <p className="text-sm text-slate-500">No paid visits recorded for this guest.</p> : history.map(order => <article key={order.id} className="rounded-xl border border-slate-200 p-4 space-y-2 text-sm">
               <div className="flex flex-wrap justify-between gap-2 font-semibold"><span>Bill #{displayOrderNumber(order.orderNumber)}</span><time>{new Date(order.paidAt || order.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}</time></div>
               <ul className="divide-y divide-slate-100">{order.items.map((item, index) => <li key={index} className="py-2"><div className="flex justify-between gap-3"><span>{item.quantity} × {item.menuItem?.name || "Menu item"}</span><span>₹{((item.menuItem?.price || 0) * item.quantity).toFixed(2)}</span></div>{(item.note || item.notes) && <p className="text-xs text-slate-500">{item.note || item.notes}</p>}</li>)}</ul>
@@ -571,8 +568,7 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
               <p className="text-xs text-slate-600">Points earned: {order.earnedPoints ?? "Not recorded"} · Points used: {order.redeemedPoints ?? "Not recorded"}</p>
             </article>)}
           </div>
-        </section>
-      </div>}
+      </Dialog>
     </div>
   );
 }

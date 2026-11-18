@@ -2,6 +2,7 @@ import { displayOrderNumber } from "../../../../shared/orderNumber";
 import { printReceipt } from '../utils/printReceipt';
 import React, { useState, useMemo } from "react";
 import ReceiptTotals from "./ReceiptTotals";
+import { Card } from "./ui/Card";
 import FssaiRegistration from "./FssaiRegistration";
 import { 
   TrendingUp, 
@@ -53,6 +54,8 @@ interface DashboardProps {
 }
 
 type PeriodType = "yesterday" | "week" | "month" | "custom";
+const formatRupees = (value: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+const isPaidOrder = (order: Order) => order.status === "Completed" && Boolean(order.paidAt);
 
 export default function Dashboard({
   dashboardStats,
@@ -103,6 +106,15 @@ export default function Dashboard({
     return [...realOrders].sort((a, b) => {
       return new Date(b.date).getTime() - new Date(a.date).getTime();
     });
+  }, [orders]);
+
+  const liveOrderSummary = useMemo(() => {
+    const today = new Date().toDateString();
+    const todaysOrders = (orders || []).filter((order) => order.date && new Date(order.date).toDateString() === today);
+    return {
+      paid: todaysOrders.filter(isPaidOrder).length,
+      pending: todaysOrders.filter((order) => order.status !== "Cancelled" && !order.paidAt).length,
+    };
   }, [orders]);
 
   // Compute stats based on the selected period
@@ -199,15 +211,16 @@ export default function Dashboard({
     // 2. Filter orders for current period vs comparative period
     const currentPeriodOrders = allOrdersCombined.filter(o => {
       const orderTime = new Date(o.date).getTime();
-      return orderTime >= startDate.getTime() && orderTime <= endDate.getTime() && o.status !== "Cancelled";
+      return orderTime >= startDate.getTime() && orderTime <= endDate.getTime() && isPaidOrder(o);
     });
 
     const comparativePeriodOrders = allOrdersCombined.filter(o => {
       const orderTime = new Date(o.date).getTime();
-      return orderTime >= compStartDate.getTime() && orderTime <= compEndDate.getTime() && o.status !== "Cancelled";
+      return orderTime >= compStartDate.getTime() && orderTime <= compEndDate.getTime() && isPaidOrder(o);
     });
 
-    // Food Cost Helper: Lookup ingredient-based cost from recipes, or default to a realistic 35% margin cost
+    // Preserve the existing estimate: 35% of recorded menu-item prices.
+    // This does not include a recipe lookup or operating overhead.
     const calculateOrderFoodCost = (order: Order) => {
       let cost = 0;
       if (!order.items) return 0;
@@ -215,8 +228,6 @@ export default function Dashboard({
       order.items.forEach(item => {
         if (!item.menuItem) return;
 
-        // Find exact ingredient deduction if recipes & costPerUnit are set
-        // In our case, let's fall back gracefully to a solid realistic 35% material cost to guarantee financial consistency
         const itemPrice = item.menuItem.price || 0;
         const itemQuantity = item.quantity || 1;
         cost += (itemPrice * 0.35) * itemQuantity;
@@ -380,9 +391,20 @@ export default function Dashboard({
       ticketTrend,
       chartData,
       topSellingInPeriod,
-      comparisonLabel
+      comparisonLabel,
+      hasSalesComparison: compRevenue > 0,
+      hasProfitComparison: compProfit > 0,
+      hasOrdersComparison: compOrderCount > 0,
+      hasTicketComparison: compAvgTicket > 0,
     };
   }, [selectedPeriod, customStartDate, customEndDate, allOrdersCombined]);
+
+  const analyticsMetrics = [
+    { label: "Net Sales", value: formatRupees(periodAnalytics.totalRevenue), hint: periodAnalytics.orderCount ? "Paid sales only" : "No paid sales yet", trend: periodAnalytics.salesTrend, hasComparison: periodAnalytics.hasSalesComparison },
+    { label: "Estimated Profit", value: formatRupees(periodAnalytics.estimatedProfit), hint: periodAnalytics.totalRevenue > 0 ? "Uses a 35% cost estimate" : "No paid sales yet", trend: periodAnalytics.profitTrend, hasComparison: periodAnalytics.hasProfitComparison },
+    { label: "Paid Checkouts", value: String(periodAnalytics.orderCount), hint: "Pending orders excluded", trend: periodAnalytics.ordersTrend, hasComparison: periodAnalytics.hasOrdersComparison },
+    { label: "Average Paid Bill", value: formatRupees(periodAnalytics.avgTicket), hint: "Based on paid checkouts", trend: periodAnalytics.ticketTrend, hasComparison: periodAnalytics.hasTicketComparison },
+  ];
 
   return (
     <div className="h-full p-4 sm:p-6 flex flex-col gap-6 overflow-y-auto bg-[#fafbfd] select-text">
@@ -400,8 +422,8 @@ export default function Dashboard({
         <div className="flex bg-slate-100 p-1 rounded-xl max-w-sm self-start sm:self-center border border-slate-200/50">
           <button
             onClick={() => setDashboardViewTab("live")}
-            className={`px-4 py-2 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-              dashboardViewTab === "live" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-800"
+            className={`min-h-11 px-4 py-2 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+              dashboardViewTab === "live" ? "bg-white text-slate-800 shadow-sm" : "text-slate-600 hover:text-slate-800"
             }`}
           >
             <Activity className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
@@ -410,8 +432,8 @@ export default function Dashboard({
 
           <button
             onClick={() => setDashboardViewTab("analytics")}
-            className={`px-4 py-2 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-              dashboardViewTab === "analytics" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-800"
+            className={`min-h-11 px-4 py-2 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+              dashboardViewTab === "analytics" ? "bg-white text-slate-800 shadow-sm" : "text-slate-600 hover:text-slate-800"
             }`}
           >
             <BarChart3 className="w-3.5 h-3.5 text-indigo-600" />
@@ -423,131 +445,70 @@ export default function Dashboard({
       {/* ================= VIEW 1: TODAY LIVE DESK ================= */}
       {dashboardViewTab === "live" && (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {/* Net Sales Today */}
-            <div className="bg-white p-5 border border-slate-100 rounded-2xl shadow-[0_2px_8px_-3px_rgba(0,0,0,0.04)] flex flex-col justify-between transition hover:shadow-md animate-fade-in">
-              <div>
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Net Sales Today</p>
-                  <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100/30">
-                    <TrendingUp className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className="text-2xl font-extrabold mt-4 tracking-tight text-slate-900 font-display flex items-baseline gap-1">
-                  <span className="text-xs text-slate-400 font-normal">INR</span>
-                  <span>{dashboardStats.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 1 })}</span>
-                </h3>
-              </div>
-              <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-50 text-[10px]">
-                <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  +100% Real
-                </span>
-                <span className="text-slate-400 font-mono">
-                  Cash: {((dashboardStats.cashRevenue / (dashboardStats.totalRevenue || 1)) * 100).toFixed(0)}% • UPI: {((dashboardStats.upiRevenue / (dashboardStats.totalRevenue || 1)) * 100).toFixed(0)}%
-                </span>
-              </div>
-            </div>
-
-            {/* Today's Transactions */}
-            <div className="bg-white p-5 border border-slate-100 rounded-2xl shadow-[0_2px_8px_-3px_rgba(0,0,0,0.04)] flex flex-col justify-between transition hover:shadow-md">
-              <div>
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Today's Transactions</p>
-                  <div className="p-2 bg-blue-50 text-blue-600 rounded-lg border border-blue-100/30">
-                    <Activity className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className="text-2xl font-extrabold mt-4 tracking-tight text-slate-900 font-display">
-                  {dashboardStats.totalOrders} <span className="text-xs text-slate-400 font-normal font-sans">checkouts</span>
-                </h3>
-              </div>
-              <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-50 text-[10px]">
-                <span className="text-slate-500">
-                  Avg ticket: <span className="font-mono text-slate-700 font-bold">INR {(dashboardStats.totalRevenue / (dashboardStats.totalOrders || 1)).toFixed(0)}</span>
-                </span>
-                <button onClick={() => setActiveTab("billing")} className="text-blue-600 hover:text-blue-700 font-bold hover:underline cursor-pointer">
-                  New Ticket →
-                </button>
-              </div>
-            </div>
-
-            {/* Labor Shift Coverage */}
-            <div className="bg-white p-5 border border-slate-100 rounded-2xl shadow-[0_2px_8px_-3px_rgba(0,0,0,0.04)] flex flex-col justify-between transition hover:shadow-md">
-              <div>
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Labor Shift Coverage</p>
-                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100/30">
-                    <Clock className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className="text-2xl font-extrabold mt-4 tracking-tight text-slate-900 font-display">
-                  {dashboardStats.activeShiftsCount} <span className="text-xs text-slate-400 font-normal font-sans">on duty</span>
-                </h3>
-              </div>
-              <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-50 text-[10px]">
-                <span className="text-slate-500 truncate max-w-[140px]" title={shifts.filter(s => s.status === 'Active').map(s => s.staffName.split(" ")[0]).join(", ")}>
-                  Active: <span className="font-semibold text-slate-700">{shifts.filter(s => s.status === 'Active').map(s => s.staffName.split(" ")[0]).join(", ") || 'None'}</span>
-                </span>
-                <button onClick={() => setActiveTab("shifts")} className="text-indigo-600 hover:text-indigo-700 font-bold hover:underline cursor-pointer">
-                  Roster logs
-                </button>
-              </div>
-            </div>
-
-            {/* Critical Stock Alerts */}
-            <div className="bg-white p-5 border border-slate-100 rounded-2xl shadow-[0_2px_8px_-3px_rgba(0,0,0,0.04)] flex flex-col justify-between transition hover:shadow-md">
-              <div>
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Critical Stock Alerts</p>
-                  <div className={`p-2 rounded-lg border ${dashboardStats.lowStockItems.length > 0 ? "bg-red-50 text-red-600 border-red-100 animate-pulse" : "bg-slate-50 text-slate-400 border-slate-100"}`}>
-                    <AlertTriangle className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className={`text-2xl font-extrabold mt-4 tracking-tight font-display ${dashboardStats.lowStockItems.length > 0 ? "text-red-600" : "text-slate-900"}`}>
-                  {dashboardStats.lowStockItems.length} <span className="text-xs text-slate-400 font-normal font-sans">materials</span>
-                </h3>
-              </div>
-              <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-50 text-[10px]">
-                <span className="text-slate-500 truncate max-w-[145px]" title={dashboardStats.lowStockItems.length > 0 ? `Needs reorder: ${dashboardStats.lowStockItems.map(i => i.name).join(", ")}` : "All ingredients sufficient"}>
-                  {dashboardStats.lowStockItems.length > 0 ? `Low: ${dashboardStats.lowStockItems.map(i => i.name).join(", ")}` : "All levels healthy"}
-                </span>
-                <button onClick={() => setActiveTab("inventory")} className="text-red-600 hover:text-red-700 font-bold hover:underline cursor-pointer">
-                  Reorder →
-                </button>
-              </div>
-            </div>
-          </div>
+          <section aria-label="Today's summary" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+            <article aria-labelledby="dashboard-sales-label" className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
+              <p id="dashboard-sales-label" className="text-xs font-semibold text-slate-600">Net Sales Today</p>
+              <p data-testid="dashboard-net-sales" className="mt-3 text-xl sm:text-2xl font-extrabold tabular-nums text-slate-900 [overflow-wrap:anywhere]">{formatRupees(dashboardStats.totalRevenue)}</p>
+              <p className="mt-2 text-xs text-slate-600">{dashboardStats.totalRevenue > 0 ? "Paid sales only" : "No paid sales yet"}</p>
+              {dashboardStats.totalRevenue > 0 && <p className="mt-3 text-xs text-slate-600 [overflow-wrap:anywhere]">Cash {Math.round(dashboardStats.cashRevenue / dashboardStats.totalRevenue * 100)}% · UPI {Math.round(dashboardStats.upiRevenue / dashboardStats.totalRevenue * 100)}%</p>}
+            </article>
+            <article aria-labelledby="dashboard-paid-label" className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
+              <p id="dashboard-paid-label" className="text-xs font-semibold text-slate-600">Paid Checkouts</p>
+              <p data-testid="dashboard-paid-checkouts" className="mt-3 text-xl sm:text-2xl font-extrabold tabular-nums text-slate-900">{liveOrderSummary.paid}</p>
+              <dl className="mt-2 space-y-1 text-xs text-slate-600">
+                <div className="flex flex-wrap justify-between gap-1"><dt>Pending orders</dt><dd data-testid="dashboard-pending-orders" className="font-bold text-slate-900">{liveOrderSummary.pending}</dd></div>
+                <div className="flex flex-wrap justify-between gap-1"><dt>Orders today</dt><dd>{dashboardStats.totalOrders}</dd></div>
+              </dl>
+              <p className="mt-2 text-xs text-slate-600 [overflow-wrap:anywhere]">Avg paid bill {formatRupees(liveOrderSummary.paid ? dashboardStats.totalRevenue / liveOrderSummary.paid : 0)}</p>
+            </article>
+            <article aria-labelledby="dashboard-shifts-label" className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
+              <p id="dashboard-shifts-label" className="text-xs font-semibold text-slate-600">Active Shifts</p>
+              <p className="mt-3 text-xl sm:text-2xl font-extrabold tabular-nums text-slate-900">{dashboardStats.activeShiftsCount}</p>
+              <p className="mt-2 text-xs text-slate-600">{dashboardStats.activeShiftsCount ? "Clocked-in staff" : "No active shifts"}</p>
+              <button type="button" onClick={() => setActiveTab("shifts")} className="mt-2 min-h-11 text-left text-xs font-semibold text-blue-700 hover:underline">View shifts →</button>
+            </article>
+            <article aria-labelledby="dashboard-stock-label" className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
+              <p id="dashboard-stock-label" className="text-xs font-semibold text-slate-600">Low Stock</p>
+              <p className={`mt-3 text-xl sm:text-2xl font-extrabold tabular-nums ${dashboardStats.lowStockItems.length ? "text-rose-700" : "text-slate-900"}`}>{dashboardStats.lowStockItems.length}</p>
+              <p className="mt-2 text-xs text-slate-600">{!ingredients.length ? "No ingredients yet" : dashboardStats.lowStockItems.length ? "Ingredients to reorder" : "All levels healthy"}</p>
+              <button type="button" onClick={() => setActiveTab("inventory")} className="mt-2 min-h-11 text-left text-xs font-semibold text-blue-700 hover:underline">View inventory →</button>
+            </article>
+          </section>
+          <nav aria-label="Quick actions" className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[{ label: "New bill", tab: "billing" }, { label: "Inventory", tab: "inventory" }, { label: "Reports", tab: "ai-reports" }, { label: "Settings", tab: "settings" }].map((action) => (
+              <button key={action.tab} type="button" onClick={() => setActiveTab(action.tab)} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-blue-700 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-600">{action.label}</button>
+            ))}
+          </nav>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0">
             {/* Real-time Order Stream */}
-            <div className="col-span-12 lg:col-span-8 bg-white border border-slate-200 rounded-2xl flex flex-col shadow-sm overflow-hidden min-h-[350px]">
+            <div className="min-w-0 lg:col-span-8 bg-white border border-slate-200 rounded-2xl flex flex-col shadow-sm overflow-hidden min-h-[350px]">
               <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
                 <div className="flex items-center gap-2">
                   <h3 className="font-bold text-sm text-slate-900 tracking-tight font-display">Real-time Order Stream</h3>
-                  <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-600 rounded text-[9px] font-mono font-bold animate-pulse">LIVE SYNC</span>
+                  <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-600 rounded text-[9px] font-mono font-bold">LIVE SYNC</span>
                 </div>
-                <span className="text-[10px] text-slate-400 font-mono">Synced seconds ago</span>
+                <span className="text-[10px] text-slate-600 font-mono">Synced seconds ago</span>
               </div>
 
               <div className="flex-1 overflow-y-auto">
-                <div className="overflow-x-auto w-full">
+                <div tabIndex={0} role="region" aria-label="Order stream table" className="overflow-x-auto w-full">
                   <table className="w-full text-xs text-left border-collapse">
-                    <thead className="bg-slate-50/75 border-b border-slate-100 sticky top-0 text-slate-500 font-bold">
+                    <thead className="bg-slate-50/75 border-b border-slate-100 sticky top-0 text-slate-600 font-bold">
                       <tr>
-                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">ID</th>
-                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Staff Server</th>
-                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Table Ref</th>
-                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Items Ordered</th>
-                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Method</th>
-                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Total</th>
-                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Status</th>
+                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">ID</th>
+                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Staff Server</th>
+                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Table Ref</th>
+                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Items Ordered</th>
+                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Method</th>
+                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Total</th>
+                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-600">
                       {orders.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="p-12 text-center text-slate-400 italic font-sans">No checkout records received today.</td>
+                          <td colSpan={7} className="p-12 text-center text-slate-600 italic font-sans">No checkout records received today.</td>
                         </tr>
                       ) : (
                         orders.map((order) => {
@@ -562,7 +523,7 @@ export default function Dashboard({
                                 </span>
                               </td>
                               <td className="p-3.5 font-medium text-slate-700">{order.cashierName}</td>
-                              <td className="p-3.5 text-slate-500">{order.tableNo || "Takeaway"}</td>
+                              <td className="p-3.5 text-slate-600">{order.tableNo || "Takeaway"}</td>
                               <td className="p-3.5 max-w-[200px] truncate text-slate-600 font-medium" title={itemsSummarized}>{itemsSummarized}</td>
                               <td className="p-3.5">
                                 {order.paymentMethod ? (
@@ -570,7 +531,7 @@ export default function Dashboard({
                                     {order.paymentMethod}
                                   </span>
                                 ) : (
-                                  <span className="text-slate-400 italic">Unsettled</span>
+                                  <span className="text-slate-600 italic">Unsettled</span>
                                 )}
                               </td>
                               <td className="p-3.5 font-bold text-slate-900 font-mono text-[11px]">INR {order.total}</td>
@@ -601,7 +562,7 @@ export default function Dashboard({
               </div>
             </div>
 
-            <div className="col-span-12 lg:col-span-4 flex flex-col gap-6 overflow-hidden">
+            <div className="min-w-0 lg:col-span-4 flex flex-col gap-6 overflow-hidden">
               {/* Popular Menu Items */}
               <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col">
                 <div className="p-4 border-b border-slate-100 bg-white flex justify-between items-center">
@@ -610,7 +571,7 @@ export default function Dashboard({
                 </div>
                 <div className="p-5 space-y-3">
                   {dashboardStats.topSellingItems.length === 0 ? (
-                    <p className="text-slate-400 text-xs italic">No sales logs to compute popularity yet.</p>
+                    <p className="text-slate-600 text-xs italic">No sales logs to compute popularity yet.</p>
                   ) : (
                     dashboardStats.topSellingItems.map((item, idx) => (
                       <div key={idx} className="flex items-center justify-between text-xs py-1 border-b border-slate-50 last:border-0 pb-2 last:pb-0">
@@ -620,7 +581,7 @@ export default function Dashboard({
                           </span>
                           <span className="font-semibold text-slate-800">{item.name}</span>
                         </div>
-                        <span className="text-[11px] text-slate-500 font-mono">
+                        <span className="text-[11px] text-slate-600 font-mono">
                           <b className="text-slate-800 font-bold">{item.qty}</b> portions
                         </span>
                       </div>
@@ -642,7 +603,7 @@ export default function Dashboard({
                       <div key={ing.id} className="flex flex-col gap-1.5">
                         <div className="flex justify-between text-[11px] font-semibold text-slate-700">
                           <span className="text-slate-800 font-medium">{ing.name}</span>
-                          <span className={`font-mono ${isLow ? "text-rose-500 font-bold" : "text-slate-500"}`}>
+                          <span className={`font-mono ${isLow ? "text-rose-500 font-bold" : "text-slate-600"}`}>
                             {ing.currentStock} {ing.unit} {isLow ? "• Warning" : ""}
                           </span>
                         </div>
@@ -680,7 +641,7 @@ export default function Dashboard({
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setSelectedPeriod("yesterday")}
-                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border ${
+                className={`min-h-11 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border ${
                   selectedPeriod === "yesterday"
                     ? "bg-slate-900 text-white border-slate-900 shadow-sm"
                     : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
@@ -692,7 +653,7 @@ export default function Dashboard({
 
               <button
                 onClick={() => setSelectedPeriod("week")}
-                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border ${
+                className={`min-h-11 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border ${
                   selectedPeriod === "week"
                     ? "bg-slate-900 text-white border-slate-900 shadow-sm"
                     : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
@@ -704,7 +665,7 @@ export default function Dashboard({
 
               <button
                 onClick={() => setSelectedPeriod("month")}
-                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border ${
+                className={`min-h-11 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border ${
                   selectedPeriod === "month"
                     ? "bg-slate-900 text-white border-slate-900 shadow-sm"
                     : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
@@ -716,7 +677,7 @@ export default function Dashboard({
 
               <button
                 onClick={() => setSelectedPeriod("custom")}
-                className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border ${
+                className={`min-h-11 px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center gap-1.5 border ${
                   selectedPeriod === "custom"
                     ? "bg-slate-900 text-white border-slate-900 shadow-sm"
                     : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
@@ -731,7 +692,7 @@ export default function Dashboard({
             {selectedPeriod === "custom" && (
               <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-150 animate-fade-in">
                 <div className="flex items-center gap-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">From</span>
+                  <span className="text-[10px] font-bold text-slate-600 uppercase font-mono">From</span>
                   <input
                     type="date"
                     value={customStartDate}
@@ -740,7 +701,7 @@ export default function Dashboard({
                   />
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase font-mono">To</span>
+                  <span className="text-[10px] font-bold text-slate-600 uppercase font-mono">To</span>
                   <input
                     type="date"
                     value={customEndDate}
@@ -752,7 +713,7 @@ export default function Dashboard({
             )}
 
             <div className="text-right">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">Selected Duration</p>
+              <p className="text-[10px] font-bold text-slate-600 uppercase tracking-wider font-mono">Selected Duration</p>
               <p className="text-xs font-extrabold text-indigo-700 font-mono mt-0.5">
                 {periodAnalytics.startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - {periodAnalytics.endDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
               </p>
@@ -760,170 +721,26 @@ export default function Dashboard({
           </div>
 
           {/* DYNAMIC METRIC CARDS WITH HIGHEST VISIBILITY CONTRAST */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-
-            {/* KPI 1: Net Sales */}
-            <div className="bg-white p-5 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
-              <div>
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-mono">Net Sales</p>
-                  <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-100">
-                    <TrendingUp className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className="text-3xl font-black mt-4 tracking-tight text-slate-900 font-display flex items-baseline gap-1">
-                  <span className="text-sm text-slate-400 font-normal">INR</span>
-                  <span>{periodAnalytics.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 1 })}</span>
-                </h3>
-              </div>
-
-              {/* COMPARISON METRIC BLOCK (Option 4) */}
-              <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-100">
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                  periodAnalytics.salesTrend >= 0
-                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200"
-                    : "bg-rose-100 text-rose-900 border border-rose-200"
-                }`}>
-                  {periodAnalytics.salesTrend >= 0 ? (
-                    <>
-                      <ArrowUpRight className="w-3 h-3 text-emerald-700" />
-                      <span>+{periodAnalytics.salesTrend}% {periodAnalytics.comparisonLabel}</span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowDownRight className="w-3 h-3 text-rose-700" />
-                      <span>{periodAnalytics.salesTrend}% {periodAnalytics.comparisonLabel}</span>
-                    </>
-                  )}
-                </span>
-                <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Estimated Sales</span>
-              </div>
-            </div>
-
-            {/* KPI 2: Gross Profit / Loss */}
-            <div className="bg-white p-5 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
-              <div>
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-mono">Est. Profit/Loss</p>
-                  <div className="p-2 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-100">
-                    <CircleDollarSign className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className="text-3xl font-black mt-4 tracking-tight text-emerald-800 font-display flex items-baseline gap-1">
-                  <span className="text-sm text-emerald-600 font-normal">INR</span>
-                  <span>{periodAnalytics.estimatedProfit.toLocaleString(undefined, { minimumFractionDigits: 1 })}</span>
-                </h3>
-              </div>
-
-              {/* COMPARISON METRIC BLOCK (Option 4) */}
-              <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-100">
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                  periodAnalytics.profitTrend >= 0
-                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200"
-                    : "bg-rose-100 text-rose-900 border border-rose-200"
-                }`}>
-                  {periodAnalytics.profitTrend >= 0 ? (
-                    <>
-                      <ArrowUpRight className="w-3 h-3 text-emerald-700" />
-                      <span>+{periodAnalytics.profitTrend}% {periodAnalytics.comparisonLabel}</span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowDownRight className="w-3 h-3 text-rose-700" />
-                      <span>{periodAnalytics.profitTrend}% {periodAnalytics.comparisonLabel}</span>
-                    </>
-                  )}
-                </span>
-                <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Est. 65% Gross Margin</span>
-              </div>
-            </div>
-
-            {/* KPI 3: Checkouts Count */}
-            <div className="bg-white p-5 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
-              <div>
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-mono">Checkout Orders</p>
-                  <div className="p-2 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
-                    <ShoppingBag className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className="text-3xl font-black mt-4 tracking-tight text-slate-900 font-display">
-                  {periodAnalytics.orderCount} <span className="text-xs text-slate-400 font-normal font-sans">checkouts</span>
-                </h3>
-              </div>
-
-              {/* COMPARISON METRIC BLOCK (Option 4) */}
-              <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-100">
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                  periodAnalytics.ordersTrend >= 0
-                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200"
-                    : "bg-rose-100 text-rose-900 border border-rose-200"
-                }`}>
-                  {periodAnalytics.ordersTrend >= 0 ? (
-                    <>
-                      <ArrowUpRight className="w-3 h-3 text-emerald-700" />
-                      <span>+{periodAnalytics.ordersTrend}% {periodAnalytics.comparisonLabel}</span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowDownRight className="w-3 h-3 text-rose-700" />
-                      <span>{periodAnalytics.ordersTrend}% {periodAnalytics.comparisonLabel}</span>
-                    </>
-                  )}
-                </span>
-                <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Completed Orders</span>
-              </div>
-            </div>
-
-            {/* KPI 4: Average Ticket */}
-            <div className="bg-white p-5 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
-              <div>
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-mono">Avg Ticket Size</p>
-                  <div className="p-2 bg-amber-50 text-amber-700 rounded-lg border border-amber-100">
-                    <Briefcase className="w-4 h-4" />
-                  </div>
-                </div>
-                <h3 className="text-3xl font-black mt-4 tracking-tight text-slate-900 font-display flex items-baseline gap-1">
-                  <span className="text-sm text-slate-400 font-normal">INR</span>
-                  <span>{periodAnalytics.avgTicket.toLocaleString()}</span>
-                </h3>
-              </div>
-
-              {/* COMPARISON METRIC BLOCK (Option 4) */}
-              <div className="flex items-center justify-between mt-5 pt-3 border-t border-slate-100">
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                  periodAnalytics.ticketTrend >= 0
-                    ? "bg-emerald-100 text-emerald-900 border border-emerald-200"
-                    : "bg-rose-100 text-rose-900 border border-rose-200"
-                }`}>
-                  {periodAnalytics.ticketTrend >= 0 ? (
-                    <>
-                      <ArrowUpRight className="w-3 h-3 text-emerald-700" />
-                      <span>+{periodAnalytics.ticketTrend}% {periodAnalytics.comparisonLabel}</span>
-                    </>
-                  ) : (
-                    <>
-                      <ArrowDownRight className="w-3 h-3 text-rose-700" />
-                      <span>{periodAnalytics.ticketTrend}% {periodAnalytics.comparisonLabel}</span>
-                    </>
-                  )}
-                </span>
-                <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Sales Efficiency</span>
-              </div>
-            </div>
-
-          </div>
+          <section aria-label="Selected period summary" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
+            {analyticsMetrics.map((metric) => <Card key={metric.label} role="group" aria-label={metric.label} className="min-w-0">
+              <p className="text-xs font-semibold text-slate-600">{metric.label}</p>
+              <p className="mt-3 text-xl sm:text-2xl font-extrabold tabular-nums text-slate-900 [overflow-wrap:anywhere]">{metric.value}</p>
+              <p className="mt-2 text-xs text-slate-600">{metric.hint}</p>
+              <p className="mt-3 text-xs text-slate-600 [overflow-wrap:anywhere]">{metric.hasComparison ? (
+                <span className={metric.trend >= 0 ? "font-semibold text-emerald-800" : "font-semibold text-rose-800"}>{metric.trend >= 0 ? "+" : ""}{metric.trend}% {periodAnalytics.comparisonLabel}</span>
+              ) : "No comparison data"}</p>
+            </Card>)}
+          </section>
 
           {/* OPTION 3 BREAKDOWN: HIGH-CONTRAST CHART & TRANSACTION GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
             {/* Left: SVG Revenue Trend Chart */}
-            <div className="col-span-12 lg:col-span-8 bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+            <div className="min-w-0 lg:col-span-8 bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3 mb-4">
                 <div>
                   <h3 className="font-bold text-sm text-slate-900 tracking-tight font-display">Chronological Performance Chart</h3>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Estimated sales and net profit margins drawn continuously over selected intervals.</p>
+                  <p className="text-[10px] text-slate-600 mt-0.5">Paid sales and estimated profit for the selected period.</p>
                 </div>
                 <div className="flex gap-4 text-xs font-bold">
                   <div className="flex items-center gap-1.5 text-indigo-700">
@@ -932,7 +749,7 @@ export default function Dashboard({
                   </div>
                   <div className="flex items-center gap-1.5 text-emerald-700">
                     <span className="w-3 h-3 bg-emerald-500 rounded" />
-                    <span>Net Profit</span>
+                    <span>Estimated Profit</span>
                   </div>
                 </div>
               </div>
@@ -940,8 +757,8 @@ export default function Dashboard({
               {/* Responsive custom-crafted SVG Chart */}
               <div className="flex-1 w-full min-h-[220px] flex items-end justify-center relative select-none">
                 {periodAnalytics.chartData.length === 0 || periodAnalytics.orderCount === 0 ? (
-                  <div className="text-slate-400 text-xs italic py-16 text-center">
-                    No checkout records in the selected period. Real orders placed at the billing terminal will appear here automatically.
+                  <div className="text-slate-600 text-xs italic py-16 text-center">
+                    No paid checkouts in the selected period. Real orders placed at the billing terminal will appear here automatically.
                   </div>
                 ) : (
                   <div className="w-full h-[220px] flex flex-col justify-between">
@@ -959,7 +776,7 @@ export default function Dashboard({
                               <p className="font-black text-slate-300 border-b border-slate-700 pb-1 mb-1">{d.dateLabel}</p>
                               <p className="text-indigo-400">Sales: INR {d.sales.toLocaleString()}</p>
                               <p className="text-emerald-400">Profit: INR {d.profit.toLocaleString()}</p>
-                              <p className="text-slate-400">Orders: {d.orders}</p>
+                              <p className="text-slate-600">Orders: {d.orders}</p>
                             </div>
 
                             {/* Bar segment Stack */}
@@ -986,7 +803,7 @@ export default function Dashboard({
                             </div>
 
                             {/* Column text label */}
-                            <span className="text-[9px] text-slate-500 font-bold font-mono mt-2 truncate w-full text-center">
+                            <span className="text-[9px] text-slate-600 font-bold font-mono mt-2 truncate w-full text-center">
                               {d.dateLabel}
                             </span>
                           </div>
@@ -999,14 +816,14 @@ export default function Dashboard({
             </div>
 
             {/* Right: Top Selling menu items specifically in this filtered range */}
-            <div className="col-span-12 lg:col-span-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col">
+            <div className="min-w-0 lg:col-span-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col">
               <h3 className="font-bold text-sm text-slate-900 tracking-tight font-display mb-4 border-b border-slate-100 pb-3">
                 Top Sellers in Selected Period
               </h3>
 
               <div className="flex-1 space-y-4">
                 {periodAnalytics.topSellingInPeriod.length === 0 ? (
-                  <p className="text-slate-400 text-xs italic">No orders computed for this duration.</p>
+                  <p className="text-slate-600 text-xs italic">No orders computed for this duration.</p>
                 ) : (
                   periodAnalytics.topSellingInPeriod.map((item, idx) => {
                     const maxQty = Math.max(...periodAnalytics.topSellingInPeriod.map(i => i.qty)) || 1;
@@ -1020,7 +837,7 @@ export default function Dashboard({
                             </span>
                             <span className="font-semibold text-slate-800">{item.name}</span>
                           </div>
-                          <span className="font-mono text-slate-500">
+                          <span className="font-mono text-slate-600">
                             <b className="text-slate-800 font-bold">{item.qty}</b> portions (INR {item.sales})
                           </span>
                         </div>
@@ -1055,24 +872,24 @@ export default function Dashboard({
               </span>
             </div>
 
-            <div className="overflow-x-auto">
+            <div tabIndex={0} role="region" aria-label="Daily performance table" className="overflow-x-auto">
               <table className="w-full text-xs text-left border-collapse">
-                <thead className="bg-slate-50/80 border-b border-slate-150 text-slate-500 font-bold font-mono">
+                <thead className="bg-slate-50/80 border-b border-slate-150 text-slate-600 font-bold font-mono">
                   <tr>
-                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Day Interval / Date</th>
-                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Checkout count</th>
-                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">UPI Payments</th>
-                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Cash Payments</th>
-                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Net Sales</th>
-                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Est. Food Cost</th>
-                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500">Est. Profit Margin</th>
-                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-500 text-right">Orders Details</th>
+                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Day Interval / Date</th>
+                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Checkout count</th>
+                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">UPI Payments</th>
+                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Cash Payments</th>
+                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Net Sales</th>
+                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Est. Food Cost</th>
+                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Est. Profit Margin</th>
+                    <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600 text-right">Orders Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-600">
                   {periodAnalytics.chartData.filter(r => r.orders > 0).length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="p-12 text-center text-slate-400 italic">No checkout records found in this time range.</td>
+                      <td colSpan={8} className="p-12 text-center text-slate-600 italic">No checkout records found in this time range.</td>
                     </tr>
                   ) : (
                     periodAnalytics.chartData.filter(row => row.orders > 0).map((row, idx) => (
@@ -1138,7 +955,7 @@ export default function Dashboard({
                       {selectedDrilldownDay.orders} Total Checkouts
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-slate-600 mt-0.5">
                     Click any order to inspect or print its full Tax Invoice Bill.
                   </p>
                 </div>
@@ -1155,19 +972,19 @@ export default function Dashboard({
             {/* Quick Metrics Bar for the Selected Day */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-100/60 border-b border-slate-200/70 font-mono text-xs">
               <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Total Net Sales</span>
+                <span className="text-[10px] text-slate-600 font-bold uppercase block">Total Net Sales</span>
                 <span className="text-sm font-black text-slate-900">INR {selectedDrilldownDay.sales.toLocaleString()}</span>
               </div>
               <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">UPI Collections</span>
+                <span className="text-[10px] text-slate-600 font-bold uppercase block">UPI Collections</span>
                 <span className="text-sm font-black text-indigo-700">INR {selectedDrilldownDay.upi.toLocaleString()}</span>
               </div>
               <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Cash Collections</span>
+                <span className="text-[10px] text-slate-600 font-bold uppercase block">Cash Collections</span>
                 <span className="text-sm font-black text-emerald-700">INR {selectedDrilldownDay.cash.toLocaleString()}</span>
               </div>
               <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-                <span className="text-[10px] text-slate-400 font-bold uppercase block">Est. Day Profit</span>
+                <span className="text-[10px] text-slate-600 font-bold uppercase block">Est. Day Profit</span>
                 <span className="text-sm font-black text-emerald-800">INR {selectedDrilldownDay.profit.toLocaleString()}</span>
               </div>
             </div>
@@ -1175,7 +992,7 @@ export default function Dashboard({
             {/* Search and Filters Bar */}
             <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-white">
               <div className="relative flex-1 min-w-[200px]">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
                 <input
                   type="text"
                   placeholder="Search by Order ID, Customer, Table or Item..."
@@ -1186,7 +1003,7 @@ export default function Dashboard({
               </div>
 
               <div className="flex items-center gap-1.5 text-xs">
-                <span className="text-[11px] text-slate-400 font-bold uppercase">Payment:</span>
+                <span className="text-[11px] text-slate-600 font-bold uppercase">Payment:</span>
                 {(["All", "UPI", "Cash"] as const).map((mode) => (
                   <button
                     key={mode}
@@ -1223,7 +1040,7 @@ export default function Dashboard({
 
                 if (filteredOrders.length === 0) {
                   return (
-                    <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-400 text-xs">
+                    <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-slate-600 text-xs">
                       No matching order details found for this date.
                     </div>
                   );
@@ -1242,8 +1059,8 @@ export default function Dashboard({
                           <span className="font-mono font-black text-sm text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                             #{displayOrderNumber(order.orderNumber || order.id.slice(-4))}
                           </span>
-                          <span className="text-xs font-semibold text-slate-500 font-mono flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-slate-400" />
+                          <span className="text-xs font-semibold text-slate-600 font-mono flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-slate-600" />
                             {orderTimeStr}
                           </span>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border font-mono ${
@@ -1258,7 +1075,7 @@ export default function Dashboard({
                           </span>
                           {order.customerName && (
                             <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
-                              <User className="w-3 h-3 text-slate-400" /> {order.customerName}
+                              <User className="w-3 h-3 text-slate-600" /> {order.customerName}
                             </span>
                           )}
                         </div>
@@ -1276,7 +1093,7 @@ export default function Dashboard({
                       {/* Total Amount & Action */}
                       <div className="flex items-center justify-between sm:justify-end gap-4 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                         <div className="text-left sm:text-right font-mono">
-                          <span className="text-[10px] text-slate-400 font-bold uppercase block">Bill Amount</span>
+                          <span className="text-[10px] text-slate-600 font-bold uppercase block">Bill Amount</span>
                           <span className="text-base font-black text-slate-900">
                             INR {(order.total || 0).toLocaleString()}
                           </span>
@@ -1299,7 +1116,7 @@ export default function Dashboard({
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center text-xs text-slate-500">
+            <div className="p-4 border-t border-slate-100 bg-slate-50/50 flex justify-between items-center text-xs text-slate-600">
               <span>Showing historical transactions recorded in selected interval</span>
               <button
                 onClick={() => setSelectedDrilldownDay(null)}
@@ -1338,10 +1155,10 @@ export default function Dashboard({
             <div className="historical-receipt-print-body flex-1 overflow-y-auto p-6 space-y-4 font-mono text-xs text-slate-800 bg-white">
               <div className="text-center border-b border-dashed border-slate-300 pb-4">
                 <h2 className="text-lg font-black text-slate-900 uppercase font-sans">
-                  {activeTenant?.name || "Aatmyam POS Restaurant"}
+                  {activeTenant?.name || "Aatmyam Pos Restaurant"}
                 </h2>
-                <p className="text-[11px] text-slate-500 mt-0.5">Authentic Dining & Quick Billing Hub</p>
-                <p className="text-[10px] text-slate-400 mt-1">
+                <p className="text-[11px] text-slate-600 mt-0.5">Authentic Dining & Quick Billing Hub</p>
+                <p className="text-[10px] text-slate-600 mt-1">
                   {(settings?.gstin || activeTenant?.gstin) ? `GSTIN: ${(settings?.gstin || activeTenant?.gstin)?.toUpperCase()}` : "Retail Cash Bill"}
                 </p>
                 <FssaiRegistration number={settings?.fssaiNumber} />
@@ -1350,28 +1167,28 @@ export default function Dashboard({
               {/* Order Meta Info */}
               <div className="grid grid-cols-2 gap-2 text-[11px] border-b border-dashed border-slate-300 pb-3">
                 <div>
-                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Order ID</span>
+                  <span className="text-slate-600 block text-[9px] uppercase font-bold">Order ID</span>
                   <span className="font-bold text-slate-900">#{displayOrderNumber(selectedOrderReceipt.orderNumber || selectedOrderReceipt.id.slice(-4))}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Date & Time</span>
+                  <span className="text-slate-600 block text-[9px] uppercase font-bold">Date & Time</span>
                   <span className="font-semibold text-slate-800">
                     {new Date(selectedOrderReceipt.date).toLocaleDateString()} {new Date(selectedOrderReceipt.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Order Type / Table</span>
+                  <span className="text-slate-600 block text-[9px] uppercase font-bold">Order Type / Table</span>
                   <span className="font-semibold text-slate-800">
                     {selectedOrderReceipt.type || "Dine-In"} {selectedOrderReceipt.tableNo ? `(${selectedOrderReceipt.tableNo})` : ""}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[9px] uppercase font-bold">Cashier / Server</span>
+                  <span className="text-slate-600 block text-[9px] uppercase font-bold">Cashier / Server</span>
                   <span className="font-semibold text-slate-800">{selectedOrderReceipt.cashierName || "Rahul Sharma"}</span>
                 </div>
                 {selectedOrderReceipt.customerName && (
                   <div className="col-span-2">
-                    <span className="text-slate-400 block text-[9px] uppercase font-bold">Customer</span>
+                    <span className="text-slate-600 block text-[9px] uppercase font-bold">Customer</span>
                     <span className="font-semibold text-slate-800">{selectedOrderReceipt.customerName}</span>
                   </div>
                 )}
@@ -1381,7 +1198,7 @@ export default function Dashboard({
               <div>
                 <table className="w-full text-[11px]">
                   <thead>
-                    <tr className="border-b border-slate-200 text-slate-400 text-[9px] uppercase">
+                    <tr className="border-b border-slate-200 text-slate-600 text-[9px] uppercase">
                       <th className="text-left py-1 font-bold">Item Description</th>
                       <th className="text-center py-1 font-bold">Qty</th>
                       <th className="text-right py-1 font-bold">Rate</th>
@@ -1396,7 +1213,7 @@ export default function Dashboard({
                         <tr key={idx} className="py-1.5">
                           <td className="py-1.5 font-medium text-slate-800">{item.menuItem?.name || "Item"}</td>
                           <td className="py-1.5 text-center font-bold text-slate-700">{item.quantity}</td>
-                          <td className="py-1.5 text-right text-slate-500">₹{rate}</td>
+                          <td className="py-1.5 text-right text-slate-600">₹{rate}</td>
                           <td className="py-1.5 text-right font-bold text-slate-900">₹{lineTotal}</td>
                         </tr>
                       );
@@ -1411,7 +1228,7 @@ export default function Dashboard({
               {/* Payment Method Details */}
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-[11px]">
                 <div className="flex items-center gap-1.5">
-                  <CreditCard className="w-3.5 h-3.5 text-slate-500" />
+                  <CreditCard className="w-3.5 h-3.5 text-slate-600" />
                   <span className="text-slate-600 font-semibold">Payment Mode:</span>
                 </div>
                 <span className="font-bold font-mono text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
@@ -1419,7 +1236,7 @@ export default function Dashboard({
                 </span>
               </div>
 
-              <div className="text-center pt-2 text-[10px] text-slate-400">
+              <div className="text-center pt-2 text-[10px] text-slate-600">
                 <p>Thank you for dining with us!</p>
                 <p className="mt-0.5">Please visit again.</p>
               </div>

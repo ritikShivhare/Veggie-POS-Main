@@ -492,7 +492,7 @@ export default function SessionManagementDashboard({
               <div>
                 <h3 className="text-sm font-bold text-slate-800">Login Audits & Authentication Events</h3>
                 <p className="text-xs text-slate-400 mt-1">
-                  Compliance and security tracking audit trail. This records every authentication action taken on Aatmyam POS servers.
+                  Compliance and security tracking audit trail. This records every authentication action taken on Aatmyam Pos servers.
                 </p>
               </div>
 

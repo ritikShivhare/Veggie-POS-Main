@@ -256,7 +256,7 @@ export class MonitoringService {
         }
 
         const slackPayload = {
-          text: `🚨 *VeggiePOS Alert: Critical [${level}] in ${service}*`,
+          text: `🚨 *Aatmyam Pos Alert: Critical [${level}] in ${service}*`,
           attachments: [
             {
               color: level === "ERROR" ? "#e11d48" : "#f59e0b",
@@ -391,9 +391,9 @@ export class MonitoringService {
 📧 [EMAIL ALERT DISPATCHER] OUTGOING EMAIL INITIATED
 ======================================================================
 To: ${email}
-Subject: [VeggiePOS ALERT] Critical [${level}] in ${service}
+Subject: [Aatmyam Pos ALERT] Critical [${level}] in ${service}
 Body:
-  An application error has occurred on VeggiePOS Production.
+  An application error has occurred on Aatmyam Pos Production.
   
   Details:
   ------------------------------------------------------------------

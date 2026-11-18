@@ -53,7 +53,7 @@ export async function createPaymentLink(tenant:string,plan:'pro'|'enterprise',re
  let response:any;
  try {
   response=await gateway.create({link_id:link.id,link_amount:link.amount,link_currency:'INR',link_partial_payments:false,link_expiry_time:link.expiresAt,
-   link_purpose:`Aatmyam POS ${PLAN_LIMITS[plan].label} — 30 days`,customer_details:{customer_name:customer.name,customer_email:customer.email,customer_phone:customer.phone},
+   link_purpose:`Aatmyam Pos ${PLAN_LIMITS[plan].label} — 30 days`,customer_details:{customer_name:customer.name,customer_email:customer.email,customer_phone:customer.phone},
    link_notify:{send_email:false,send_sms:false},link_auto_reminders:false,
    ...(appUrl?{link_meta:{return_url:`${appUrl.replace(/\/$/,'')}/?tab=settings&checkout=return`,notify_url:`${appUrl.replace(/\/$/,'')}/api/webhooks/cashfree`}}:{}),link_notes:{tenant_id:tenant,plan}});
  } catch(error) {

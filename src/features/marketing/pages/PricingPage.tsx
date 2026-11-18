@@ -51,7 +51,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     },
     {
       q: "Do I need to buy expensive proprietary hardware from you?",
-      a: "Aatmyam POS is a web app. Request a walkthrough so we can discuss your device and printer setup."
+      a: "Aatmyam Pos is a web app. Request a walkthrough so we can discuss your device and printer setup."
     },
     {
       q: "How do I get started?",
@@ -83,7 +83,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
               <span className="text-[#6E8F45] italic">One outlet per plan.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              Aatmyam POS is in early access. These 30-day plans use the same prices and limits as the app.
+              Aatmyam Pos is in early access. These 30-day plans use the same prices and limits as the app.
             </p>
 
             <div className="pt-4 text-xs font-mono text-[#787F74]">

@@ -38,7 +38,7 @@ export default function MarketingFooter({
             <div className="w-2.5 h-2.5 rounded-full bg-[#6E8F45]"></div>
             <div>
               <p className="text-xs font-mono font-semibold text-[#FBF9F5]">
-                Aatmyam POS • Early access
+                Aatmyam Pos • Early access
               </p>
               <p className="text-[11px] text-[#A6AEA0]">
                 Explore ordering, billing, kitchen tickets, and inventory workflows
@@ -240,7 +240,7 @@ export default function MarketingFooter({
 
         {/* Bottom Strip */}
         <div className="pt-8 border-t border-[#2E332D] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#787F74]">
-          <p>© {new Date().getFullYear()} Aatmyam POS. Designed for hospitality craft & operational calm.</p>
+          <p>© {new Date().getFullYear()} Aatmyam Pos. Designed for hospitality craft & operational calm.</p>
           <div className="flex items-center gap-6">
             <span className="font-mono text-[11px] text-[#A6AEA0]">Version 4.8.2-Enterprise</span>
             <SiteLink href="/login"
