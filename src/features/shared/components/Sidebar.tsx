@@ -17,9 +17,8 @@ import {
   Zap,
   Shield,
   Activity,
-  ChevronUp,
-  ChevronDown,
-  Crown
+  Crown,
+  X
 } from "lucide-react";
 
 interface SidebarProps {
@@ -47,43 +46,42 @@ export default function Sidebar({
 }: SidebarProps) {
   // Local state for collapse/slim mode on desktop
   const [isCollapsed, setIsCollapsed] = React.useState(true);
-
-  // Custom scrolling references and state for tabs overflow
-  const navRef = React.useRef<HTMLDivElement>(null);
-  const [showUpBtn, setShowUpBtn] = React.useState(false);
-  const [showDownBtn, setShowDownBtn] = React.useState(false);
-
-  const checkScroll = () => {
-    if (navRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = navRef.current;
-      setShowUpBtn(scrollTop > 5);
-      setShowDownBtn(scrollTop + clientHeight < scrollHeight - 5);
-    }
-  };
-
-  const scrollUp = () => {
-    navRef.current?.scrollBy({ top: -140, behavior: "smooth" });
-  };
-
-  const scrollDown = () => {
-    navRef.current?.scrollBy({ top: 140, behavior: "smooth" });
-  };
-
+  const [isDesktop, setIsDesktop] = React.useState(() => typeof window !== "undefined" && (window.matchMedia ? window.matchMedia("(min-width: 1024px)").matches : window.innerWidth >= 1024));
+  const drawerRef = React.useRef<HTMLElement>(null);
+  const closeMobileRef = React.useRef(onCloseMobile);
+  React.useEffect(() => { closeMobileRef.current = onCloseMobile; }, [onCloseMobile]);
   React.useEffect(() => {
-    const el = navRef.current;
-    if (el) {
-      el.addEventListener("scroll", checkScroll);
-      window.addEventListener("resize", checkScroll);
-      checkScroll();
-
-      const timer = setTimeout(checkScroll, 300);
-      return () => {
-        el.removeEventListener("scroll", checkScroll);
-        window.removeEventListener("resize", checkScroll);
-        clearTimeout(timer);
-      };
-    }
-  }, [currentStaff, isCollapsed]);
+    const query = window.matchMedia?.("(min-width: 1024px)");
+    if (!query) return;
+    const update = () => setIsDesktop(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  React.useEffect(() => {
+    if (isDesktop && isOpenMobile) closeMobileRef.current?.();
+    if (isDesktop || !isOpenMobile || !drawerRef.current) return;
+    const drawer = drawerRef.current;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const focusable = () => Array.from(drawer.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]'))
+      .filter((element) => element.getClientRects().length > 0);
+    (focusable()[0] || drawer).focus();
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); closeMobileRef.current?.(); return; }
+      if (event.key !== "Tab") return;
+      const controls = focusable(), first = controls[0], last = controls.at(-1);
+      if (!first) { event.preventDefault(); drawer.focus(); return; }
+      if (!drawer.contains(document.activeElement) || (event.shiftKey && document.activeElement === first) || (!event.shiftKey && document.activeElement === last)) {
+        event.preventDefault(); (event.shiftKey ? last : first)?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, [isDesktop, isOpenMobile]);
+  const handleShiftAction = () => { onCloseMobile?.(); onShiftAction(); };
 
   const menuItems: Array<{ id: string; label: string; icon: any; permission?: string; role?: string }> = [
     { id: "saas-admin", label: "SaaS Admin Panel", icon: Crown, role: "Owner" },
@@ -120,11 +118,20 @@ export default function Sidebar({
       {isOpenMobile && (
         <div
           className="fixed inset-0 z-40 bg-slate-950/20 lg:hidden transition-opacity duration-300"
+          aria-hidden="true"
           onClick={onCloseMobile}
         />
       )}
 
       <aside
+        ref={drawerRef}
+        id="main-sidebar"
+        tabIndex={-1}
+        inert={!isDesktop && !isOpenMobile}
+        aria-hidden={!isDesktop && !isOpenMobile ? true : undefined}
+        role={!isDesktop && isOpenMobile ? "dialog" : undefined}
+        aria-modal={!isDesktop && isOpenMobile ? true : undefined}
+        aria-label="Main menu"
         className={`fixed inset-y-0 left-0 z-50 bg-white border-r border-slate-200/85 flex flex-col justify-between text-slate-600 font-sans select-none shrink-0 shadow-lg transition-all duration-300 ease-in-out lg:static lg:translate-x-0 ${
           isCollapsed ? "w-64 lg:w-[72px]" : "w-64"
         } ${
@@ -140,13 +147,13 @@ export default function Sidebar({
             {(!isCollapsed || isOpenMobile) ? (
               <div className="flex items-center gap-2.5 overflow-hidden transition-all duration-300">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-pink-500 to-rose-500 flex items-center justify-center text-white text-base font-black shadow-md shadow-rose-500/10 shrink-0">
-                  V
+                  A
                 </div>
                 <div className="flex flex-col">
                   <h1 className="text-sm font-extrabold text-slate-800 tracking-tight leading-none">
-                    VEGGIE<span className="text-pink-600 font-extrabold">POS</span>
+                    Aatmyam Pos
                   </h1>
-                  <p className="text-[9px] uppercase tracking-wider text-slate-400 mt-1 font-mono font-bold">
+                  <p className="text-[9px] uppercase tracking-wider text-slate-600 mt-1 font-mono font-bold">
                     SYSTEM TERMINAL
                   </p>
                 </div>
@@ -155,14 +162,15 @@ export default function Sidebar({
 
             {/* Collapsible toggle (three lines / hamburger icon) */}
             <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className={`p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all duration-150 focus:outline-none shrink-0 cursor-pointer ${
+              onClick={() => { if (!isDesktop && isOpenMobile) onCloseMobile?.(); else setIsCollapsed(!isCollapsed); }}
+              className={`min-h-11 min-w-11 p-2 rounded-lg text-slate-600 hover:text-slate-700 hover:bg-slate-100 transition-all duration-150 focus:outline-none shrink-0 cursor-pointer ${
                 collapsedMode ? "lg:w-10 lg:h-10 lg:flex lg:items-center lg:justify-center lg:mx-auto" : ""
               }`}
               id="sidebar-toggle-collapse-btn"
-              title={isCollapsed ? "Expand Menu" : "Collapse Menu"}
+              aria-label={!isDesktop && isOpenMobile ? "Close menu" : isCollapsed ? "Expand menu" : "Collapse menu"}
+              title={!isDesktop && isOpenMobile ? "Close menu" : isCollapsed ? "Expand Menu" : "Collapse Menu"}
             >
-              <Menu className="w-5 h-5" />
+              {!isDesktop && isOpenMobile ? <X aria-hidden="true" className="w-5 h-5" /> : <Menu aria-hidden="true" className="w-5 h-5" />}
             </button>
           </div>
 
@@ -174,8 +182,8 @@ export default function Sidebar({
               // Collapsed Staff Avatar & Quick Action with premium multi-detail popover
               <div className="relative group">
                 <button
-                  onClick={onShiftAction}
-                  className="w-10 h-10 rounded-lg bg-pink-50 border border-pink-100 flex items-center justify-center text-pink-600 font-bold text-sm shrink-0 hover:bg-pink-100/70 transition-all duration-150 relative cursor-pointer"
+                  onClick={handleShiftAction}
+                  className="w-11 h-11 rounded-lg bg-pink-50 border border-pink-100 flex items-center justify-center text-pink-700 font-bold text-sm shrink-0 hover:bg-pink-100/70 transition-all duration-150 relative cursor-pointer"
                   id="sidebar-collapsed-staff-btn"
                 >
                   {currentStaff.name.charAt(0)}
@@ -189,7 +197,7 @@ export default function Sidebar({
                 <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 p-3 bg-white text-slate-800 rounded-xl shadow-xl border border-slate-200 pointer-events-none opacity-0 translate-x-[-6px] group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-150 z-[100] min-w-[180px]">
                   <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-1.5 h-1.5 bg-white border-b border-l border-slate-200 rotate-45" />
                   <p className="font-semibold text-xs text-slate-800">{currentStaff.name}</p>
-                  <p className="text-[10px] text-slate-400 capitalize mt-0.5">{currentStaff.role}</p>
+                  <p className="text-[10px] text-slate-600 capitalize mt-0.5">{currentStaff.role}</p>
                   <div className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-1.5 text-[10px]">
                     <span className={`w-1.5 h-1.5 rounded-full ${activeShift ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
                     <span className="text-slate-500 font-medium">{activeShift ? "Shift Active (Click to clock out)" : "Off-Duty (Click to clock in)"}</span>
@@ -200,14 +208,14 @@ export default function Sidebar({
               // Expanded Staff Details and Roster Status
               <>
                 <div className="flex items-center space-x-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <div className="w-8 h-8 rounded-lg bg-pink-50 border border-pink-100 flex items-center justify-center text-pink-600 font-bold text-xs shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-pink-50 border border-pink-100 flex items-center justify-center text-pink-700 font-bold text-xs shrink-0">
                     {currentStaff.name.charAt(0)}
                   </div>
                   <div className="overflow-hidden">
                     <h2 className="font-semibold text-slate-800 text-xs truncate">
                       {currentStaff.name}
                     </h2>
-                    <p className="text-[10px] text-slate-400 font-medium capitalize mt-0.5">
+                    <p className="text-[10px] text-slate-600 font-medium capitalize mt-0.5">
                       {currentStaff.role}
                     </p>
                   </div>
@@ -226,11 +234,11 @@ export default function Sidebar({
                     </span>
                   </div>
                   <button
-                    onClick={onShiftAction}
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition duration-150 cursor-pointer ${
+                    onClick={handleShiftAction}
+                    className={`min-h-11 px-3 py-2 rounded text-xs font-bold transition duration-150 cursor-pointer ${
                       activeShift
-                        ? "bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100/70"
-                        : "bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-100/70"
+                        ? "bg-rose-50 text-rose-800 border border-rose-100 hover:bg-rose-100/70"
+                        : "bg-emerald-50 text-emerald-800 border border-emerald-100 hover:bg-emerald-100/70"
                     }`}
                     id="sidebar-shift-action-btn"
                   >
@@ -241,24 +249,13 @@ export default function Sidebar({
             )}
           </div>
 
-          {/* NAVIGATION ITEMS LIST WITH DYNAMIC SCROLL CONTROLS */}
+          {/* NATIVE SCROLLABLE NAVIGATION */}
           <div className="relative flex-1 min-h-0 flex flex-col mt-2">
-            {showUpBtn && (
-              <button
-                onClick={scrollUp}
-                className="absolute top-1 inset-x-0 mx-auto z-10 w-7 h-7 rounded-full bg-white/95 border border-pink-100 flex items-center justify-center text-pink-600 hover:bg-pink-50 shadow-md hover:shadow-lg transition-all duration-150 cursor-pointer animate-bounce"
-                title="Scroll Up"
-                id="sidebar-scroll-up-btn"
-              >
-                <ChevronUp className="w-4 h-4" />
-              </button>
-            )}
-
             <nav
-              ref={navRef}
-              className="flex-1 overflow-y-auto p-2 space-y-1.5 scrollbar-none"
-              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              onScroll={checkScroll}
+              id="sidebar-navigation"
+              aria-label="Main navigation"
+              tabIndex={0}
+              className="flex-1 overflow-y-auto p-2 space-y-1.5"
             >
               {filteredMenuItems.map((item) => {
                 const IconComponent = item.icon;
@@ -267,24 +264,26 @@ export default function Sidebar({
                 return (
                   <div key={item.id} className="relative group px-1">
                     <button
+                      aria-label={item.label}
+                      aria-current={isSelected ? "page" : undefined}
                       onClick={() => {
                         setActiveTab(item.id);
                         onCloseMobile?.();
                       }}
                       className={`w-full flex items-center transition-all duration-150 rounded-lg text-xs cursor-pointer ${
                         collapsedMode
-                          ? "justify-center h-10 w-10 mx-auto"
-                          : "gap-3 px-3 py-2.5 text-left"
+                          ? "justify-center h-11 w-11 mx-auto"
+                          : "min-h-11 gap-3 px-3 py-2.5 text-left"
                       } ${
                         isSelected
-                          ? "bg-pink-50/70 text-pink-600 border-l-2 border-pink-500 font-semibold shadow-sm"
+                          ? "bg-pink-50/70 text-pink-700 border-l-2 border-pink-500 font-semibold shadow-sm"
                           : "hover:bg-slate-50 text-slate-500 hover:text-slate-800 font-medium"
                       }`}
                       id={`sidebar-tab-btn-${item.id}`}
                     >
                       <IconComponent className={`shrink-0 transition-transform duration-150 ${
                         collapsedMode ? "w-5 h-5 group-hover:scale-110" : "w-4 h-4"
-                      } ${isSelected ? "text-pink-500" : "text-slate-400 group-hover:text-slate-600"}`} />
+                      } ${isSelected ? "text-pink-500" : "text-slate-600 group-hover:text-slate-600"}`} />
 
                       {!collapsedMode && (
                         <span className="truncate text-slate-600 group-hover:text-slate-900 transition-colors duration-150">
@@ -305,16 +304,6 @@ export default function Sidebar({
               })}
             </nav>
 
-            {showDownBtn && (
-              <button
-                onClick={scrollDown}
-                className="absolute bottom-1 inset-x-0 mx-auto z-10 w-7 h-7 rounded-full bg-white/95 border border-pink-100 flex items-center justify-center text-pink-600 hover:bg-pink-50 shadow-md hover:shadow-lg transition-all duration-150 cursor-pointer animate-bounce"
-                title="Scroll Down"
-                id="sidebar-scroll-down-btn"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </button>
-            )}
           </div>
         </div>
 
@@ -330,8 +319,9 @@ export default function Sidebar({
                   onLogout();
                   onCloseMobile?.();
                 }}
-                className="w-10 h-10 flex items-center justify-center bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 rounded-lg transition duration-150 cursor-pointer"
+                className="w-11 h-11 flex items-center justify-center bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-100 rounded-lg transition duration-150 cursor-pointer"
                 id="sidebar-logout-btn-collapsed"
+                aria-label="Lock Terminal"
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -348,14 +338,14 @@ export default function Sidebar({
                   onLogout();
                   onCloseMobile?.();
                 }}
-                className="w-full flex items-center justify-center space-x-2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-150 py-2.5 rounded-lg font-semibold text-xs transition duration-150 cursor-pointer"
+                className="min-h-11 w-full flex items-center justify-center space-x-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-150 py-2.5 rounded-lg font-semibold text-xs transition duration-150 cursor-pointer"
                 id="sidebar-logout-btn"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>Lock Terminal</span>
               </button>
-              <p className="text-center text-[9px] text-slate-400 mt-3 font-mono">
-                Aatmyam POS 1.20
+              <p className="text-center text-[9px] text-slate-600 mt-3 font-mono">
+                Aatmyam Pos 1.20
               </p>
             </>
           )}

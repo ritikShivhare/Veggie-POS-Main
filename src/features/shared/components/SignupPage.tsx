@@ -583,7 +583,7 @@ export default function SignupPage({ onBack, onSignupSuccess, initialData }: Sig
       {/* Footer details */}
       <footer className="w-full max-w-md mx-auto text-center text-[10px] text-slate-500 font-mono">
         <p>Tenant Space: AWS Mumbai S3 Sandbox Node</p>
-        <p className="mt-1">© 2026 Aatmyam POS SaaS Ltd. All rights reserved.</p>
+        <p className="mt-1">© 2026 Aatmyam Pos SaaS Ltd. All rights reserved.</p>
       </footer>
     </div>
   );

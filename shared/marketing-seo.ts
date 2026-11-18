@@ -6,91 +6,91 @@ export const PUBLIC_PAGES = [
   {
     path: "/",
     label: "Home",
-    title: "Restaurant POS & Billing Software in India | Aatmyam POS",
+    title: "Restaurant POS & Billing Software in India | Aatmyam Pos",
     description:
-      "Explore Aatmyam POS for independent restaurants: billing, kitchen tickets, recipe-linked inventory and staff workflows. See features, pricing and early-access demos.",
+      "Explore Aatmyam Pos for independent restaurants: billing, kitchen tickets, recipe-linked inventory and staff workflows. See features, pricing and early-access demos.",
   },
   {
     path: "/product",
     label: "Product",
     title: "Restaurant POS Features: Billing, KOT & Inventory | Aatmyam",
     description:
-      "Explore Aatmyam POS features for restaurant order entry, billing, kitchen displays, recipe-linked stock and role-based staff access.",
+      "Explore Aatmyam Pos features for restaurant order entry, billing, kitchen displays, recipe-linked stock and role-based staff access.",
   },
   {
     path: "/solutions",
     label: "Solutions",
     title: "POS Software for Restaurants, Cafes & Counters | Aatmyam",
     description:
-      "See how Aatmyam POS supports restaurant, cafe and counter workflows with connected ordering, kitchen tickets, billing and inventory tools.",
+      "See how Aatmyam Pos supports restaurant, cafe and counter workflows with connected ordering, kitchen tickets, billing and inventory tools.",
   },
   {
     path: "/solutions/cafes",
     label: "Cafés",
     title: "Cafe POS Software for Independent Cafes in India | Aatmyam",
     description:
-      "Review Aatmyam POS for a single cafe: counter billing, kitchen status, recipe-linked stock, staff access, plan allowances and device requirements.",
+      "Review Aatmyam Pos for a single cafe: counter billing, kitchen status, recipe-linked stock, staff access, plan allowances and device requirements.",
   },
   {
     path: "/roi",
     label: "ROI Calculator",
-    title: "Restaurant POS ROI Calculator | Aatmyam POS",
+    title: "Restaurant POS ROI Calculator | Aatmyam Pos",
     description:
-      "Estimate restaurant workflow savings with the Aatmyam POS ROI calculator. Adjust your operating assumptions to explore potential value.",
+      "Estimate restaurant workflow savings with the Aatmyam Pos ROI calculator. Adjust your operating assumptions to explore potential value.",
   },
   {
     path: "/pricing",
     label: "Pricing",
-    title: "Restaurant POS Pricing & Subscription Plans | Aatmyam POS",
+    title: "Restaurant POS Pricing & Subscription Plans | Aatmyam Pos",
     description:
-      "Compare Aatmyam POS subscription plans, restaurant billing features, staff limits and inventory tools. Review current pricing and plan details.",
+      "Compare Aatmyam Pos subscription plans, restaurant billing features, staff limits and inventory tools. Review current pricing and plan details.",
   },
   {
     path: "/about",
     label: "About",
-    title: "About Aatmyam POS | Software for Independent Restaurants",
+    title: "About Aatmyam Pos | Software for Independent Restaurants",
     description:
-      "Learn about Aatmyam POS, an early-access restaurant software platform focused on ordering, billing, kitchen workflows and inventory management.",
+      "Learn about Aatmyam Pos, an early-access restaurant software platform focused on ordering, billing, kitchen workflows and inventory management.",
   },
   {
     path: "/resources",
     label: "Resources",
     title: "Restaurant POS Guides & Operations Resources | Aatmyam",
     description:
-      "Explore Aatmyam POS resources on restaurant billing, recipe costing, inventory, kitchen operations and choosing compatible hardware.",
+      "Explore Aatmyam Pos resources on restaurant billing, recipe costing, inventory, kitchen operations and choosing compatible hardware.",
   },
   {
     path: "/contact",
     label: "Contact",
-    title: "Book a Restaurant POS Demo | Contact Aatmyam POS",
+    title: "Book a Restaurant POS Demo | Contact Aatmyam Pos",
     description:
-      "Contact Aatmyam POS and request a walkthrough of restaurant billing, kitchen tickets, inventory and staff workflows for your business.",
+      "Contact Aatmyam Pos and request a walkthrough of restaurant billing, kitchen tickets, inventory and staff workflows for your business.",
   },
   {
     path: "/terms",
     label: "Terms of Service",
-    title: "Terms of Service | Aatmyam POS",
+    title: "Terms of Service | Aatmyam Pos",
     description:
-      "Read the Aatmyam POS terms of service covering use of the restaurant software platform and associated services.",
+      "Read the Aatmyam Pos terms of service covering use of the restaurant software platform and associated services.",
   },
   {
     path: "/privacy",
     label: "Privacy Policy",
-    title: "Privacy Policy | Aatmyam POS",
+    title: "Privacy Policy | Aatmyam Pos",
     description:
-      "Read the Aatmyam POS privacy policy for information about data handling, restaurant accounts and use of the platform.",
+      "Read the Aatmyam Pos privacy policy for information about data handling, restaurant accounts and use of the platform.",
   },
   {
     path: "/refund-policy",
     label: "Refund Policy",
-    title: "Refund & Cancellation Policy | Aatmyam POS",
+    title: "Refund & Cancellation Policy | Aatmyam Pos",
     description:
-      "Review the Aatmyam POS refund and cancellation policy for subscriptions and associated services.",
+      "Review the Aatmyam Pos refund and cancellation policy for subscriptions and associated services.",
   },
   ...MARKETING_GUIDES.map(guide => ({
     path: guide.path,
     label: guide.title,
-    title: `${guide.title} | Aatmyam POS`,
+    title: `${guide.title} | Aatmyam Pos`,
     description: guide.summary,
   })),
 ] as const;
@@ -134,11 +134,11 @@ export function getPageSeo(input: string) {
     title: indexable
       ? page!.title
       : appPage
-        ? "Secure Restaurant Sign In | Aatmyam POS"
-        : "Page Not Found | Aatmyam POS",
+        ? "Secure Restaurant Sign In | Aatmyam Pos"
+        : "Page Not Found | Aatmyam Pos",
     description: indexable
       ? page!.description
-      : "Secure account access for Aatmyam POS restaurant owners and staff.",
+      : "Secure account access for Aatmyam Pos restaurant owners and staff.",
     canonical:
       SITE_ORIGIN +
       (page || (APP_PATHS as readonly string[]).includes(path) ? path : "/404"),
@@ -164,9 +164,9 @@ export function renderSeoHead(
     ? {
         ...resolved,
         indexable: false,
-        title: "Secure Restaurant Sign In | Aatmyam POS",
+        title: "Secure Restaurant Sign In | Aatmyam Pos",
         description:
-          "Secure account access for Aatmyam POS restaurant owners and staff.",
+          "Secure account access for Aatmyam Pos restaurant owners and staff.",
         robots: "noindex, follow",
       }
     : resolved;
@@ -175,21 +175,21 @@ export function renderSeoHead(
     {
       "@type": "Organization",
       "@id": SITE_ORIGIN + "/#organization",
-      name: "Aatmyam POS",
+      name: "Aatmyam Pos",
       url: SITE_ORIGIN + "/",
       logo: image,
     },
     {
       "@type": "WebSite",
       "@id": SITE_ORIGIN + "/#website",
-      name: "Aatmyam POS",
+      name: "Aatmyam Pos",
       url: SITE_ORIGIN + "/",
       publisher: { "@id": SITE_ORIGIN + "/#organization" },
     },
     {
       "@type": "SoftwareApplication",
       "@id": SITE_ORIGIN + "/#software",
-      name: "Aatmyam POS",
+      name: "Aatmyam Pos",
       url: SITE_ORIGIN + "/",
       applicationCategory: "BusinessApplication",
       operatingSystem: "Web browser",
@@ -238,12 +238,12 @@ export function renderSeoHead(
     meta("robots", seo.robots),
     `<link data-aatmyam-seo rel="canonical" href="${escapeHtml(seo.canonical)}">`,
     meta("og:type", "website", true),
-    meta("og:site_name", "Aatmyam POS", true),
+    meta("og:site_name", "Aatmyam Pos", true),
     meta("og:title", seo.title, true),
     meta("og:description", seo.description, true),
     meta("og:url", seo.canonical, true),
     meta("og:image", image, true),
-    meta("og:image:alt", "Aatmyam POS logo", true),
+    meta("og:image:alt", "Aatmyam Pos logo", true),
     meta("twitter:card", "summary_large_image"),
     meta("twitter:title", seo.title),
     meta("twitter:description", seo.description),
@@ -275,7 +275,7 @@ export function buildRobots() {
 }
 export function buildLlms() {
   return (
-    "# Aatmyam POS\n\n> Early-access web-based restaurant software for independent restaurants.\n\nAatmyam POS covers order entry, billing, kitchen tickets, recipe-linked inventory and staff workflows. Consult the public feature and pricing pages for current capabilities and plan details; demonstrations and unverified integrations should not be described as live third-party services.\n\n## Public information\n\n" +
+    "# Aatmyam Pos\n\n> Early-access web-based restaurant software for independent restaurants.\n\nAatmyam Pos covers order entry, billing, kitchen tickets, recipe-linked inventory and staff workflows. Consult the public feature and pricing pages for current capabilities and plan details; demonstrations and unverified integrations should not be described as live third-party services.\n\n## Public information\n\n" +
     PUBLIC_PAGES.map(
       (page) =>
         `- [${page.label}](${SITE_ORIGIN + page.path}): ${page.description}`,

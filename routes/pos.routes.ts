@@ -336,6 +336,20 @@ router.get("/customers", authMiddleware, requirePermission("billing","reports"),
   }
 });
 
+router.get("/customers/:id/history", authMiddleware, requirePermission("billing","reports"), async (req, res) => {
+  try {
+    const tenantId = (req as any).tenantId;
+    if (!await customerRepo.getById(tenantId, req.params.id)) {
+      return res.status(404).json({ success: false, error: "NOT_FOUND" });
+    }
+    const orders = (await orderRepo.getAll(tenantId) || [])
+      .filter(order => order.customerId === req.params.id && order.status === "Completed" &&
+        (!!order.paidAt || ["Cash", "UPI"].includes(order.paymentMethod || "")))
+      .sort((a, b) => Date.parse(b.paidAt || b.date) - Date.parse(a.paidAt || a.date));
+    res.json({ success: true, data: orders });
+  } catch (error: any) { handleApiError(res, error); }
+});
+
 router.get("/customers/:id", authMiddleware, requirePermission("billing","reports"), async (req, res) => {
   const tenantId = (req as any).tenantId;
   try {

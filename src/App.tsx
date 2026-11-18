@@ -437,14 +437,17 @@ function AppContent() {
         activeTenant={activeTenant}
       />
 
-      <main className="flex-1 flex flex-col overflow-hidden bg-[#fafbfd]">
+      <main inert={isMobileSidebarOpen} className="flex-1 flex flex-col overflow-hidden bg-[#fafbfd]">
 
         <header className="h-16 bg-white/90 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-4 sm:px-8 shadow-[0_1px_2px_0_rgba(0,0,0,0.02)] shrink-0 z-10">
           <div className="flex items-center gap-3 sm:gap-4">
             <button
               onClick={() => setIsMobileSidebarOpen(true)}
-              className="lg:hidden p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 focus:outline-none transition shrink-0"
+              className="lg:hidden min-h-11 min-w-11 flex items-center justify-center p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 focus:outline-none transition shrink-0"
               id="mobile-menu-trigger-btn"
+              aria-label="Open main menu"
+              aria-controls="main-sidebar"
+              aria-expanded={isMobileSidebarOpen}
             >
               <Menu className="w-5 h-5" />
             </button>

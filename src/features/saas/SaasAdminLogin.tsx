@@ -71,7 +71,7 @@ export default function SaasAdminLogin(props:Props) {
   }
   return <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
     <div className="w-full max-w-md rounded-3xl bg-slate-900 p-8 border border-slate-700">
-      <h1 className="text-xl font-bold">Aatmyam POS administrator</h1>
+      <h1 className="text-xl font-bold">Aatmyam Pos administrator</h1>
       <p className="text-sm text-slate-400 my-3">{mode==='password'?'Sign in with your approved administrator account.':'Enter the current code from your authenticator app.'}</p>
       <form onSubmit={submit} className="space-y-4">
         {mode==='password' ? <>

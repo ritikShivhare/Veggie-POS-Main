@@ -175,7 +175,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               <span className="text-[#6E8F45] italic">Every gram</span> accounted for.
             </h1>
             <p className="text-base sm:text-lg text-[#A6AEA0] leading-relaxed">
-              Explore the current Aatmyam POS workflows for order entry, kitchen order status, inventory, and staff access.
+              Explore the current Aatmyam Pos workflows for order entry, kitchen order status, inventory, and staff access.
             </p>
             <div className="pt-2 flex flex-wrap items-center gap-3">
               <SiteLink

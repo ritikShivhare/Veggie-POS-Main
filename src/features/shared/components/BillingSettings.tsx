@@ -23,7 +23,6 @@ export function BillingSettings({tenantId}:BillingSettingsProps){
  });
  return <section className="bg-white rounded-xl border border-slate-200 p-4 sm:p-6 space-y-5 text-sm text-slate-700">
   <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3">Subscription & Billing</h2>
-  <p className="text-xs text-slate-500 leading-relaxed">One outlet. Prices include all subscription charges. Cashfree verifies your payment before access changes.</p>
   {error && <p role="alert" className="bg-rose-50 text-rose-700 p-3 rounded">{error}</p>}
   {!data ? <button onClick={refresh}>Load subscription</button> : <>
    <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">

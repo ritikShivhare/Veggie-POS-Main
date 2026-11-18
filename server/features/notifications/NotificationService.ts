@@ -136,7 +136,7 @@ class SmtpEmailProvider implements EmailProvider {
     try {
       const fromEmail = process.env.SMTP_USER || process.env.GMAIL_USER;
       const info = await this.transporter.sendMail({
-        from: `"Aatmyam POS" <${fromEmail}>`,
+        from: `"Aatmyam Pos" <${fromEmail}>`,
         to,
         subject,
         html: htmlBody

@@ -47,7 +47,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
             className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition mb-6 bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-xl cursor-pointer"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to Aatmyam POS</span>
+            <span>Back to Aatmyam Pos</span>
           </SiteLink>
 
           <div className="flex items-center gap-4">
@@ -55,7 +55,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               {getPageIcon()}
             </div>
             <div>
-              <span className="text-[10px] uppercase font-bold tracking-widest text-pink-400 font-mono">Aatmyam POS information</span>
+              <span className="text-[10px] uppercase font-bold tracking-widest text-pink-400 font-mono">Aatmyam Pos information</span>
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight mt-1">{getPageTitle()}</h1>
             </div>
           </div>
@@ -73,21 +73,21 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">1. Acceptance of Terms</h3>
                 <p>
-                  Welcome to Aatmyam POS (the "Service"), a multi-tenant software-as-a-service application designed for billing, inventory, and staff shift scheduling. By registering for or using any portion of Aatmyam POS, you ("User", "Tenant", or "Owner") agree to be bound by these Terms of Service. If you do not agree, please do not access or use the Service.
+                  Welcome to Aatmyam Pos (the "Service"), a multi-tenant software-as-a-service application designed for billing, inventory, and staff shift scheduling. By registering for or using any portion of Aatmyam Pos, you ("User", "Tenant", or "Owner") agree to be bound by these Terms of Service. If you do not agree, please do not access or use the Service.
                 </p>
               </section>
 
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">2. Multi-Tenant Service & Account Security</h3>
                 <p>
-                  Aatmyam POS isolates data utilizing advanced multi-tenant technology. Each restaurant is assigned a unique <code className="bg-slate-100 text-pink-600 px-1 py-0.5 rounded text-xs font-mono">Tenant ID</code>. You are solely responsible for maintaining the confidentiality of your administrative credentials, including owner credentials and individual staff PINs.
+                  Aatmyam Pos isolates data utilizing advanced multi-tenant technology. Each restaurant is assigned a unique <code className="bg-slate-100 text-pink-600 px-1 py-0.5 rounded text-xs font-mono">Tenant ID</code>. You are solely responsible for maintaining the confidentiality of your administrative credentials, including owner credentials and individual staff PINs.
                 </p>
               </section>
 
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">3. User Responsibilities & Operational Use</h3>
                 <p>
-                  You agree to use Aatmyam POS only for lawful commercial restaurant operations. You will not:
+                  You agree to use Aatmyam Pos only for lawful commercial restaurant operations. You will not:
                 </p>
                 <ul className="list-disc pl-5 space-y-1 text-slate-600">
                   <li>Incorporate false transaction histories, fake inventory records, or fake staff hours;</li>
@@ -99,7 +99,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">4. Data export and device storage</h3>
                 <p>
-                  Aatmyam POS provides data tools inside the <b>Rules Settings Panel</b>:
+                  Aatmyam Pos provides data tools inside the <b>Rules Settings Panel</b>:
                 </p>
                 <div className="bg-slate-50 border border-slate-150 p-4 rounded-xl flex items-start gap-3">
                   <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
@@ -124,7 +124,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">5. Limitation of Liability</h3>
                 <p>
-                  Aatmyam POS is provided on an "as-is" and "as-available" basis. We do not warrant that the Service will be completely uninterrupted or free of brief maintenance updates. Under no circumstances shall Aatmyam POS be liable for indirect, incidental, or consequential damages resulting from restaurant down-times or ingredient stock discrepancies.
+                  Aatmyam Pos is provided on an "as-is" and "as-available" basis. We do not warrant that the Service will be completely uninterrupted or free of brief maintenance updates. Under no circumstances shall Aatmyam Pos be liable for indirect, incidental, or consequential damages resulting from restaurant down-times or ingredient stock discrepancies.
                 </p>
               </section>
             </div>
@@ -135,7 +135,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">1. Scope of Privacy Policy</h3>
                 <p>
-                  This Privacy Policy details how Aatmyam POS collects, utilizes, and secures data related to your restaurant operations. Your privacy is paramount, and we deploy multi-tenant segmentation to ensure that other business establishments cannot view or query your operational data.
+                  This Privacy Policy details how Aatmyam Pos collects, utilizes, and secures data related to your restaurant operations. Your privacy is paramount, and we deploy multi-tenant segmentation to ensure that other business establishments cannot view or query your operational data.
                 </p>
               </section>
 
@@ -195,14 +195,14 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">1. SaaS Subscription Cycle</h3>
                 <p>
-                  Paid Aatmyam POS plans use 30-day subscription cycles for one outlet. Paid access starts after backend payment verification. Review Billing for the current plan, order allowance, cycle dates and paid-access expiry.
+                  Paid Aatmyam Pos plans use 30-day subscription cycles for one outlet. Paid access starts after backend payment verification. Review Billing for the current plan, order allowance, cycle dates and paid-access expiry.
                 </p>
               </section>
 
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">2. Refund Terms & 7-Day Guarantee</h3>
                 <p>
-                  We strive for exceptional quality. If you find Aatmyam POS does not meet your restaurant's billing workflows or you experience technical issues, you may request a refund under the following conditions:
+                  We strive for exceptional quality. If you find Aatmyam Pos does not meet your restaurant's billing workflows or you experience technical issues, you may request a refund under the following conditions:
                 </p>
                 <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
                   <li><b>Guarantee Window:</b> Refund requests must be raised with the service operator within <b>7 calendar days</b> of your initial paid activation.</li>
@@ -235,7 +235,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
 
         {/* Footer */}
         <div className="bg-slate-50 px-8 py-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
-          <span>© 2026 Aatmyam POS. All Rights Reserved.</span>
+          <span>© 2026 Aatmyam Pos. All Rights Reserved.</span>
           <button
             onClick={onBack}
             className="text-pink-600 hover:text-pink-700 font-bold hover:underline transition cursor-pointer"

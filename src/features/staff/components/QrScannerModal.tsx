@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { RestaurantTenant } from "../../shared/types";
 import { toast } from "../../shared/services/toast";
+import { Dialog } from "../../shared/components/ui/Dialog";
+import { InputField } from "../../shared/components/ui/FormControls";
 
 interface QrScannerModalProps {
   isOpen: boolean;
@@ -31,6 +33,8 @@ export default function QrScannerModal({
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [manualCode, setManualCode] = useState<string>("");
   const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [connectionError, setConnectionError] = useState("");
+  useEffect(() => { if (isOpen) setConnectionError(""); }, [isOpen]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -155,6 +159,7 @@ export default function QrScannerModal({
       }
 
       if (!tenantQuery) {
+        setConnectionError("Invalid QR code format. Please scan a valid Staff Login QR.");
         toast.error("Invalid QR code format. Please scan a valid Staff Login QR.");
         startCamera();
         return;
@@ -162,6 +167,7 @@ export default function QrScannerModal({
 
       await fetchAndConnectTenant(tenantQuery, qrToken);
     } catch (e: any) {
+      setConnectionError(e.message || "Failed to parse QR Code");
       toast.error(e.message || "Failed to parse QR Code");
       startCamera();
     }
@@ -169,6 +175,7 @@ export default function QrScannerModal({
 
   // Fetch restaurant details from server
   const fetchAndConnectTenant = async (query: string, qrToken?: string) => {
+    setConnectionError("");
     setIsSearching(true);
     try {
       const res = await fetch(`/api/auth/tenant-info?q=${encodeURIComponent(query.trim())}`);
@@ -181,6 +188,7 @@ export default function QrScannerModal({
       onRestaurantSelected(data.tenant, qrToken);
       onClose();
     } catch (err: any) {
+      setConnectionError(err.message || "Could not find restaurant.");
       toast.error(err.message || "Could not find restaurant.");
       if (activeMode === "camera") {
         startCamera();
@@ -201,6 +209,7 @@ export default function QrScannerModal({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setConnectionError("");
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -217,6 +226,7 @@ export default function QrScannerModal({
         if (code && code.data) {
           handleQrFound(code.data);
         } else {
+          setConnectionError("No valid QR Code found in image. Please try another photo.");
           toast.error("No valid QR Code found in image. Please try another photo.");
         }
       };
@@ -228,194 +238,54 @@ export default function QrScannerModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
-        {/* Header */}
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
-              <Camera className="w-5 h-5" />
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}
+      title="Scan Staff QR Code" description="Connect using a QR image or your store code."
+      className="max-w-md"
+      footer={<p className="text-xs text-slate-600">Staff sign in with their PIN to open their work screen.</p>}>
+      <div className="space-y-4">
+        <div className="flex gap-1 rounded-xl bg-slate-100 p-1" aria-label="Connection method">
+          <button type="button" aria-pressed={activeMode === "camera"} onClick={() => { setConnectionError(""); setActiveMode("camera"); }}
+            className={`min-h-11 min-w-0 flex-1 rounded-lg px-2 py-2 text-xs font-bold flex items-center justify-center gap-1 ${activeMode === "camera" ? "bg-app-primary text-white" : "text-slate-700 hover:bg-white"}`}>
+            <Camera aria-hidden="true" className="h-4 w-4 shrink-0" /><span>Camera Scan</span>
+          </button>
+          <button type="button" aria-pressed={activeMode === "manual"} onClick={() => { setConnectionError(""); setActiveMode("manual"); }}
+            className={`min-h-11 min-w-0 flex-1 rounded-lg px-2 py-2 text-xs font-bold flex items-center justify-center gap-1 ${activeMode === "manual" ? "bg-app-primary text-white" : "text-slate-700 hover:bg-white"}`}>
+            <Keyboard aria-hidden="true" className="h-4 w-4 shrink-0" /><span>Store Code</span>
+          </button>
+          <button type="button" aria-pressed={activeMode === "upload"} onClick={() => { setConnectionError(""); setActiveMode("upload"); fileInputRef.current?.click(); }}
+            className={`min-h-11 min-w-0 flex-1 rounded-lg px-2 py-2 text-xs font-bold flex items-center justify-center gap-1 ${activeMode === "upload" ? "bg-app-primary text-white" : "text-slate-700 hover:bg-white"}`}>
+            <Upload aria-hidden="true" className="h-4 w-4 shrink-0" /><span>Gallery</span>
+          </button>
+        </div>
+        <input ref={fileInputRef} type="file" accept="image/*" aria-label="Choose QR image" className="hidden" onChange={handleFileUpload} />
+        {cameraError && <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{cameraError}</p>}
+        {activeMode === "camera" && (
+          <div className="space-y-3 text-center">
+            <div className="relative mx-auto aspect-square w-full max-w-[280px] overflow-hidden rounded-2xl bg-slate-950">
+              <video ref={videoRef} aria-label="Live QR camera" className="h-full w-full object-cover" autoPlay muted playsInline />
+              {isSearching && <div role="status" className="absolute inset-0 flex items-center justify-center bg-slate-950/80 p-4 text-sm text-white">Connecting to restaurant...</div>}
             </div>
-            <div>
-              <h2 className="text-base font-display font-bold text-white leading-tight">
-                Scan Staff QR Code
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                रेस्टोरेंट से जुड़ने के लिए QR स्कैन करें
-              </p>
-            </div>
+            <p className="text-sm text-slate-600">Point the camera at your restaurant’s Staff Login QR.</p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-slate-800/80 hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Tab Switcher */}
-        <div className="p-2 bg-slate-950 border-b border-slate-800/80 flex gap-1">
-          <button
-            onClick={() => setActiveMode("camera")}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeMode === "camera"
-                ? "bg-indigo-600 text-white shadow"
-                : "text-slate-400 hover:text-white hover:bg-slate-900"
-            }`}
-          >
-            <Camera className="w-3.5 h-3.5" />
-            <span>Camera Scan</span>
-          </button>
-          <button
-            onClick={() => setActiveMode("manual")}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeMode === "manual"
-                ? "bg-indigo-600 text-white shadow"
-                : "text-slate-400 hover:text-white hover:bg-slate-900"
-            }`}
-          >
-            <Keyboard className="w-3.5 h-3.5" />
-            <span>Store Code</span>
-          </button>
-          <button
-            onClick={() => {
-              setActiveMode("upload");
-              fileInputRef.current?.click();
-            }}
-            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeMode === "upload"
-                ? "bg-indigo-600 text-white shadow"
-                : "text-slate-400 hover:text-white hover:bg-slate-900"
-            }`}
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Gallery</span>
-          </button>
-        </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileUpload}
-        />
-
-        {/* Content Body */}
-        <div className="p-6 overflow-y-auto space-y-4 flex-1 text-slate-200">
-          {activeMode === "camera" && (
-            <div className="flex flex-col items-center space-y-4">
-              <div className="relative w-full aspect-square max-w-[280px] bg-slate-950 rounded-2xl overflow-hidden border-2 border-slate-800 shadow-inner flex items-center justify-center">
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover"
-                  autoPlay
-                  muted
-                  playsInline
-                />
-
-                {/* Reticle / Target Scanner UI */}
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
-                  <div className="w-48 h-48 border-2 border-indigo-400/80 rounded-2xl relative shadow-[0_0_15px_rgba(99,102,241,0.5)]">
-                    {/* Laser scanning line */}
-                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-indigo-400 to-transparent animate-pulse" />
-                    <div className="absolute -top-1 -left-1 w-4 h-4 border-t-4 border-l-4 border-indigo-400 rounded-tl-lg" />
-                    <div className="absolute -top-1 -right-1 w-4 h-4 border-t-4 border-r-4 border-indigo-400 rounded-tr-lg" />
-                    <div className="absolute -bottom-1 -left-1 w-4 h-4 border-b-4 border-l-4 border-indigo-400 rounded-bl-lg" />
-                    <div className="absolute -bottom-1 -right-1 w-4 h-4 border-b-4 border-r-4 border-indigo-400 rounded-br-lg" />
-                  </div>
-                </div>
-
-                {isSearching && (
-                  <div className="absolute inset-0 bg-slate-950/80 flex flex-col items-center justify-center space-y-2 text-white">
-                    <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin" />
-                    <span className="text-xs font-bold">Connecting to restaurant...</span>
-                  </div>
-                )}
-              </div>
-
-              <p className="text-xs text-center text-slate-400 max-w-xs">
-                अपने ओनर के डिवाइस या स्टैंडी पर लगे <b>Staff Login QR</b> को कैमरे के सामने लाएं।
-              </p>
-
-              {cameraError && (
-                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{cameraError}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeMode === "manual" && (
-            <form onSubmit={handleManualSubmit} className="space-y-4 py-2">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-300">
-                  Restaurant Outlet / Store Code
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. veg-yashikarestaurant-805 or yashika"
-                    value={manualCode}
-                    onChange={(e) => setManualCode(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition font-mono"
-                    id="manual-store-code-input"
-                  />
-                  <Store className="w-4 h-4 text-slate-500 absolute right-3.5 top-3.5" />
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  यह कोड आपके ओनर के ऐप में <b>Staff QR Modal</b> या सेटिंग्स में लिखा होता है।
-                </p>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSearching || !manualCode.trim()}
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {isSearching ? (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Searching Outlet...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Connect to Restaurant</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </>
-                )}
-              </button>
-            </form>
-          )}
-
-          {activeMode === "upload" && (
-            <div className="text-center py-6 space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-400 mx-auto flex items-center justify-center">
-                <Upload className="w-6 h-6" />
-              </div>
-              <p className="text-xs text-slate-300">
-                Gallery se QR code photo chunein
-              </p>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs rounded-xl transition cursor-pointer"
-              >
-                Choose Photo from Device
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/40 text-center">
-          <p className="text-[11px] text-slate-500">
-            कर्मचारी PIN से लॉगिन होकर सीधे अपने रोल (Waiter, Chef, Cashier) का काम कर सकते हैं।
-          </p>
-        </div>
+        )}
+        {activeMode === "manual" && (
+          <form onSubmit={handleManualSubmit} className="space-y-4">
+            <InputField id="manual-store-code-input" label="Store code or restaurant name" required
+              placeholder="Enter code or restaurant name" value={manualCode}
+              onChange={(event) => setManualCode(event.target.value)} error={connectionError || undefined} />
+            <button type="submit" disabled={isSearching || !manualCode.trim()} className="min-h-11 w-full rounded-xl bg-app-primary px-4 py-3 text-sm font-bold text-white hover:bg-app-primary-hover disabled:bg-slate-200 disabled:text-slate-600">
+              {isSearching ? "Searching Outlet..." : "Connect to Restaurant"}
+            </button>
+          </form>
+        )}
+        {activeMode === "upload" && (
+          <div className="space-y-3 py-4 text-center">
+            <p className="text-sm text-slate-600">Choose a photo containing your store QR code.</p>
+            <button type="button" onClick={() => fileInputRef.current?.click()} className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-100">Choose Photo from Device</button>
+          </div>
+        )}
+        {connectionError && activeMode !== "manual" && <p role="alert" className="break-words rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{connectionError}</p>}
       </div>
-    </div>
+    </Dialog>
   );
 }

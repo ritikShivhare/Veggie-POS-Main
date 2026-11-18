@@ -79,7 +79,7 @@ it("updates metadata without duplicates after client navigation and keeps auth q
   history.replaceState({}, "", "/pricing");
   updateDocumentSeo();
   expect(document.title).toBe(
-    "Restaurant POS Pricing & Subscription Plans | Aatmyam POS",
+    "Restaurant POS Pricing & Subscription Plans | Aatmyam Pos",
   );
   expect(document.querySelectorAll("title")).toHaveLength(1);
   history.pushState({}, "", "/login?token=do-not-publish");

@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto';
-import { beforeEach, afterEach, describe, expect, it } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { VeggiePOSLocalDatabase } from '../src/features/shared/services/offline/database';
 import { OfflineRepository } from '../src/features/shared/services/offline/OfflineRepository';
 import { OfflineSyncEngine } from '../src/features/shared/services/offline/OfflineSyncEngine';
@@ -13,7 +13,7 @@ describe('Deployment audit: offline invariants', () => {
     ApiClient.setSessionId(null);
     await db.open();
   });
-  afterEach(async () => { db.close(); await db.delete(); });
+  afterEach(async () => { vi.restoreAllMocks(); db.close(); await db.delete(); });
   it('keeps identical entity IDs in two tenants separate', async () => {
     await repo.putMenuItem('tenant-a', { id: 'common-menu-id', name: 'A' });
     await repo.putMenuItem('tenant-b', { id: 'common-menu-id', name: 'B' });
@@ -37,6 +37,7 @@ describe('Deployment audit: offline invariants', () => {
     expect(result).not.toBe('SYNCED');
   });
   it('does not submit dependent payment while parent order creation is retrying', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now());
     await repo.recordOrderOffline('tenant-a', { id: 'dependency-order', items: [], total: 100, status: 'Pending' });
     await repo.recordPaymentOffline('tenant-a', 'dependency-order', { status: 'Completed', paymentMethod: 'Cash' });
     const paths: string[] = [];

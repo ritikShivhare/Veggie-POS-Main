@@ -66,11 +66,11 @@ export default function StoreLoginView({
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <button
             onClick={onBackToWebsite}
-            className="flex items-center gap-2 text-xs font-bold text-[#5A6056] hover:text-[#181A18] transition cursor-pointer"
+            className="min-h-11 flex items-center gap-2 text-xs font-bold text-[#5A6056] hover:text-[#181A18] transition cursor-pointer"
             id="store-login-back-to-site-btn"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to Aatmyam POS Website</span>
+            <span>Back to Aatmyam Pos Website</span>
           </button>
 
           <div className="flex items-center gap-2">
@@ -97,12 +97,12 @@ export default function StoreLoginView({
           </div>
 
           {error && (
-            <div className="p-3.5 bg-[#FDF2F2] border border-[#F8D7DA] rounded-2xl text-xs text-[#9B1C1C] flex items-start gap-2.5 animate-shake">
+            <div id="store-code-error" role="alert" className="p-3.5 bg-[#FDF2F2] border border-[#F8D7DA] rounded-2xl text-xs text-[#9B1C1C] flex items-start gap-2.5 animate-shake">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <p className="font-semibold">{error}</p>
                 <p className="text-[11px] text-[#9B1C1C]/80">
-                  Tip: Use demo store <button type="button" onClick={() => handleSubmit(undefined as any, "veg-main-001")} className="underline font-bold">veg-main-001</button> or register a new store.
+                  Check the store code, or enter your restaurant name.
                 </p>
               </div>
             </div>
@@ -111,25 +111,27 @@ export default function StoreLoginView({
           {/* Connection Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-mono font-bold text-[#181A18] uppercase tracking-wider flex items-center justify-between">
+              <label htmlFor="store-code-input-field" className="text-xs font-mono font-bold text-[#181A18] uppercase tracking-wider flex flex-wrap gap-1 items-center justify-between">
                 <span>Store ID or Restaurant Code</span>
-                <span className="text-[10px] text-[#787F74] normal-case">e.g. veg-main-001</span>
+                <span className="text-xs text-[#5A6056] normal-case">Code or restaurant name</span>
               </label>
 
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#787F74]">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5A6056]">
                   <Store className="w-4 h-4" />
                 </div>
                 <input
                   type="text"
                   required
+                  aria-invalid={Boolean(error) || undefined}
+                  aria-describedby={error ? "store-code-error" : undefined}
                   placeholder="Enter Store Code or Outlet Name"
                   value={storeCodeInput}
                   onChange={(e) => {
                     setStoreCodeInput(e.target.value);
                     setError("");
                   }}
-                  className="w-full pl-10 pr-4 py-3 bg-[#FBF9F5] border border-[#EAE5DA] rounded-xl text-xs text-[#181A18] font-mono focus:outline-hidden focus:border-[#6E8F45] focus:ring-1 focus:ring-[#6E8F45] placeholder:text-[#A6AEA0]"
+                  className="w-full min-h-11 pl-10 pr-4 py-3 bg-[#FBF9F5] border border-[#EAE5DA] rounded-xl text-base text-[#181A18] focus:outline-hidden focus:border-[#567234] focus:ring-1 focus:ring-[#567234] placeholder:text-slate-500"
                   id="store-code-input-field"
                   autoFocus
                 />
@@ -165,30 +167,20 @@ export default function StoreLoginView({
             </div>
           </form>
 
-          {/* Quick Demo Outlets */}
-          <div className="pt-4 border-t border-[#EAE5DA] space-y-2">
-            <p className="text-[10px] font-mono uppercase text-[#787F74] font-bold text-center">
-              Available Demo Outlets:
-            </p>
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => handleSubmit(undefined as any, "veg-main-001")}
-                className="p-2.5 bg-[#FBF9F5] hover:bg-[#EAE5DA] border border-[#EAE5DA] rounded-xl text-left transition cursor-pointer"
-              >
-                <p className="font-bold text-[#181A18] truncate">Main Veggie Bistro</p>
-                <p className="text-[10px] font-mono text-[#567234]">veg-main-001</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSubmit(undefined as any, "veg-reetesh-dhaba")}
-                className="p-2.5 bg-[#FBF9F5] hover:bg-[#EAE5DA] border border-[#EAE5DA] rounded-xl text-left transition cursor-pointer"
-              >
-                <p className="font-bold text-[#181A18] truncate">Reetesh Dhaba</p>
-                <p className="text-[10px] font-mono text-[#567234]">veg-reetesh-dhaba</p>
-              </button>
+          {tenants.some((tenant) => tenant.status === "active") && (
+            <div className="pt-4 border-t border-[#EAE5DA] space-y-2">
+              <p className="text-xs font-semibold text-[#5A6056]">Saved stores</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {tenants.filter((tenant) => tenant.status === "active").slice(0, 4).map((tenant) => (
+                  <button key={tenant.tenantId} type="button"
+                    onClick={() => handleSubmit(undefined as any, tenant.tenantId)}
+                    className="min-h-11 p-3 bg-[#FBF9F5] hover:bg-[#EAE5DA] border border-[#EAE5DA] rounded-xl text-left text-sm font-semibold">
+                    {tenant.name}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Register New Store CTA */}
           <div className="pt-2 text-center space-y-2">
@@ -198,7 +190,7 @@ export default function StoreLoginView({
             <button
               type="button"
               onClick={onOpenSignup}
-              className="text-xs font-bold text-[#6E8F45] hover:underline cursor-pointer"
+              className="min-h-11 px-2 text-sm font-bold text-[#4F6B30] hover:underline cursor-pointer"
               id="store-login-open-signup-btn"
             >
               Register & Setup a New Restaurant Store →
@@ -209,8 +201,8 @@ export default function StoreLoginView({
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-[#EAE5DA] py-4 text-center text-xs text-[#787F74]">
-        <p>Aatmyam POS • Encrypted Multi-Tenant Terminal Gateway</p>
+      <footer className="border-t border-[#EAE5DA] py-4 text-center text-xs text-[#5A6056]">
+        <p>Aatmyam Pos • Encrypted Multi-Tenant Terminal Gateway</p>
       </footer>
 
       {/* QR Scanner Modal */}

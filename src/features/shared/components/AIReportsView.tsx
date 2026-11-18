@@ -56,6 +56,8 @@ export default function AIReportsView({
   setActiveTab
 }: AIReportsViewProps) {
   const [selectedLanguage, setSelectedLanguage] = useState<ReportLanguage>("hindi");
+  const tr = (hindi: string, english: string) => selectedLanguage === "hindi" ? hindi : english;
+  const [generatedLanguage, setGeneratedLanguage] = useState<ReportLanguage | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "full">("cards");
 
   // Manual-only reports: opening the page or changing language must not
@@ -90,9 +92,9 @@ export default function AIReportsView({
               </div>
               <div>
                 <h1 className="text-lg sm:text-xl font-black text-slate-900 font-display flex items-center gap-2">
-                  <span>AI Business Diagnosis & Audit</span>
+                  <span>{tr("व्यवसाय का एआई विश्लेषण", "AI Business Diagnosis & Audit")}</span>
                   <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2.5 py-0.5 rounded-full border border-indigo-100 font-mono">
-                    Live Gemini 2.5
+                    {tr("जेमिनी 2.5", "Gemini 2.5")}
                   </span>
                 </h1>
                 <p className="text-xs text-slate-500">
@@ -116,9 +118,9 @@ export default function AIReportsView({
                     ? "bg-white text-indigo-700 shadow-xs border border-slate-200/80"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
-                title="सरल हिंदी में रिपोर्ट देखें"
+                title={tr("सरल हिंदी में रिपोर्ट देखें", "View report in Hindi")}
               >
-                <span>🇮🇳 सरल हिंदी</span>
+                <span>🇮🇳 {tr("सरल हिंदी", "Hindi")}</span>
               </button>
               <button
                 onClick={() => handleLanguageChange("hinglish")}
@@ -127,9 +129,9 @@ export default function AIReportsView({
                     ? "bg-white text-indigo-700 shadow-xs border border-slate-200/80"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
-                title="हिंग्लिश (Roman Hindi) में रिपोर्ट देखें"
+                title={tr("हिंग्लिश में रिपोर्ट देखें", "View report in Hinglish")}
               >
-                <span>🗣️ Hinglish</span>
+                <span>🗣️ {tr("हिंग्लिश", "Hinglish")}</span>
               </button>
               <button
                 onClick={() => handleLanguageChange("english")}
@@ -140,7 +142,7 @@ export default function AIReportsView({
                 }`}
                 title="View Report in English"
               >
-                <span>🇬🇧 English</span>
+                <span>🇬🇧 {tr("अंग्रेज़ी", "English")}</span>
               </button>
             </div>
 
@@ -155,7 +157,7 @@ export default function AIReportsView({
                 }`}
               >
                 <LayoutGrid className="w-3.5 h-3.5" />
-                <span>कार्ड दृश्य (Cards)</span>
+                <span>{tr("कार्ड दृश्य", "Cards")}</span>
               </button>
               <button
                 onClick={() => setViewMode("full")}
@@ -166,20 +168,20 @@ export default function AIReportsView({
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>दस्तावेज (Full Doc)</span>
+                <span>{tr("पूरा दस्तावेज़", "Full Document")}</span>
               </button>
             </div>
 
             {/* Re-trigger Diagnosis Action */}
             <button
-              onClick={() => handleGenerateAIReport(selectedLanguage)}
+              onClick={() => { setGeneratedLanguage(selectedLanguage); void handleGenerateAIReport(selectedLanguage); }}
               disabled={isGeneratingReport}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold text-xs rounded-xl transition shadow-sm flex items-center gap-2 cursor-pointer"
             >
               {isGeneratingReport ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>AI विश्लेषण जारी...</span>
+                  <span>{tr("एआई विश्लेषण जारी…", "Analysing…")}</span>
                 </>
               ) : (
                 <>
@@ -199,7 +201,7 @@ export default function AIReportsView({
               <span className="font-bold block text-amber-900">
                 {selectedLanguage === "hindi" ? "सिस्टम सूचना:" : "System Notice:"}
               </span>
-              <p className="text-amber-800">{reportError}</p>
+              <p className="text-amber-800">{selectedLanguage === "hindi" ? "रिपोर्ट नहीं बन सकी। कृपया दोबारा प्रयास करें।" : /[\u0900-\u097f]/.test(reportError) ? "Unable to generate the report. Please retry." : reportError}</p>
             </div>
           </div>
         )}
@@ -216,14 +218,14 @@ export default function AIReportsView({
             <div className="space-y-1">
               <h3 className="font-extrabold text-base text-slate-900 font-display">
                 {selectedLanguage === "hindi"
-                  ? "Gemini AI आपकी रेस्टोरेंट रिपोर्ट तैयार कर रहा है..."
+                  ? "जेमिनी एआई आपकी रेस्टोरेंट रिपोर्ट तैयार कर रहा है..."
                   : selectedLanguage === "hinglish"
                   ? "Gemini AI aapki restaurant ki report generate kar raha hai..."
                   : "Evaluating restaurant performance metrics with Gemini..."}
               </h3>
               <p className="text-xs text-slate-500 max-w-md">
                 {selectedLanguage === "hindi"
-                  ? "आज की कुल बिक्री, कच्चा माल (Inventory) और स्टाफ ड्यूटी का गहन अध्ययन किया जा रहा है।"
+                  ? "आज की कुल बिक्री, कच्चा माल और स्टाफ ड्यूटी का गहन अध्ययन किया जा रहा है।"
                   : selectedLanguage === "hinglish"
                   ? "Daily sales volume, stock alerts aur margin improvement points compute ho rahe hain."
                   : "Computing raw ingredient margins, ticket velocity, and labor allocation."}
@@ -258,7 +260,7 @@ export default function AIReportsView({
                       </div>
                     </div>
                     <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 font-mono">
-                      {totalOrders} Orders
+                      {totalOrders} {tr("ऑर्डर", "Orders")}
                     </span>
                   </div>
 
@@ -274,7 +276,7 @@ export default function AIReportsView({
                     </div>
                     <div className="p-2.5 bg-indigo-50/60 rounded-xl border border-indigo-100">
                       <span className="text-[10px] text-indigo-700 font-bold uppercase block">
-                        UPI पेमेंट ({upiPercent}%)
+                        {tr("यूपीआई भुगतान", "UPI payment")} ({upiPercent}%)
                       </span>
                       <span className="text-lg font-black text-indigo-900">
                         ₹{upiRev.toLocaleString()}
@@ -282,7 +284,7 @@ export default function AIReportsView({
                     </div>
                     <div className="p-2.5 bg-emerald-50/60 rounded-xl border border-emerald-100">
                       <span className="text-[10px] text-emerald-700 font-bold uppercase block">
-                        कैश / नकद ({cashPercent}%)
+                        {tr("नकद", "Cash")} ({cashPercent}%)
                       </span>
                       <span className="text-lg font-black text-emerald-900">
                         ₹{cashRev.toLocaleString()}
@@ -293,9 +295,9 @@ export default function AIReportsView({
                   {/* Payment Visual Split Bar */}
                   <div className="py-3 space-y-1.5">
                     <div className="flex justify-between text-[11px] font-bold text-slate-600">
-                      <span>UPI: {upiPercent}%</span>
-                      <span className="text-slate-400 font-mono">औसत बिल: ₹{avgTicket} / ग्राहक</span>
-                      <span>Cash: {cashPercent}%</span>
+                      <span>{tr("यूपीआई", "UPI")}: {upiPercent}%</span>
+                      <span className="text-slate-400 font-mono">{tr("औसत बिल", "Average bill")}: ₹{avgTicket} / {tr("ग्राहक", "guest")}</span>
+                      <span>{tr("नकद", "Cash")}: {cashPercent}%</span>
                     </div>
                     <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
                       <div style={{ width: `${upiPercent}%` }} className="bg-indigo-600 h-full" title={`UPI: ₹${upiRev}`} />
@@ -307,14 +309,14 @@ export default function AIReportsView({
                   {topItems.length > 0 && (
                     <div className="pt-2 space-y-1.5">
                       <span className="text-[11px] font-bold text-slate-500 block">
-                        {selectedLanguage === "hindi" ? "🔥 सबसे ज्यादा बिकने वाले व्यंजन (Top Items):" : "🔥 Top Selling Menu Items:"}
+                        {selectedLanguage === "hindi" ? "🔥 सबसे ज्यादा बिकने वाले व्यंजन:" : "🔥 Top Selling Menu Items:"}
                       </span>
                       <div className="flex flex-wrap gap-1.5">
                         {topItems.map((item, idx) => (
                           <span key={idx} className="bg-slate-100 text-slate-800 text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-slate-200 flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                             <b>{item.name}</b>
-                            <span className="text-slate-500 font-mono">({item.qty} बिके • ₹{item.sales})</span>
+                            <span className="text-slate-500 font-mono">({item.qty} {tr("बिके", "sold")} • ₹{item.sales})</span>
                           </span>
                         ))}
                       </div>
@@ -325,14 +327,14 @@ export default function AIReportsView({
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                   <span className="text-slate-500 flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                    {selectedLanguage === "hindi" ? "डिजिटल पेमेंट अनुपात बहुत अच्छा है" : "Healthy digital settlement ratio"}
+                    {tr("भुगतान का बँटवारा", "Payment mix")}: {tr("यूपीआई", "UPI")} {upiPercent}% · {tr("नकद", "Cash")} {cashPercent}%
                   </span>
                   {setActiveTab && (
                     <button
                       onClick={() => setActiveTab("billing")}
                       className="text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer"
                     >
-                      <span>बिलिंग काउंटर</span>
+                      <span>{tr("बिलिंग काउंटर", "Billing")}</span>
                       <ArrowRight className="w-3 h-3" />
                     </button>
                   )}
@@ -361,7 +363,7 @@ export default function AIReportsView({
                     <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold font-mono border ${
                       lowStock.length > 0 ? "bg-red-50 text-red-700 border-red-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"
                     }`}>
-                      {lowStock.length > 0 ? `⚠️ ${lowStock.length} आइटम कम हैं` : "✅ स्टॉक सुरक्षित है"}
+                      {lowStock.length > 0 ? `⚠️ ${lowStock.length} ${tr("सामग्री कम हैं", "items low")}` : tr("स्टॉक पर्याप्त है", "Stock sufficient")}
                     </span>
                   </div>
 
@@ -377,7 +379,7 @@ export default function AIReportsView({
                         </span>
                       </div>
                       <span className="text-xs font-bold text-slate-600 font-mono bg-white px-2.5 py-1 rounded-lg border border-slate-200">
-                        {ingredients.length} कुल कच्चा माल
+                        {ingredients.length} {tr("सामग्री", "ingredients")}
                       </span>
                     </div>
 
@@ -386,7 +388,7 @@ export default function AIReportsView({
                       <div className="space-y-2">
                         <span className="text-[11px] font-bold text-red-600 flex items-center gap-1">
                           <ShieldAlert className="w-3.5 h-3.5" />
-                          {selectedLanguage === "hindi" ? "तुरंत मंगाने योग्य सामग्री (Critical Reorder Needed):" : "Critical Low Stock Items:"}
+                          {selectedLanguage === "hindi" ? "तुरंत मंगाने योग्य सामग्री:" : "Critical Low Stock Items:"}
                         </span>
                         <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
                           {lowStock.map((item) => (
@@ -394,11 +396,11 @@ export default function AIReportsView({
                               <div>
                                 <span className="font-extrabold text-slate-900">{item.name}</span>
                                 <span className="text-[11px] text-slate-500 block">
-                                  बचा स्टॉक: <b className="text-red-700 font-mono">{item.currentStock} {item.unit}</b> (कम से कम चाहिए: {item.minStock} {item.unit})
+                                  {tr("बचा स्टॉक", "Remaining")}: <b className="text-red-700 font-mono">{item.currentStock} {item.unit}</b> ({tr("न्यूनतम", "Minimum")}: {item.minStock} {item.unit})
                                 </span>
                               </div>
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-600 text-white shadow-2xs">
-                                कम है!
+                                {tr("कम है", "Low stock")}
                               </span>
                             </div>
                           ))}
@@ -406,8 +408,8 @@ export default function AIReportsView({
                       </div>
                     ) : (
                       <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-xl text-center text-xs text-emerald-800 space-y-1">
-                        <span className="font-bold block">✅ सभी ज़रूरी सामान पर्याप्त मात्रा में उपलब्ध हैं।</span>
-                        <p className="text-[11px] text-emerald-700">किचन में किसी भी मुख्य सामग्री की कमी नहीं है।</p>
+                        <span className="font-bold block">{tr("सभी ज़रूरी सामान पर्याप्त मात्रा में उपलब्ध हैं।", "All essential ingredients are sufficiently stocked.")}</span>
+                        <p className="text-[11px] text-emerald-700">{tr("किचन में किसी मुख्य सामग्री की कमी नहीं है।", "No critical ingredient shortages.")}</p>
                       </div>
                     )}
                   </div>
@@ -422,7 +424,7 @@ export default function AIReportsView({
                       onClick={() => setActiveTab("inventory")}
                       className="text-red-600 hover:text-red-800 font-bold flex items-center gap-1 cursor-pointer"
                     >
-                      <span>स्टॉक परचेज करें</span>
+                      <span>{tr("सामग्री मँगाएँ", "Purchase stock")}</span>
                       <ArrowRight className="w-3 h-3" />
                     </button>
                   )}
@@ -452,7 +454,7 @@ export default function AIReportsView({
                       </div>
                     </div>
                     <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200 font-mono">
-                      {activeStaff} Active Staff
+                      {activeStaff} {tr("सक्रिय कर्मचारी", "Active Staff")}
                     </span>
                   </div>
 
@@ -462,33 +464,33 @@ export default function AIReportsView({
                         <span className="text-[10px] text-slate-400 font-bold uppercase block">
                           {selectedLanguage === "hindi" ? "ड्यूटी पर कर्मचारी" : "Active Staff"}
                         </span>
-                        <span className="text-xl font-black text-slate-900">{activeStaff} लोग</span>
+                        <span className="text-xl font-black text-slate-900">{activeStaff} {tr("लोग", "staff")}</span>
                       </div>
                       <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                         <span className="text-[10px] text-slate-400 font-bold uppercase block">
                           {selectedLanguage === "hindi" ? "शिफ्ट स्थिति" : "Shift Status"}
                         </span>
-                        <span className="text-base font-bold text-emerald-700">सामान्य (Normal)</span>
+                        <span className="text-base font-bold text-emerald-700">{tr("सक्रिय शिफ्ट", "Active shifts")}</span>
                       </div>
                     </div>
 
                     {/* Active Staff List */}
                     <div className="space-y-1.5">
                       <span className="text-[11px] font-bold text-slate-500 block">
-                        {selectedLanguage === "hindi" ? "सक्रिय कर्मचारी (Current On-Duty Roster):" : "Active Shift Members:"}
+                        {selectedLanguage === "hindi" ? "सक्रिय कर्मचारी:" : "Active Shift Members:"}
                       </span>
                       <div className="space-y-1">
                         {shifts.filter(s => s.status === "Active").slice(0, 3).map((s, idx) => (
                           <div key={idx} className="p-2 bg-slate-50 border border-slate-200/80 rounded-lg flex items-center justify-between text-xs">
                             <span className="font-bold text-slate-800">{s.staffName}</span>
                             <span className="text-[10px] font-semibold bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-600">
-                              {s.role}
+                              {selectedLanguage === "hindi" ? ({Owner:"मालिक", Manager:"प्रबंधक", Cashier:"कैशियर", Waiter:"वेटर", Cook:"रसोइया", Staff:"कर्मचारी"}[s.role] || "कर्मचारी") : s.role}
                             </span>
                           </div>
                         ))}
                         {shifts.filter(s => s.status === "Active").length === 0 && (
                           <div className="p-3 text-center text-xs text-slate-400 bg-slate-50 rounded-xl">
-                            वर्तमान में कोई सक्रिय शिफ्ट दर्ज नहीं है।
+                            {tr("वर्तमान में कोई सक्रिय शिफ्ट दर्ज नहीं है।", "No active shifts recorded.")}
                           </div>
                         )}
                       </div>
@@ -506,7 +508,7 @@ export default function AIReportsView({
                       onClick={() => setActiveTab("shifts")}
                       className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 cursor-pointer"
                     >
-                      <span>रोस्टर देखें</span>
+                      <span>{tr("शिफ्ट सूची देखें", "View shifts")}</span>
                       <ArrowRight className="w-3 h-3" />
                     </button>
                   )}
@@ -526,12 +528,12 @@ export default function AIReportsView({
                           {selectedLanguage === "hindi" ? "4. मुनाफ़ा बढ़ाने के मुख्य सुझाव" : selectedLanguage === "hinglish" ? "4. Profit Optimization Tips" : "4. Profit & Menu Playbook"}
                         </h3>
                         <p className="text-[11px] text-slate-400">
-                          {selectedLanguage === "hindi" ? "लागत घटाने और कमाई 8-12% बढ़ाने के आसान नुस्खे" : "High-impact cost reduction & margin hacks"}
+                          {selectedLanguage === "hindi" ? "लागत घटाने और कमाई की समीक्षा के सुझाव" : "High-impact cost reduction & margin hacks"}
                         </p>
                       </div>
                     </div>
                     <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-amber-50 text-amber-800 border border-amber-200 font-mono">
-                      +8-12% Margin
+                      {tr("लागत की समीक्षा", "Review costs")}
                     </span>
                   </div>
 
@@ -544,8 +546,8 @@ export default function AIReportsView({
                       <div className="space-y-0.5">
                         <span className="font-bold text-slate-900 block">
                           {selectedLanguage === "hindi"
-                            ? `टॉप सेलिंग आइटम (${topItems[0]?.name || "Special Thali"}) का मार्जिन बढ़ाएं`
-                            : `Top Item (${topItems[0]?.name || "Special Thali"}) Margin Boost`}
+                            ? `टॉप सेलिंग आइटम (${topItems[0]?.name || tr("मुख्य व्यंजन", "Top dish")}) का मार्जिन बढ़ाएं`
+                            : `Top Item (${topItems[0]?.name || tr("मुख्य व्यंजन", "Top dish")}) Margin Boost`}
                         </span>
                         <p className="text-[11px] text-slate-600 leading-relaxed">
                           {selectedLanguage === "hindi"
@@ -565,7 +567,7 @@ export default function AIReportsView({
                         </span>
                         <p className="text-[11px] text-slate-600 leading-relaxed">
                           {selectedLanguage === "hindi"
-                            ? "पनीर, तेल और सूखे मसालों की तौल (Kitchen Scale) के अनुसार ग्रेवी बनाएं जिससे बर्बादी 0% हो।"
+                            ? "पनीर, तेल और सूखे मसालों की तौल के अनुसार ग्रेवी बनाएं जिससे बर्बादी 0% हो।"
                             : "Introduce kitchen weighing scales for high-cost ingredients to prevent recipe drift."}
                         </p>
                       </div>
@@ -577,11 +579,11 @@ export default function AIReportsView({
                       </span>
                       <div className="space-y-0.5">
                         <span className="font-bold text-slate-900 block">
-                          {selectedLanguage === "hindi" ? "QR पेमेंट व टेबल टर्नअराउंड" : "Faster Table Turnaround"}
+                          {selectedLanguage === "hindi" ? "क्यूआर भुगतान और टेबल सेवा" : "Faster Table Turnaround"}
                         </span>
                         <p className="text-[11px] text-slate-600 leading-relaxed">
                           {selectedLanguage === "hindi"
-                            ? "टेबल पर UPI QR स्टिकर रखें, जिससे ग्राहक बिल का इंतजार किए बिना तुरंत पे करके फ्री हो सके।"
+                            ? "टेबल पर भुगतान का क्यूआर स्टिकर रखें, जिससे ग्राहक बिल का इंतजार किए बिना तुरंत पे करके फ्री हो सके।"
                             : "Place UPI QR codes on tables to accelerate dining checkouts and increase seat turnover."}
                         </p>
                       </div>
@@ -598,7 +600,7 @@ export default function AIReportsView({
                     className="text-slate-700 hover:text-slate-900 font-bold flex items-center gap-1 cursor-pointer"
                   >
                     <Printer className="w-3.5 h-3.5" />
-                    <span>प्रिंट रिपोर्ट</span>
+                    <span>{tr("प्रिंट रिपोर्ट", "Print report")}</span>
                   </button>
                 </div>
               </div>
@@ -613,7 +615,7 @@ export default function AIReportsView({
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-indigo-600" />
                 <h3 className="font-bold text-base text-slate-900">
-                  {selectedLanguage === "hindi" ? "विस्तृत AI डायग्नोसिस ऑडिट" : selectedLanguage === "hinglish" ? "Complete AI Business Audit" : "Full AI Business Audit"}
+                  {selectedLanguage === "hindi" ? "विस्तृत एआई विश्लेषण" : selectedLanguage === "hinglish" ? "Complete AI Business Audit" : "Full AI Business Audit"}
                 </h3>
               </div>
               <button
@@ -621,17 +623,17 @@ export default function AIReportsView({
                 className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span>प्रिंट करें</span>
+                <span>{tr("प्रिंट करें", "Print")}</span>
               </button>
             </div>
 
-            {aiReport ? (
+            {aiReport && generatedLanguage === selectedLanguage ? (
               <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed font-sans text-sm py-2">
                 <MarkdownRenderer content={aiReport} />
               </div>
             ) : (
               <div className="py-12 text-center text-slate-400 text-xs italic">
-                कोई विस्तृत रिपोर्ट उपलब्ध नहीं है। ऊपर दिए गए बटन पर क्लिक करें।
+                {tr("चुनी गई भाषा में रिपोर्ट बनाने के लिए ऊपर का बटन दबाएँ।", "Generate a report in the selected language using the button above.")}
               </div>
             )}
           </div>

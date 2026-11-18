@@ -23,7 +23,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
       number: "01",
       title: "Respect the Rush",
       description:
-        "Aatmyam POS is being developed around restaurant order entry, kitchen status, inventory, and staff workflows. We build for the floor, not the boardroom."
+        "Aatmyam Pos is being developed around restaurant order entry, kitchen status, inventory, and staff workflows. We build for the floor, not the boardroom."
     },
     {
       number: "02",
@@ -53,14 +53,14 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF2E4] border border-[#D5E3C8] text-xs font-mono font-bold text-[#567234]">
             <Heart className="w-3.5 h-3.5 text-[#6E8F45]" />
-            <span>THE AATMYAM POS MANIFESTO</span>
+            <span>THE Aatmyam Pos MANIFESTO</span>
           </div>
           <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl tracking-tight text-[#181A18] leading-[1.12]">
             Restoring calm to the <br />
             <span className="text-[#6E8F45] italic">hardest working room</span> in hospitality.
           </h1>
           <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-            Aatmyam POS is early-access software for independent restaurants and cafés in India, with one outlet per restaurant account.
+            Aatmyam Pos is early-access software for independent restaurants and cafés in India, with one outlet per restaurant account.
             Its focus is keeping order entry, kitchen preparation status, ingredient records and staff access in a shared workspace.
           </p>
         </div>
@@ -141,7 +141,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             See the calm difference on your own floor.
           </h2>
           <p className="text-sm text-[#5A6056] leading-relaxed">
-            Experience how Aatmyam POS simplifies table service, kitchen lines, and inventory accounting. Schedule a personalized walkthrough with our hospitality team.
+            Experience how Aatmyam Pos simplifies table service, kitchen lines, and inventory accounting. Schedule a personalized walkthrough with our hospitality team.
           </p>
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <SiteLink

@@ -190,7 +190,7 @@ export default function StaffQrModal({
         </head>
         <body>
           <div class="card">
-            <div class="badge">Aatmyam POS • Staff Terminal</div>
+            <div class="badge">Aatmyam Pos • Staff Terminal</div>
             <h1>${tenant.name}</h1>
             <p class="sub">कर्मचारी लॉगिन क्यूआर कोड (Staff Quick Login)</p>
 
@@ -213,7 +213,7 @@ export default function StaffQrModal({
             </div>
 
             <div class="footer">
-              सुरक्षित प्रमाणीकरण • Powered by Aatmyam POS Cloud Suite
+              सुरक्षित प्रमाणीकरण • Powered by Aatmyam Pos Cloud Suite
             </div>
           </div>
           <script>
@@ -438,7 +438,7 @@ export default function StaffQrModal({
 
         {/* Modal Footer */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/40 flex items-center justify-between text-xs text-slate-500">
-          <span>Yashika POS Security Suite</span>
+          <span>Aatmyam Pos Security Suite</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-lg transition cursor-pointer"

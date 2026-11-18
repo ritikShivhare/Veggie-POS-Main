@@ -9,7 +9,7 @@ export default function BrandLogo({ dark = false }: { dark?: boolean }) {
           at every size, without reconstructing the name in another font. */}
       <svg
         role="img"
-        aria-label="Aatmyam POS — Restaurant Management"
+        aria-label="Aatmyam Pos — Restaurant Management"
         viewBox="110 300 1850 540"
         width="222"
         height="65"

@@ -36,7 +36,7 @@ const PORT = Number(process.env.PORT) || 3000;
 // Enable Helmet middleware with iframe-friendly parameters
 app.use(
   helmet({
-    contentSecurityPolicy: process.env.NODE_ENV === "production" ? {directives:{defaultSrc:["'self'"],scriptSrc:["'self'","https://accounts.google.com"],styleSrc:["'self'","'unsafe-inline'","https://fonts.googleapis.com"],imgSrc:["'self'","data:","blob:","https:"],fontSrc:["'self'","data:","https://fonts.gstatic.com"],connectSrc:["'self'","wss:",...supabaseAuthOrigin],frameSrc:["https://accounts.google.com"],frameAncestors:["'self'","https://*.ai.studio"]}} : false,
+    contentSecurityPolicy: process.env.NODE_ENV === "production" ? {directives:{defaultSrc:["'self'"],scriptSrc:["'self'","https://accounts.google.com"],styleSrc:["'self'","'unsafe-inline'","https://fonts.googleapis.com"],imgSrc:["'self'","data:","blob:","https:"],fontSrc:["'self'","data:","https://fonts.gstatic.com"],connectSrc:["'self'","wss:",...supabaseAuthOrigin],frameSrc:["'self'","https://accounts.google.com"],frameAncestors:["'self'","https://*.ai.studio"]}} : false,
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: false,
     frameguard: false,
@@ -135,12 +135,12 @@ app.use((req, res, next) => {
   }
 
   const start = Date.now();
-  
+
   res.on("finish", () => {
     const duration = Date.now() - start;
     const status = res.statusCode;
     const level = status >= 500 ? "ERROR" : status >= 400 ? "WARN" : "INFO";
-    
+
     monitoringService.log(
       level,
       "API_GATEWAY",

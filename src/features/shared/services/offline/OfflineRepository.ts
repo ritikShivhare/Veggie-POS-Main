@@ -202,9 +202,15 @@ export class OfflineRepository {
 
   public async saveCustomers(tenantId: string, items: any[]): Promise<void> {
     const enriched = items.map((item) => this.enrichRecord(tenantId, item));
-    await this.db.transaction("rw", this.db.customers, async () => {
+    await this.db.transaction("rw", [this.db.customers, this.db.outbox], async () => {
+      const pending = (await this.getAllOutbox(tenantId)).filter(item =>
+        item.entityType === "customer" && !["SYNCED", "completed"].includes(item.status));
+      const pendingIds = new Set(pending.map(item => item.entityId));
+      const local = (await this.getCustomers(tenantId)).filter(item => pendingIds.has(item.id));
+      const merged = new Map(enriched.map(item => [item.id, item]));
+      for (const item of local) merged.set(item.id, item);
       await this.db.customers.where("tenantId").equals(tenantId).delete();
-      await this.db.customers.bulkPut(enriched);
+      await this.db.customers.bulkPut([...merged.values()]);
     });
   }
 
@@ -383,8 +389,15 @@ export class OfflineRepository {
       version: 1
     };
 
-    await this.db.outbox.put(outboxItem);
-    return outboxItem;
+    return this.db.transaction("rw", this.db.outbox, async () => {
+      // Two commands recorded in the same millisecond must still have an
+      // unambiguous FIFO order. Otherwise each can block on the other.
+      const previous = await this.getAllOutbox(tenantId);
+      outboxItem.clientTimestamp = previous.reduce((next, item) =>
+        Math.max(next, (item.clientTimestamp || 0) + 1), now);
+      await this.db.outbox.put(outboxItem);
+      return outboxItem;
+    });
   }
 
   /**
@@ -735,6 +748,7 @@ export class OfflineRepository {
    * 2. Enqueues an outbox operation with idempotency key
    */
   public async recordCustomerOffline(tenantId: string, customer: any): Promise<OfflineOutboxItem> {
+    return this.db.transaction("rw", [this.db.customers, this.db.outbox], async () => {
     await this.putCustomer(tenantId, customer);
 
     const idempotencyKey = `ik_cust_${customer.id}`;
@@ -746,6 +760,7 @@ export class OfflineRepository {
       endpoint: "/api/customers",
       method: "POST",
       idempotencyKey
+    });
     });
   }
 

@@ -111,7 +111,7 @@ export default function SettingsPanel({
     const rawVpa = (upiInputVpa || activeTenant.vpa || "").trim();
     if(!rawVpa) {setQrPreviewUrl(null);return;}
     const vpa = rawVpa;
-    const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam POS").trim());
+    const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam Pos").trim());
     const amt = parseFloat(testAmount) > 0 ? parseFloat(testAmount).toFixed(2) : "1.00";
     const note = encodeURIComponent(`Test QR - ${activeTenant.name}`);
     const uri = `upi://pay?pa=${vpa}&pn=${name}&am=${amt}&cu=INR&tn=${note}`;
@@ -257,7 +257,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Production Monitoring & Alerting",
       gdprPrivacy: "GDPR Privacy & Data Portability",
       staffCredentials: "Staff Credentials & Permissions Control",
-      settingsTitle: "Aatmyam POS Administration Settings",
+      settingsTitle: "Aatmyam Pos Administration Settings",
       generalTab: "General Settings",
       passwordTab: "Change PIN / Password",
       languageTab: "Language Change",
@@ -291,7 +291,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Monitoreo de Producción y Alertas",
       gdprPrivacy: "Privacidad GDPR y Portabilidad de Datos",
       staffCredentials: "Credenciales de Personal y Control de Permisos",
-      settingsTitle: "Configuración Administrativa de Aatmyam POS",
+      settingsTitle: "Configuración Administrativa de Aatmyam Pos",
       generalTab: "Configuración General",
       passwordTab: "Cambiar PIN / Contraseña",
       languageTab: "Cambiar Idioma",
@@ -308,7 +308,7 @@ export default function SettingsPanel({
       monitoringAlerting: "Surveillance de Production et Alertes",
       gdprPrivacy: "Confidentialité GDPR et Portabilité des Données",
       staffCredentials: "Identifiants du Personnel et Contrôle des Permissions",
-      settingsTitle: "Paramètres d'Administration Aatmyam POS",
+      settingsTitle: "Paramètres d'Administration Aatmyam Pos",
       generalTab: "Paramètres Généraux",
       passwordTab: "Modifier le PIN / Mot de passe",
       languageTab: "Changer de Langue",
@@ -510,12 +510,12 @@ export default function SettingsPanel({
               </div>
 
               {/* Status and State Indicator */}
-              <div className="text-[11px] leading-relaxed flex items-start gap-1.5">
+              {gstinInput.trim() && <div className="text-[11px] leading-relaxed flex items-start gap-1.5">
                 <Info className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
                 <span className={getGstinStatus(gstinInput).color}>
                   {getGstinStatus(gstinInput).text}
                 </span>
-              </div>
+              </div>}
 
               <div className="border-t border-slate-100 pt-3 space-y-1.5">
                 <label htmlFor="settings-fssai-input" className="block text-xs font-bold text-slate-800">
@@ -529,12 +529,10 @@ export default function SettingsPanel({
                   value={fssaiInput}
                   onChange={(e) => setFssaiInput(e.target.value)}
                   placeholder="Enter your restaurant's 14-digit number"
-                  aria-describedby="settings-fssai-help"
+
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono text-slate-800 focus:outline-none focus:border-emerald-500"
                 />
-                <p id="settings-fssai-help" className="text-[11px] text-slate-500">
-                  Leave blank to omit FSSAI from both dashboard invoices and thermal receipts.
-                </p>
+
               </div>
 
               {/* Live Receipt Header Preview */}
@@ -589,17 +587,6 @@ export default function SettingsPanel({
               </div>
             </div>
 
-            {/* Why previous QR was invalid banner */}
-            <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl space-y-1 text-xs text-amber-900">
-              <div className="font-bold flex items-center gap-1.5 text-amber-800">
-                <Info className="w-4 h-4 text-amber-600 shrink-0" />
-                <span>Why did the payment QR code show "Invalid" previously?</span>
-              </div>
-              <p className="text-[11px] text-amber-800/90 leading-relaxed">
-                When customers scan with <b>PhonePe, Google Pay, or Paytm</b>, the banking network looks up the receiver's UPI ID. If it is set to a placeholder (e.g. <code>veggiepos@upi</code>), the bank rejects the payment as <b>"Invalid UPI ID"</b>. Entering your authentic merchant/bank UPI ID below routes customer payments directly into your bank account.
-              </p>
-            </div>
-
             {/* UPI ID / VPA Input */}
             <div className="space-y-3">
               <div>
@@ -624,7 +611,7 @@ export default function SettingsPanel({
               {/* Merchant Display Name Input (Optional) */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Merchant / Payee Name <span className="text-slate-400 font-normal">(Optional, defaults to restaurant name)</span>
+                  Merchant / Payee Name
                 </label>
                 <input
                   type="text"
@@ -656,7 +643,7 @@ export default function SettingsPanel({
                   </div>
                 )}
                 <span className="text-[10px] font-mono text-slate-500 font-bold mt-1 text-center truncate max-w-[130px]">
-                  {upiInputVpa.trim() || "veggiepos@upi"}
+                  {upiInputVpa.trim() || "Aatmyampos@upi"}
                 </span>
               </div>
 
@@ -679,16 +666,16 @@ export default function SettingsPanel({
                   </div>
                 </div>
 
-                <p className="text-[11px] text-slate-500 leading-snug">
-                  Scan this live QR code right now with your phone's <b>PhonePe or Google Pay</b> to verify that your bank account and restaurant name load properly!
-                </p>
+
 
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     type="button"
+                    disabled={!qrPreviewUrl}
                     onClick={() => {
-                      const vpa = (upiInputVpa || activeTenant.vpa || "veggiepos@upi").trim();
-                      const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam POS").trim());
+                      const vpa = (upiInputVpa || activeTenant.vpa || "").trim();
+                      if (!vpa) return;
+                      const name = encodeURIComponent((upiMerchantInput || activeTenant.name || "Aatmyam Pos").trim());
                       const amt = parseFloat(testAmount) > 0 ? parseFloat(testAmount).toFixed(2) : "1.00";
                       const uri = `upi://pay?pa=${vpa}&pn=${name}&am=${amt}&cu=INR&tn=TestQR`;
                       navigator.clipboard?.writeText(uri);
@@ -753,7 +740,7 @@ export default function SettingsPanel({
                 <option value="80mm">80mm receipt roll (default)</option>
                 <option value="58mm">58mm receipt roll</option>
               </select>
-              <p>Saved on this device for browser receipt printing. In the print dialog, select the matching printer and paper size. This does not pair or configure the printer itself.</p>
+
             </div>
           </div>
         </div>
@@ -850,18 +837,6 @@ export default function SettingsPanel({
             </button>
           </form>
 
-          {/* Hindi description as requested */}
-          <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-[11px] text-blue-800 leading-relaxed space-y-2">
-            <h4 className="font-bold flex items-center gap-1 text-blue-900">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-              <span>पिन/पासवर्ड बदलने से होने वाले प्रभाव (Effects of changing PIN/Password):</span>
-            </h4>
-            <ul className="list-disc pl-4 space-y-1 text-blue-700">
-              <li><b>तत्काल प्रभाव (Instant Effect):</b> पिन बदलते ही टर्मिनल लॉक स्क्रीन पर लॉग इन करने के लिए नए पिन का उपयोग करना अनिवार्य हो जाएगा। पुराना पिन तुरंत काम करना बंद कर देगा।</li>
-              <li><b>सुरक्षा (Enhanced Security):</b> यदि आपका पिन लीक हो गया था, तो नया पिन सेट करने से अनधिकृत व्यक्ति आपकी बिलिंग या डेटा तक नहीं पहुँच पाएंगे।</li>
-              <li><b>उदाहरण (Example):</b> यदि आपका पुराना पिन <code>1111</code> था और आपने इसे बदलकर <code>5678</code> किया, तो अब लॉक स्क्रीन को केवल <code>5678</code> द्वारा ही खोला जा सकेगा। पुराना पिन अब काम नहीं करेगा।</li>
-            </ul>
-          </div>
         </div>
       )}
         {generalPane==="language" && (
@@ -948,7 +923,7 @@ export default function SettingsPanel({
               <div className="flex items-center justify-between py-3 pt-4">
                 <div>
                   <h3 className="font-bold text-slate-800 text-sm">Block Orders if Stock Insufficient</h3>
-                  <p className="text-slate-500 mt-0.5">Strict mode: Prevent cashier checkouts if ingredient stock levels would drop below 0.</p>
+
                 </div>
                 <input
                   type="checkbox"
@@ -1089,10 +1064,10 @@ export default function SettingsPanel({
             <div>
               <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
                 <Bell className="w-5 h-5 text-indigo-600" />
-                {t("monitoringAlerting")}
+                Service Alerts
               </h2>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                Configure direct integrations to forward Aatmyam POS application crashes and database errors to Slack channels, Sentry telemetry, or your operations email address.
+                Receive service error alerts in your connected Slack channel.
               </p>
             </div>
 
@@ -1100,8 +1075,8 @@ export default function SettingsPanel({
               {/* Alert Active Switch */}
               <div className="flex items-center justify-between bg-indigo-50/40 p-3 rounded-lg border border-indigo-100/60">
                 <div>
-                  <h4 className="font-bold text-indigo-950">Enable Alerting & Dispatch</h4>
-                  <p className="text-[10px] text-indigo-600 mt-0.5 font-medium">Toggle all automated Slack/Sentry notifications off or on.</p>
+                  <h4 className="font-bold text-indigo-950">Enable service alerts</h4>
+                  <p className="text-[10px] text-indigo-600 mt-0.5 font-medium">Send alerts when the service encounters an error.</p>
                 </div>
                 <input
                   type="checkbox"
@@ -1117,7 +1092,7 @@ export default function SettingsPanel({
                 <div className="flex items-center justify-between">
                   <label className="font-bold text-slate-700 flex items-center gap-1.5">
                     <Activity className="w-3.5 h-3.5 text-slate-400" />
-                    Slack Incoming Webhook URL
+                    Slack alert connection
                   </label>
                   <button
                     onClick={() => triggerTestAlert("Slack Webhook")}
@@ -1138,65 +1113,8 @@ export default function SettingsPanel({
                 />
               </div>
 
-              {/* Sentry DSN Input */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-700 flex items-center gap-1.5">
-                    <Settings className="w-3.5 h-3.5 text-slate-400" />
-                    Sentry DSN
-                  </label>
-                  <button
-                    onClick={() => triggerTestAlert("Sentry DSN")}
-                    disabled={testingSentry || !settings.sentryDsn}
-                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 disabled:text-slate-400 transition flex items-center gap-1 cursor-pointer"
-                    id="settings-test-sentry-btn"
-                  >
-                    {testingSentry ? "Dispatching..." : "Test Ingest"}
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  placeholder="https://publicKey@o0.ingest.sentry.io/project"
-                  value={settings.sentryDsn || ""}
-                  onChange={(e) => setSettings({ ...settings, sentryDsn: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-mono text-xs focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700"
-                  id="settings-sentry-dsn-input"
-                />
-              </div>
-
-              {/* Email Alert Address Input */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-700 flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-slate-400" />
-                    Operations Email Alerts
-                  </label>
-                  <button
-                    onClick={() => triggerTestAlert("Email Address")}
-                    disabled={testingEmail || !settings.emailAlertAddress}
-                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 disabled:text-slate-400 transition flex items-center gap-1 cursor-pointer"
-                    id="settings-test-email-btn"
-                  >
-                    {testingEmail ? "Logging..." : "Test Dispatch"}
-                  </button>
-                </div>
-                <input
-                  type="email"
-                  placeholder="alerts@yourdomain.com"
-                  value={settings.emailAlertAddress || ""}
-                  onChange={(e) => setSettings({ ...settings, emailAlertAddress: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-mono text-xs focus:outline-none focus:border-indigo-500 focus:bg-white text-slate-700"
-                  id="settings-email-alert-input"
-                />
-              </div>
             </div>
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[10px] text-slate-500 leading-relaxed space-y-1">
-              <p className="font-semibold text-slate-700">🔐 Security & Env Fallbacks:</p>
-              <p>
-                Credentials saved here are scoped locally to <b>{activeTenant.name}</b>. Alternatively, you can configure <code>SLACK_WEBHOOK_URL</code> or <code>SENTRY_DSN</code> in the global system secrets for cross-tenant production coverage.
-              </p>
-            </div>
           </div>
 
 
@@ -1209,10 +1127,10 @@ export default function SettingsPanel({
             <div>
               <h2 className="text-base font-bold text-slate-800 border-b border-slate-100 pb-3 flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-pink-600" />
-                {t("gdprPrivacy")}
+                Your Data
               </h2>
               <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                In accordance with the General Data Protection Regulation (GDPR), Aatmyam POS empowers you with direct control over your business data assets.
+                Download your restaurant records or manage saved data on this device.
               </p>
             </div>
 
@@ -1221,9 +1139,9 @@ export default function SettingsPanel({
               <div className="p-3.5 bg-slate-50 border border-slate-150 rounded-xl space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h4 className="font-bold text-slate-800 text-xs">Export server data</h4>
+                    <h4 className="font-bold text-slate-800 text-xs">Download restaurant data</h4>
                     <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">
-                      Download a comprehensive JSON data matrix containing all ingredients, menus, transaction histories, staff lists, and CRM records under your Tenant ID.
+                      Download a copy of your menu, inventory, bills, staff and guest records.
                     </p>
                   </div>
                 </div>
@@ -1241,7 +1159,7 @@ export default function SettingsPanel({
                   id="settings-export-data-btn"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
-                  <span>Export my data (JSON)</span>
+                  <span>Download data</span>
                 </button>
               </div>
 
@@ -1249,9 +1167,9 @@ export default function SettingsPanel({
               <div className="p-3.5 bg-rose-50/50 border border-rose-100 rounded-xl space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <h4 className="font-bold text-rose-800 text-xs">Clear data on this device</h4>
+                    <h4 className="font-bold text-rose-800 text-xs">Clear saved data</h4>
                     <p className="text-[10px] text-rose-600/80 mt-0.5 leading-relaxed">
-                      Clear this browser’s saved restaurant data. Cloud records remain available. Account deletion requires contacting the service owner.
+                      Remove this restaurant’s saved data from this browser. Your cloud records stay available.
                     </p>
                   </div>
                 </div>

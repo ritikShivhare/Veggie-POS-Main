@@ -40,7 +40,7 @@ export default function AICopilot({ activeTenant, currentStaff }: AICopilotProps
         {
           id: "msg-welcome",
           sender: "ai",
-          text: `Namaste & Welcome to Aatmyam POS! I am your AI Product & Operations Advisor.
+          text: `Namaste & Welcome to Aatmyam Pos! I am your AI Product & Operations Advisor.
 
 I have full information about our Touch POS Billing, Kitchen KOT/KDS, Recipe Bill of Materials (BOM), Table Floor Management, Pricing Plans, and ROI Leakage Protections.
 
@@ -107,17 +107,17 @@ How can I help you or your restaurant today? (Feel free to ask in English or Hin
       // Smart offline fallback
       setTimeout(() => {
         const planSummary = Object.values(PLAN_LIMITS).map(plan => `• ${plan.label}: ₹${plan.price}/month`).join("\n");
-        let reply = "Aatmyam POS is in early access for restaurants and cafés. Explore billing, kitchen tickets, inventory, and reports in a walkthrough.";
+        let reply = "Aatmyam Pos is in early access for restaurants and cafés. Explore billing, kitchen tickets, inventory, and reports in a walkthrough.";
         
         const lowercaseText = text.toLowerCase();
         if (lowercaseText.includes("price") || lowercaseText.includes("cost") || lowercaseText.includes("plan") || lowercaseText.includes("pricing") || lowercaseText.includes("dam")) {
-          reply = `Aatmyam POS monthly plans:\n${planSummary}\nOne outlet per restaurant. Contact us to discuss setup and availability.`;
+          reply = `Aatmyam Pos monthly plans:\n${planSummary}\nOne outlet per restaurant. Contact us to discuss setup and availability.`;
         } else if (lowercaseText.includes("hindi") || lowercaseText.includes("kya") || lowercaseText.includes("kaise")) {
-          reply = `Aatmyam POS abhi early access mein hai. Ismein billing, kitchen tickets aur inventory workflows ka walkthrough dekh sakte hain.\nMonthly plans:\n${planSummary}\nSetup timing aur device compatibility aapke restaurant ke liye check karni hogi.`;
+          reply = `Aatmyam Pos abhi early access mein hai. Ismein billing, kitchen tickets aur inventory workflows ka walkthrough dekh sakte hain.\nMonthly plans:\n${planSummary}\nSetup timing aur device compatibility aapke restaurant ke liye check karni hogi.`;
         } else if (lowercaseText.includes("recipe") || lowercaseText.includes("ingredient") || lowercaseText.includes("stock") || lowercaseText.includes("inventory")) {
-          reply = `In Aatmyam POS, each dish links to raw ingredients via our Bill of Materials (BOM). When a cashier checks out an order at the POS, ingredient quantities (like cheese, coffee beans, sauces) are automatically deducted in real time, preventing inventory leakage.`;
+          reply = `In Aatmyam Pos, each dish links to raw ingredients via our Bill of Materials (BOM). When a cashier checks out an order at the POS, ingredient quantities (like cheese, coffee beans, sauces) are automatically deducted in real time, preventing inventory leakage.`;
         } else if (lowercaseText.includes("hardware") || lowercaseText.includes("printer") || lowercaseText.includes("ipad") || lowercaseText.includes("tablet")) {
-          reply = `Aatmyam POS runs in any modern browser on iPads, Android tablets, Windows laptops, MacBooks, and phones. It connects seamlessly with standard 58mm/80mm ESC/POS thermal receipt and kitchen ticket printers over Bluetooth, USB, and LAN/Wi-Fi.`;
+          reply = `Aatmyam Pos runs in any modern browser on iPads, Android tablets, Windows laptops, MacBooks, and phones. It connects seamlessly with standard 58mm/80mm ESC/POS thermal receipt and kitchen ticket printers over Bluetooth, USB, and LAN/Wi-Fi.`;
         } else if (lowercaseText.includes("login") || lowercaseText.includes("terminal") || lowercaseText.includes("sign in")) {
           reply = `To access your restaurant's billing terminal, click 'Sign In' in the top navigation bar. Enter your Store Code or Restaurant Name once to connect this device, and then your staff can log in using their 4-digit PIN!`;
         }
@@ -146,7 +146,7 @@ How can I help you or your restaurant today? (Feel free to ask in English or Hin
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 right-6 z-[80] p-4 bg-[#181A18] hover:bg-[#6E8F45] text-[#FBF9F5] rounded-full shadow-2xl flex items-center justify-center gap-2.5 transition-all duration-200 hover:scale-105 active:scale-95 group cursor-pointer border border-[#2E332D]"
         id="ai-copilot-trigger-bubble"
-        title="Aatmyam POS AI Assistant"
+        title="Aatmyam Pos AI Assistant"
       >
         <span className="relative flex h-3 w-3">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#6E8F45] opacity-75"></span>
@@ -179,7 +179,7 @@ How can I help you or your restaurant today? (Feel free to ask in English or Hin
                   </div>
                   <div>
                     <h3 className="font-serif text-sm font-bold tracking-tight flex items-center gap-1.5 text-[#FBF9F5]">
-                      Aatmyam POS AI Assistant
+                      Aatmyam Pos AI Assistant
                       <span className="bg-[#6E8F45]/20 text-[#84A955] text-[9px] px-1.5 py-0.5 rounded font-mono font-bold tracking-widest uppercase">AI</span>
                     </h3>
                     <p className="text-[10px] text-[#A6AEA0] font-medium">Platform & Operations Advisor</p>
@@ -236,7 +236,7 @@ How can I help you or your restaurant today? (Feel free to ask in English or Hin
             {/* SUGGESTIONS PILLS */}
             <div className="p-3 bg-[#F4F0E8] border-t border-[#EAE5DA] shrink-0 flex gap-2 overflow-x-auto whitespace-nowrap scrollbar-none">
               <button
-                onClick={() => handleSuggestionClick("Aatmyam POS ke main features kya hain?")}
+                onClick={() => handleSuggestionClick("Aatmyam Pos ke main features kya hain?")}
                 className="px-2.5 py-1.5 bg-[#FBF9F5] border border-[#EAE5DA] hover:border-[#6E8F45] rounded-lg text-[10px] text-[#1C1E1B] font-semibold cursor-pointer transition-all"
               >
                 Features in Hindi 🇮🇳
@@ -260,7 +260,7 @@ How can I help you or your restaurant today? (Feel free to ask in English or Hin
               <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  placeholder="Ask anything about Aatmyam POS or restaurant operations..."
+                  placeholder="Ask anything about Aatmyam Pos or restaurant operations..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}

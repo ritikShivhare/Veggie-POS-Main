@@ -20,18 +20,40 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
   React.useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    let previousFocus: HTMLElement | null = null;
+    if (open && !dialog.open) {
+      previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      dialog.showModal();
+    }
     if (!open && dialog.open) dialog.close();
-    return () => { if (dialog.open) dialog.close(); };
+    return () => {
+      if (dialog.open) dialog.close();
+      // An open dialog may be unmounted before the browser runs its close steps.
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
   }, [open]);
 
   return <dialog
     ref={ref}
+    aria-modal="true"
     aria-labelledby={titleId}
     aria-describedby={description ? descriptionId : undefined}
     onCancel={(event) => { event.preventDefault(); onOpenChange(false); }}
+    onKeyDown={(event) => {
+      if (event.key !== "Tab") return;
+      const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]'))
+        .filter((element) => element.getClientRects().length > 0);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }}
+    onClick={(event) => {
+      if (event.target !== event.currentTarget) return;
+      const bounds = event.currentTarget.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onOpenChange(false);
+    }}
     className={[
-      "m-auto w-[calc(100%-1.5rem)] max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto",
+      "m-auto w-[calc(100%_-_1.5rem)] max-w-lg max-h-[calc(100dvh_-_2rem)] overflow-y-auto",
       "rounded-app-card border border-app-border bg-white p-0 text-app-text shadow-2xl",
       "backdrop:bg-slate-950/50",
       className,
