@@ -1,7 +1,9 @@
 import { ApiClient } from "../shared/services/api";
 import { offlineRepository,OutboxProcessor } from "../shared/services/offline";
-import React, { useState } from "react";
-import { Customer } from "../shared/types";
+import React, { useState, useEffect } from "react";
+import { Customer, Order } from "../shared/types";
+import { useAppContext } from "../shared/context/AppContext";
+import { displayOrderNumber } from "../../../shared/orderNumber";
 import {
   Search,
   Plus,
@@ -25,6 +27,14 @@ interface CRMLoyaltyProps {
 }
 
 export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps) {
+  const { currentStaff, activeTenant } = useAppContext();
+  const canAdjustPoints = ["Owner", "Manager"].includes(currentStaff?.role || "");
+  const [savingGuest, setSavingGuest] = useState(false);
+  const [guestMessage, setGuestMessage] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<Order[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(customers[0]?.id || "");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [showAddGuestModal, setShowAddGuestModal] = useState<boolean>(false);
@@ -46,6 +56,42 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
 
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId) || customers[0];
 
+  useEffect(() => {
+    const synced = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.tenantId === activeTenant.tenantId && detail.entityType === 'customer') {
+        setGuestMessage('Guest synced to cloud.');
+      }
+    };
+    const needsAttention = (event: Event) => {
+      const item = (event as CustomEvent).detail?.item;
+      if (item?.tenantId === activeTenant.tenantId && item.entityType === 'customer') {
+        setGuestMessage('Guest is saved on this device. Cloud sync needs attention; check the sync status.');
+      }
+    };
+    window.addEventListener('veggiepos_realtime_event', synced);
+    const failures = ['veggiepos_reconcile_conflict', 'veggiepos_validation_failed', 'veggiepos_forbidden_error'];
+    failures.forEach(event => window.addEventListener(event, needsAttention));
+    return () => {
+      window.removeEventListener('veggiepos_realtime_event', synced);
+      failures.forEach(event => window.removeEventListener(event, needsAttention));
+    };
+  }, [activeTenant.tenantId]);
+
+  useEffect(() => {
+    if (!historyOpen || !selectedCustomer) return;
+    let active = true;
+    setHistoryLoading(true); setHistoryError(""); setHistory([]);
+    ApiClient.authenticatedFetch(`/api/customers/${encodeURIComponent(selectedCustomer.id)}/history`)
+      .then(async response => {
+        const result = await response.json();
+        if (!response.ok || !result.success || !Array.isArray(result.data)) throw new Error("Guest history could not be loaded. Please retry.");
+        if (active) setHistory(result.data);
+      }).catch(error => { if (active) setHistoryError(error.message); })
+      .finally(() => { if (active) setHistoryLoading(false); });
+    return () => { active = false; };
+  }, [historyOpen, selectedCustomer?.id, activeTenant.tenantId]);
+
   const filteredCustomers = customers.filter(
     (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -54,6 +100,7 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
 
   const handleAddGuestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingGuest) return;
     if (!newGuest.name || !newGuest.phone) {
       alert("Name and Phone Number are required!");
       return;
@@ -67,20 +114,30 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
       dob: newGuest.dob || undefined,
       anniversary: newGuest.anniversary || undefined,
       gstin: newGuest.gstin || undefined,
-      loyaltyPoints: Number(newGuest.loyaltyPoints) || 0,
+      loyaltyPoints: 0,
       comingSince: new Date().toISOString().split("T")[0],
-      lastVisited: new Date().toISOString().split("T")[0],
-      totalVisits: 1,
+      lastVisited: "",
+      totalVisits: 0,
       totalSpend: 0,
       maxBillAmount: 0,
       minBillAmount: 0
     };
 
-    try {await offlineRepository.recordCustomerOffline(localStorage.getItem("veggiepos_active_tenant_id") || "",createdGuest);await OutboxProcessor.triggerDrain();}catch(error:any){alert(`Customer was not saved: ${error.message}`);return;}
-    const updated = [...customers, createdGuest];
-    setCustomers(updated);
+    setSavingGuest(true);
+    try {
+      await offlineRepository.recordCustomerOffline(activeTenant.tenantId, createdGuest);
+    } catch(error:any) {
+      setGuestMessage(`Guest was not saved: ${error.message}`);
+      setSavingGuest(false); return;
+    }
+    setCustomers(previous => [...previous.filter(customer => customer.id !== createdGuest.id), createdGuest]);
+    setGuestMessage("Guest saved on this device. Cloud sync is pending; you can continue working.");
+    void OutboxProcessor.triggerDrain(activeTenant.tenantId).catch(() => {
+      setGuestMessage("Guest is saved on this device. Cloud sync needs attention; check the sync status.");
+    });
     setSelectedCustomerId(createdGuest.id);
     setShowAddGuestModal(false);
+    setSavingGuest(false);
     setNewGuest({
       name: "",
       phone: "",
@@ -93,11 +150,12 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
   };
 
   const handlePointsAdjustmentSubmit=async()=>{
+    if (!canAdjustPoints) return;
     const amount=Number(pointsAdjustment);if(!Number.isInteger(amount) || amount<=0 || !selectedCustomer) return;
     const reason=window.prompt("Reason for points adjustment:");if(!reason?.trim()) return;
     try {
       const response=await ApiClient.authenticatedFetch(`/api/customers/${encodeURIComponent(selectedCustomer.id)}/points`,{method:"POST",headers:{"Content-Type":"application/json","Idempotency-Key":ApiClient.generateIdempotencyKey("points")},body:JSON.stringify({delta:adjustmentType==="add"?amount:-amount,reason,version:selectedCustomer.version})});const data=await response.json();
-      if(!response.ok || !data.success) throw new Error(data.message || data.error || "Adjustment failed.");setCustomers(customers.map(c=>c.id===data.data.id?data.data:c));setPointsAdjustment("");
+      if(!response.ok || !data.success) throw new Error(data.message || data.error || "Adjustment failed.");setCustomers(previous=>previous.map(c=>c.id===data.data.id?data.data:c));setPointsAdjustment("");
     }catch(error:any){alert(error.message);}
   };
 
@@ -116,7 +174,7 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
   };
 
   return (
-    <div className="h-full flex flex-col lg:flex-row overflow-hidden bg-slate-50" id="crm-loyalty-tab-view">
+    <div className="h-full min-h-0 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden bg-slate-50" id="crm-loyalty-tab-view">
 
       {/* LEFT COLUMN: GUEST LIST */}
       <div className="w-full lg:w-96 border-r border-slate-200 flex flex-col bg-white shrink-0">
@@ -187,6 +245,7 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
 
       {/* RIGHT COLUMN: DETAILED VIEW (Posease Slide 5 Premium Interface) */}
       <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 bg-slate-50">
+        {guestMessage && <p role="status" className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">{guestMessage}</p>}
         {selectedCustomer ? (
           <div className="max-w-4xl w-full mx-auto space-y-6">
 
@@ -271,20 +330,11 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 border-t border-slate-100/60 pt-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
-                      <FileSpreadsheet className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400 font-medium">GSTIN (Tax Registration Number)</p>
-                      <p className="font-bold text-slate-700 font-mono">{selectedCustomer.gstin || "No GST Registration Connected"}</p>
-                    </div>
-                  </div>
                 </div>
               </div>
 
               {/* SECTION B: LOYALTY REWARDS ADJUSTMENT PANEL */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+              {canAdjustPoints && <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
                 <div>
                   <h3 className="font-bold text-slate-800 text-xs uppercase tracking-wider border-b border-slate-100 pb-2 flex items-center gap-1.5 text-amber-600">
                     <Coins className="w-4 h-4" />
@@ -348,7 +398,7 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
                     {selectedCustomer.loyaltyPoints > 200 ? "👑 Elite Gold Guest" : "🌿 Silver Club Member"}
                   </span>
                 </div>
-              </div>
+              </div>}
             </div>
 
             {/* SECTION C: GUEST TRANSACTION HISTORY (MATCHING SLIDE 5 SPECIFICATION) */}
@@ -372,10 +422,10 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
                 </div>
 
                 {/* 3. Total Visits */}
-                <div className="bg-emerald-50/50 border border-emerald-100 p-3 rounded-xl text-center">
+                <button type="button" id="crm-total-visits" onClick={() => setHistoryOpen(true)} className="bg-emerald-50/50 hover:bg-emerald-100 border border-emerald-100 p-3 rounded-xl text-center cursor-pointer" aria-label="View guest visit history">
                   <p className="text-[9px] font-bold text-emerald-700/80 uppercase tracking-wider">Total Visits</p>
                   <p className="text-base font-black text-slate-800 mt-0.5">{selectedCustomer.totalVisits} visits</p>
-                </div>
+                </button>
 
                 {/* 4. Total Spend */}
                 <div className="bg-rose-50/50 border border-rose-100 p-3 rounded-xl text-center">
@@ -484,30 +534,6 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">GSTIN Number (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g., 07AAAAA1111A1Z1"
-                  value={newGuest.gstin}
-                  onChange={(e) => setNewGuest({ ...newGuest, gstin: e.target.value })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white"
-                  id="crm-modal-gstin"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Starting Loyalty Balance</label>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={newGuest.loyaltyPoints || ""}
-                  onChange={(e) => setNewGuest({ ...newGuest, loyaltyPoints: Number(e.target.value) })}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-slate-800 focus:outline-none focus:border-blue-500 focus:bg-white"
-                  id="crm-modal-loyalty"
-                />
-              </div>
-
               <div className="flex gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -518,10 +544,11 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
                 </button>
                 <button
                   type="submit"
+                  disabled={savingGuest}
                   className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition shadow"
                   id="crm-submit-new-guest"
                 >
-                  Save Guest
+                  {savingGuest ? "Saving…" : "Save Guest"}
                 </button>
               </div>
             </form>
@@ -529,6 +556,23 @@ export default function CRMLoyalty({ customers, setCustomers }: CRMLoyaltyProps)
         </div>
       )}
 
+      {historyOpen && <div className="fixed inset-0 z-50 bg-slate-900/60 flex items-center justify-center p-4">
+        <section role="dialog" aria-modal="true" aria-labelledby="guest-history-title" className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+          <header className="p-4 border-b flex items-center justify-between gap-3">
+            <h2 id="guest-history-title" className="font-bold text-slate-900">Guest History · {selectedCustomer?.name}</h2>
+            <button type="button" onClick={() => setHistoryOpen(false)} className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold">Done</button>
+          </header>
+          <div className="p-4 overflow-y-auto space-y-3">
+            {historyLoading ? <p role="status">Loading visits…</p> : historyError ? <div role="alert"><p>{historyError}</p><button type="button" onClick={() => { setHistoryOpen(false); }} className="underline">Close and retry</button></div> : history.length === 0 ? <p className="text-sm text-slate-500">No paid visits recorded for this guest.</p> : history.map(order => <article key={order.id} className="rounded-xl border border-slate-200 p-4 space-y-2 text-sm">
+              <div className="flex flex-wrap justify-between gap-2 font-semibold"><span>Bill #{displayOrderNumber(order.orderNumber)}</span><time>{new Date(order.paidAt || order.date).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "medium", timeStyle: "short" })}</time></div>
+              <ul className="divide-y divide-slate-100">{order.items.map((item, index) => <li key={index} className="py-2"><div className="flex justify-between gap-3"><span>{item.quantity} × {item.menuItem?.name || "Menu item"}</span><span>₹{((item.menuItem?.price || 0) * item.quantity).toFixed(2)}</span></div>{(item.note || item.notes) && <p className="text-xs text-slate-500">{item.note || item.notes}</p>}</li>)}</ul>
+              <div className="flex flex-wrap justify-between gap-3 text-xs text-slate-600"><span>Subtotal ₹{order.subtotal.toFixed(2)}</span><span>Tax ₹{order.tax.toFixed(2)}</span><span>Discount ₹{(order.discount || 0).toFixed(2)}</span></div>
+              <p className="font-bold">Total ₹{order.total.toFixed(2)} · {order.paymentMethod}</p>
+              <p className="text-xs text-slate-600">Points earned: {order.earnedPoints ?? "Not recorded"} · Points used: {order.redeemedPoints ?? "Not recorded"}</p>
+            </article>)}
+          </div>
+        </section>
+      </div>}
     </div>
   );
 }

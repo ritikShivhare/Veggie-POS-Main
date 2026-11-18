@@ -3,10 +3,10 @@ import React, {act} from 'react';
 import {createRoot, Root} from 'react-dom/client';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
-const mocks=vi.hoisted(()=>({getSync:vi.fn(),saveSync:vi.fn(),loadLocal:vi.fn(),saveLocal:vi.fn(),getOrders:vi.fn()}));
+const mocks=vi.hoisted(()=>({getSync:vi.fn(),saveSync:vi.fn(),loadLocal:vi.fn(),saveLocal:vi.fn(),getOrders:vi.fn(),getCustomers:vi.fn(async()=>[])}));
 vi.mock('../src/features/shared/services/api',()=>({ApiClient:{getTenantSync:mocks.getSync,saveTenantSync:mocks.saveSync}}));
 vi.mock('../src/features/shared/services/offline',()=>({
-  offlineRepository:{getFullTenantState:mocks.loadLocal,saveFullTenantState:mocks.saveLocal,getOrders:mocks.getOrders,resumeAuthOperations:vi.fn(async()=>{})},
+  offlineRepository:{getFullTenantState:mocks.loadLocal,saveFullTenantState:mocks.saveLocal,getOrders:mocks.getOrders,getCustomers:mocks.getCustomers,resumeAuthOperations:vi.fn(async()=>{})},
   OutboxProcessor:{triggerDrain:vi.fn(async()=>{})}
 }));
 import {useSyncState} from '../src/features/shared/hooks/useSyncState';

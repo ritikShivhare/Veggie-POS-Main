@@ -122,7 +122,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
       setPurchases([]);
       setStaffList(currentStaff ? [currentStaff] : []);
       setShifts([]);
-      
+
       setSettings({
         autoDeductStock: true,
         blockOrdersIfInsufficient: true,
@@ -208,6 +208,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
           await offlineRepository.saveFullTenantState(activeTenantId,d);
           if (!active) return;
           d.orders=await offlineRepository.getOrders(activeTenantId) as Order[];
+          if (d.customers) d.customers=await offlineRepository.getCustomers(activeTenantId);
           if (!active) return;
           {
             const serverStateStr = JSON.stringify({
@@ -259,8 +260,9 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
           await offlineRepository.saveFullTenantState(activeTenantId,d);
           if (!active) return;
           d.orders=await offlineRepository.getOrders(activeTenantId) as Order[];
+          if (d.customers) d.customers=await offlineRepository.getCustomers(activeTenantId);
           if (!active) return;
-          
+
           const serverStateStr = JSON.stringify({
             menuItems: d.menuItems,
             ingredients: d.ingredients,
@@ -283,7 +285,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
           if (d.purchases) setPurchases(d.purchases);
           if (d.shifts) setShifts(d.shifts);
           if (d.settings) setSettings(d.settings);
-          
+
           try {
             offlineRepository.saveFullTenantState(activeTenantId, d).catch(e => console.warn(e));
           } catch (e) {}
@@ -337,7 +339,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
             return;
           }
           console.log(`[Realtime] Connected to server-mediated WebSocket for authenticated tenant.`);
-          
+
           // Send server auth message with session token
           if (currentSessionId && ws?.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: "auth", token: currentSessionId }));
@@ -482,13 +484,14 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   },[menuItems,ingredients,recipes,staffList,settings,activeTenantId,currentSessionId,currentStaff?.role]);
 
   useEffect(()=>{
-    const onSync=(e:any)=>{if(e.detail?.tenantId!==activeTenantId) return;offlineRepository.getOrders(activeTenantId).then(rows=>setOrders(rows as Order[]));};
-    const onError=(e:any)=>{if(e.detail?.item?.tenantId===activeTenantId) setToastMessage({type:"error",text:`Order sync needs attention: ${e.detail.errorMsg}`});};
+    let active = true;
+    const onSync=(e:any)=>{if(e.detail?.tenantId!==activeTenantId) return;offlineRepository.getOrders(activeTenantId).then(rows=>{if(active)setOrders(rows as Order[]);});offlineRepository.getCustomers(activeTenantId).then(rows=>{if(active)setCustomers(rows as Customer[]);});};
+    const onError=(e:any)=>{if(e.detail?.item?.tenantId===activeTenantId) setToastMessage({type:"error",text:`Sync needs attention: ${e.detail.errorMsg}`});};
     const onBlocked=(e:any)=>{if(e.detail?.tenantId===activeTenantId) setToastMessage({type:"error",text:`Order ${e.detail.entityId} is waiting for a rejected earlier operation. Review sync errors before retrying.`});};
     window.addEventListener("veggiepos_realtime_event",onSync);
     window.addEventListener("veggiepos_sync_blocked",onBlocked);
     for(const event of ["veggiepos_reconcile_conflict","veggiepos_validation_failed","veggiepos_forbidden_error"]) window.addEventListener(event,onError);
-    return()=>{window.removeEventListener("veggiepos_sync_blocked",onBlocked);window.removeEventListener("veggiepos_realtime_event",onSync);for(const event of ["veggiepos_reconcile_conflict","veggiepos_validation_failed","veggiepos_forbidden_error"]) window.removeEventListener(event,onError);};
+    return()=>{active=false;window.removeEventListener("veggiepos_sync_blocked",onBlocked);window.removeEventListener("veggiepos_realtime_event",onSync);for(const event of ["veggiepos_reconcile_conflict","veggiepos_validation_failed","veggiepos_forbidden_error"]) window.removeEventListener(event,onError);};
   },[activeTenantId]);
 
   // Global order creation handler

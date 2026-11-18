@@ -1,3 +1,5 @@
+import { displayOrderNumber } from "../../../shared/orderNumber";
+import { printReceipt } from '../shared/utils/printReceipt';
 import React, { useState, useMemo, useEffect } from "react";
 import QRCode from "qrcode";
 import { offlineRepository } from "../shared/services/offline/OfflineRepository";
@@ -99,6 +101,9 @@ export default function POSBilling({
     return () => { window.removeEventListener("aatmyam:receipt-paper-size", syncPaperSize); window.removeEventListener("storage", syncPaperSize); };
   }, []);
   const [kotModalOrder, setKotModalOrder] = useState<Order | null>(null);
+  useEffect(() => {
+    setKotModalOrder(previous => previous ? (orders.find(order => order.id === previous.id) || previous) : null);
+  }, [orders]);
   const [showFloorMap, setShowFloorMap] = useState<boolean>(false);
   const [billsFilter, setBillsFilter] = useState<"unpaid" | "settled" | "all">("unpaid");
   const [paymentSync, setPaymentSync] = useState<Record<string, "pending" | "attention">>({});
@@ -202,7 +207,7 @@ export default function POSBilling({
       }
 
       await onUpdateOrderStatus(cancelModalOrder.id, "Cancelled");
-      alert(`Order #${cancelModalOrder.orderNumber} successfully cancelled! Cryptographic audit entry recorded.`);
+      alert(`Order #${displayOrderNumber(cancelModalOrder.orderNumber)} successfully cancelled! Cryptographic audit entry recorded.`);
       setCancelModalOrder(null);
       setCancelReason("");
       setCancelManagerPin("");
@@ -600,7 +605,7 @@ export default function POSBilling({
     const totalOrderDiscount = Number((loyaltyDiscount + appliedDiscount).toFixed(2));
     const newOrder: Order = {
       id: orderUuid,
-      orderNumber: `${Date.now().toString(36)}-${orderUuid.slice(0,8)}`,
+      orderNumber: `Pending sync · ${orderUuid.slice(0, 6).toUpperCase()}`,
       date: new Date().toISOString(),
       type: orderType,
       tableNo: orderType === "Dine-In" ? tableNo : undefined,
@@ -730,22 +735,8 @@ export default function POSBilling({
                   </span>
                 </button>
 
-                <button
-                  onClick={() => {
-                    setShowDrawerPopModal(true);
-                    setDrawerPopReason("");
-                    setDrawerPopError(null);
-                  }}
-                  className="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
-                  title="Open Cash Drawer without sale (Logged to Audit Trail)"
-                  id="pos-open-drawer-btn"
-                >
-                  <Coins className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="hidden sm:inline">No-Sale Cash Drawer Pop</span>
-                  <span className="sm:hidden">Pop Drawer</span>
-                </button>
                 <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono text-slate-500 shadow-sm">
-                  Cashier: <span className="text-blue-600 font-bold">{currentStaff.name}</span>
+                  {currentStaff.role}: <span className="text-blue-600 font-bold">{currentStaff.name}</span>
                 </div>
               </div>
             </div>
@@ -917,7 +908,6 @@ export default function POSBilling({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-slate-200 pb-3 shrink-0">
               <div>
                 <h2 className="font-display font-bold text-slate-800 text-base">Bills & Settlement Register</h2>
-                <p className="text-slate-500 text-xs mt-0.5">Collect payments, print official ESC/POS thermal receipts, and view live order slips.</p>
               </div>
 
               {/* Filter Tabs: Unpaid vs Settled vs All */}
@@ -1016,7 +1006,7 @@ export default function POSBilling({
                                 }`}>
                                   {order.type} {order.tableNo ? `• ${order.tableNo}` : ""}
                                 </span>
-                                <h4 className="font-bold text-slate-800 text-sm mt-1.5">Order #{order.orderNumber}</h4>
+                                <h4 className="font-bold text-slate-800 text-sm mt-1.5">Order #{displayOrderNumber(order.orderNumber)}</h4>
                               </div>
                               <div className="flex flex-col items-end">
                                 {isPaid ? (
@@ -1706,7 +1696,7 @@ export default function POSBilling({
               <AlertTriangle className="w-6 h-6 shrink-0" />
               <div>
                 <h3 className="text-base font-display font-bold">Authorize Order Cancellation</h3>
-                <p className="text-xs text-slate-500 font-medium">Order #{cancelModalOrder.orderNumber} • Bill Total: INR {cancelModalOrder.total}</p>
+                <p className="text-xs text-slate-500 font-medium">Order #{displayOrderNumber(cancelModalOrder.orderNumber)} • Bill Total: INR {cancelModalOrder.total}</p>
               </div>
             </div>
 
@@ -1757,7 +1747,7 @@ export default function POSBilling({
                 }}
                 className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition"
               >
-                Back / Dismiss
+                Back
               </button>
               <button
                 onClick={handleConfirmCancelOrder}
@@ -2079,7 +2069,7 @@ export default function POSBilling({
 
             {/* Printable Thermal Receipt Container */}
             <div className="p-6 overflow-y-auto max-h-[70vh] bg-white">
-              <div data-paper-size={receiptPaperSize} className="printable-thermal-receipt bg-white text-black p-4 border border-dashed border-slate-300 rounded font-mono text-[11px] leading-relaxed mx-auto">
+              <div id="pos-receipt-print-body" data-paper-size={receiptPaperSize} className="printable-thermal-receipt bg-white text-black p-4 border border-dashed border-slate-300 rounded font-mono text-[11px] leading-relaxed mx-auto">
                 <div className="text-center pb-2 border-b border-dashed border-slate-400">
                   <h2 className="text-sm font-black uppercase tracking-wider">
                     {activeTenant?.name || "VEGGIE RESTAURANT & POS"}
@@ -2102,7 +2092,7 @@ export default function POSBilling({
 
                 <div className="py-2 border-b border-dashed border-slate-400 space-y-0.5 text-[10px]">
                   <div className="flex justify-between">
-                    <span>Invoice #: REC-{receiptModalOrder.orderNumber}</span>
+                    <span>Invoice #: REC-{displayOrderNumber(receiptModalOrder.orderNumber)}</span>
                     <span>{receiptModalOrder.type}</span>
                   </div>
                   <div className="flex justify-between">
@@ -2173,7 +2163,7 @@ export default function POSBilling({
                 Done
               </button>
               <button
-                onClick={() => window.print()}
+                onClick={() => printReceipt('#pos-receipt-print-body')}
                 className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5"
                 id="pos-print-receipt-confirm-btn"
               >
@@ -2206,7 +2196,7 @@ export default function POSBilling({
 
             {/* Printable KOT Slip */}
             <div className="p-6 overflow-y-auto max-h-[70vh] bg-white">
-              <div className="printable-thermal-receipt bg-white text-black p-4 border border-dashed border-slate-400 rounded font-mono text-[11px] leading-relaxed mx-auto">
+              <div id="pos-kot-print-body" data-paper-size={receiptPaperSize} className="printable-thermal-receipt bg-white text-black p-4 border border-dashed border-slate-400 rounded font-mono text-[11px] leading-relaxed mx-auto">
                 <div className="text-center pb-2 border-b-2 border-dashed border-black">
                   <h2 className="text-base font-black tracking-wider">
                     *** KITCHEN ORDER TICKET ***
@@ -2218,7 +2208,7 @@ export default function POSBilling({
 
                 <div className="py-2 border-b border-dashed border-black space-y-0.5 text-[10px]">
                   <div className="flex justify-between font-bold">
-                    <span>KOT #: {kotModalOrder.orderNumber}</span>
+                    <span>KOT #: {displayOrderNumber(kotModalOrder.orderNumber)}</span>
                     <span>TIME: {new Date(kotModalOrder.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                   <div className="flex justify-between">
@@ -2262,10 +2252,10 @@ export default function POSBilling({
                 onClick={() => setKotModalOrder(null)}
                 className="flex-1 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition"
               >
-                Dismiss
+                Done
               </button>
               <button
-                onClick={() => window.print()}
+                onClick={() => printReceipt('#pos-kot-print-body')}
                 className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-amber-600/20 flex items-center justify-center gap-1.5"
                 id="pos-print-kot-confirm-btn"
               >

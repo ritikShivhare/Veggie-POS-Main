@@ -1,3 +1,4 @@
+import { displayOrderNumber } from "../../../shared/orderNumber";
 import {ApiClient} from '../shared/services/api';
 import React, { useState, useEffect, useRef } from "react";
 import { Order, OrderStatus } from "../shared/types";
@@ -126,7 +127,7 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
     }
 
     // Prefer the table identifier for dine-in orders; other orders retain their order number.
-    const identifier = order.tableNo ? `Table ${order.tableNo}` : `Order ${order.orderNumber}`;
+    const identifier = order.tableNo ? `Table ${order.tableNo}` : `Order ${displayOrderNumber(order.orderNumber)}`;
     if (kdsSoundAlerts) speak(`${identifier} ${nextStatus === "Preparing" ? "preparing started" : nextStatus === "Ready" ? "is ready to serve" : `status updated to ${nextStatus}`}`);
   };
 
@@ -236,13 +237,6 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
           <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide">
             {kdsTab === "pending" ? "No new orders" : kdsTab === "preparing" ? "No items in prep" : "No orders waiting"}
           </h2>
-          <p className="text-xs text-slate-400 max-w-xs mt-1.5 leading-relaxed">
-            {kdsTab === "pending"
-              ? "All incoming checkout tickets have been accepted or prepared. Standard KDS standby active."
-              : kdsTab === "preparing"
-              ? "The kitchen is caught up. Start cooking incoming tickets from the 'New Orders' tab."
-              : "No ready orders currently waiting to be picked up or cleared."}
-          </p>
         </div>
       ) : (
         /* Dynamic Orders Grid */
@@ -273,7 +267,7 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
                       }`}>
                         {order.type} {order.tableNo ? `• ${order.tableNo}` : ""}
                       </span>
-                      <h4 className="font-bold text-slate-800 text-sm mt-1.5">Order #{order.orderNumber}</h4>
+                      <h4 className="font-bold text-slate-800 text-sm mt-1.5">Order #{displayOrderNumber(order.orderNumber)}</h4>
                     </div>
                     <div className="flex items-center space-x-1 text-xs">
                       <Clock className={`w-3.5 h-3.5 ${order.status === "Ready" ? "text-emerald-500" : "text-slate-400"}`} />

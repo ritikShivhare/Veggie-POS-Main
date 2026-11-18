@@ -458,10 +458,7 @@ export default function PinLogin({
 
             <div className="flex items-center gap-1.5 mb-2 text-[#787F74] font-bold text-[10px] uppercase font-mono tracking-widest">
               <Keyboard className="w-3.5 h-3.5" />
-              <span>Enter 4-6 Digit Staff PIN</span>
-              <span className="text-[9px] text-[#6E8F45] font-semibold lowercase bg-[#EBF2E4] px-1.5 py-0.5 rounded-md border border-[#D5E3C8]">
-                auto-submits
-              </span>
+              <span>Enter 4-6 Digit PIN</span>
             </div>
 
             <form onSubmit={e => { e.preventDefault(); handleManualSubmit(); }} className="w-full mb-3">

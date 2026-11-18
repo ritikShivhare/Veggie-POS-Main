@@ -301,7 +301,7 @@ export default function NotificationCenter() {
           }`}
         >
           <Send className="w-4 h-4 text-indigo-600" />
-          Dispatch Lab
+          Send Notification
         </button>}
 
         {canViewLogs && <button
@@ -311,7 +311,7 @@ export default function NotificationCenter() {
           }`}
         >
           <Clock className="w-4 h-4 text-emerald-600" />
-          Gateway Logs
+          Delivery History
         </button>}
       </div>
 
@@ -424,11 +424,8 @@ export default function NotificationCenter() {
             <div className="border-b border-slate-100 pb-4">
               <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-pink-600 animate-pulse" />
-                Multi-Channel Notification Dispatcher
+                Send Notification
               </h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Trigger transactional events immediately. The central engine handles distribution logic for all active targets.
-              </p>
             </div>
 
             <form onSubmit={handleSendNotification} className="space-y-4">
@@ -617,9 +614,6 @@ export default function NotificationCenter() {
               <div className="flex-1 flex flex-col items-center justify-center text-center p-12 text-slate-400 space-y-2">
                 <Clock className="w-10 h-10 text-slate-200" />
                 <p className="font-bold text-slate-600 text-sm">No transaction audit trace found</p>
-                <p className="text-xs text-slate-400 max-w-xs">
-                  SMS and Email dispatches through integration APIs will be logged here for legal, technical, and regulatory compliance.
-                </p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">

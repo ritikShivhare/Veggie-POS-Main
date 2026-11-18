@@ -615,7 +615,7 @@ export default function InventoryManagement({
                         <td className="p-4 font-mono">
                           <div className="flex flex-col">
                             <span className="text-white font-semibold">INR {ing.costPerUnit.toFixed(2)}</span>
-                            <span className="text-[10px] text-slate-400 font-sans">per {ing.unit} (WAC)</span>
+
                           </div>
                         </td>
                         <td className="p-4 font-mono text-emerald-400">
@@ -1212,7 +1212,7 @@ export default function InventoryManagement({
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <div>
                   <h3 className="text-base font-display font-bold text-white">Log Supply Delivery</h3>
-                  <p className="text-xs text-slate-400">Stock arrival & Weighted Average Cost (WAC) update</p>
+                  <p className="text-xs text-slate-400">Record a stock delivery</p>
                 </div>
               </div>
 
@@ -1237,7 +1237,7 @@ export default function InventoryManagement({
                     <option value="">-- Choose Ingredient --</option>
                     {ingredients.map((i) => (
                       <option key={i.id} value={i.id}>
-                        {i.name} ({i.unit}) — Current: {i.currentStock} {i.unit} @ ₹{i.costPerUnit.toFixed(2)}
+                        {i.name}
                       </option>
                     ))}
                   </select>
@@ -1311,42 +1311,9 @@ export default function InventoryManagement({
                 </div>
 
                 {selectedPurIng && (
-                  <div className="bg-slate-950/80 border border-emerald-500/25 rounded-2xl p-3 space-y-2">
-                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
-                      <span className="text-[11px] font-bold text-emerald-400">Weighted Average Cost (WAC) Preview</span>
-                      <span className="text-[10px] text-slate-400 font-mono">वेटेज एवरेज गणना</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-[10px]">
-                      <div className="bg-slate-900/60 p-2 rounded-xl border border-slate-850">
-                        <span className="text-slate-400 block font-medium">Current Stock in Hand:</span>
-                        <span className="font-bold text-white font-mono">{curStock} {selectedPurIng.unit}</span>
-                        <span className="text-slate-400 block font-mono">@ ₹{curCost.toFixed(2)} / {selectedPurIng.unit}</span>
-                        <span className="text-emerald-400/90 font-mono block">Value: ₹{curVal.toFixed(2)}</span>
-                      </div>
-
-                      <div className="bg-slate-900/60 p-2 rounded-xl border border-slate-850">
-                        <span className="text-slate-400 block font-medium">Incoming Purchase:</span>
-                        <span className="font-bold text-emerald-400 font-mono">+{purQty} {selectedPurIng.unit}</span>
-                        <span className="text-slate-400 block font-mono">@ ₹{purRate.toFixed(2)} / {selectedPurIng.unit}</span>
-                        <span className="text-emerald-400/90 font-mono block">Cost: ₹{purCost.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-2.5 flex items-center justify-between">
-                      <div>
-                        <span className="text-[9px] uppercase font-bold text-emerald-400 tracking-wider block">New Total Stock</span>
-                        <span className="font-mono font-bold text-white text-xs">{newCombinedStock} {selectedPurIng.unit}</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[9px] uppercase font-bold text-emerald-400 tracking-wider block">New Avg. Cost per {selectedPurIng.unit}</span>
-                        <span className="font-mono font-bold text-emerald-300 text-sm">₹{previewWac.toFixed(2)} / {selectedPurIng.unit}</span>
-                      </div>
-                    </div>
-
-                    <p className="text-[10px] text-slate-500 italic">
-                      Formula: (Current ₹{curVal.toFixed(0)} + Purchase ₹{purCost.toFixed(0)}) ÷ {newCombinedStock || 1} {selectedPurIng.unit} = ₹{previewWac.toFixed(2)} / {selectedPurIng.unit}
-                    </p>
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-center justify-between text-xs">
+                    <span className="text-emerald-400">Stock after delivery</span>
+                    <strong className="text-white font-mono">{newCombinedStock} {selectedPurIng.unit}</strong>
                   </div>
                 )}
 

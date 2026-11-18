@@ -109,6 +109,8 @@ export interface Order {
   servedBy?: string;
   paymentMethod?: 'Cash' | 'UPI';
   paidAt?: string;
+  earnedPoints?: number;
+  redeemedPoints?: number;
   cashierId: string;
   cashierName: string;
   managerPin?: string;

@@ -15,6 +15,7 @@ import { PaymentRepository } from "./PaymentRepository";
 import { InventoryMovementRepository } from "../inventory/InventoryMovementRepository";
 import { Order, OrderItem, Payment, InventoryMovement, Customer, Ingredient } from "../../../src/features/shared/types";
 import crypto from "node:crypto";
+import { allocateOrderNumber } from './OrderNumberService';
 
 export class OrderAlreadyPaidError extends Error {
   public code = "ORDER_ALREADY_PAID";
@@ -107,7 +108,7 @@ export class FinancialTransactionService {
 
     const finalOrder: Order = {
       id: orderId,
-      orderNumber: rawOrder.orderNumber || `#${Date.now().toString(36)}-${crypto.randomUUID().slice(0,8)}`,
+      orderNumber: await allocateOrderNumber(tenantId, rawOrder.date || nowIso),
       date: rawOrder.date || nowIso,
       type: rawOrder.type || "Dine-In",
       tableNo: rawOrder.tableNo,

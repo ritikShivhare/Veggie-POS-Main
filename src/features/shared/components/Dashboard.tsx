@@ -1,3 +1,5 @@
+import { displayOrderNumber } from "../../../../shared/orderNumber";
+import { printReceipt } from '../utils/printReceipt';
 import React, { useState, useMemo } from "react";
 import ReceiptTotals from "./ReceiptTotals";
 import FssaiRegistration from "./FssaiRegistration";
@@ -392,9 +394,6 @@ export default function Dashboard({
             <span className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse" />
             Executive Performance Dashboard
           </h2>
-          <p className="text-xs text-slate-400 mt-1">
-            Toggle between real-time cashier order streams and comparative chronological sales range analytics.
-          </p>
         </div>
 
         {/* Dynamic Navigation Tabs */}
@@ -559,7 +558,7 @@ export default function Dashboard({
                             <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
                               <td className="p-3.5 font-mono">
                                 <span className="bg-blue-50 border border-blue-100/30 text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-md">
-                                  #{order.orderNumber}
+                                  #{displayOrderNumber(order.orderNumber)}
                                 </span>
                               </td>
                               <td className="p-3.5 font-medium text-slate-700">{order.cashierName}</td>
@@ -688,7 +687,7 @@ export default function Dashboard({
                 }`}
               >
                 <Calendar className="w-3.5 h-3.5" />
-                <span>Yesterday (कल का)</span>
+                <span>Yesterday</span>
               </button>
 
               <button
@@ -700,7 +699,7 @@ export default function Dashboard({
                 }`}
               >
                 <Calendar className="w-3.5 h-3.5" />
-                <span>Last 7 Days (इस हफ्ते)</span>
+                <span>Last 7 Days</span>
               </button>
 
               <button
@@ -712,7 +711,7 @@ export default function Dashboard({
                 }`}
               >
                 <Calendar className="w-3.5 h-3.5" />
-                <span>Last 30 Days (इस महीने)</span>
+                <span>Last 30 Days</span>
               </button>
 
               <button
@@ -724,7 +723,7 @@ export default function Dashboard({
                 }`}
               >
                 <Calendar className="w-3.5 h-3.5" />
-                <span>Custom Range (तारीख चुनें)</span>
+                <span>Custom Range</span>
               </button>
             </div>
 
@@ -763,11 +762,11 @@ export default function Dashboard({
           {/* DYNAMIC METRIC CARDS WITH HIGHEST VISIBILITY CONTRAST */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
-            {/* KPI 1: Net Sales (कुल बिक्री) */}
+            {/* KPI 1: Net Sales */}
             <div className="bg-white p-5 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
               <div>
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-mono">Net Sales (कुल बिक्री)</p>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-mono">Net Sales</p>
                   <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-100">
                     <TrendingUp className="w-4 h-4" />
                   </div>
@@ -801,11 +800,11 @@ export default function Dashboard({
               </div>
             </div>
 
-            {/* KPI 2: Gross Profit / Loss (मुनाफा / घाटा) */}
+            {/* KPI 2: Gross Profit / Loss */}
             <div className="bg-white p-5 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
               <div>
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-mono">Est. Profit/Loss (लाभ / हानि)</p>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-mono">Est. Profit/Loss</p>
                   <div className="p-2 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-100">
                     <CircleDollarSign className="w-4 h-4" />
                   </div>
@@ -839,11 +838,11 @@ export default function Dashboard({
               </div>
             </div>
 
-            {/* KPI 3: Checkouts Count (कुल आर्डर) */}
+            {/* KPI 3: Checkouts Count */}
             <div className="bg-white p-5 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
               <div>
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-mono">Checkout Orders (कुल आर्डर)</p>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-mono">Checkout Orders</p>
                   <div className="p-2 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
                     <ShoppingBag className="w-4 h-4" />
                   </div>
@@ -876,11 +875,11 @@ export default function Dashboard({
               </div>
             </div>
 
-            {/* KPI 4: Average Ticket (औसत बिल) */}
+            {/* KPI 4: Average Ticket */}
             <div className="bg-white p-5 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
               <div>
                 <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-mono">Avg Ticket Size (औसत बिल)</p>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider font-mono">Avg Ticket Size</p>
                   <div className="p-2 bg-amber-50 text-amber-700 rounded-lg border border-amber-100">
                     <Briefcase className="w-4 h-4" />
                   </div>
@@ -923,7 +922,7 @@ export default function Dashboard({
             <div className="col-span-12 lg:col-span-8 bg-white border border-slate-200 p-5 rounded-2xl shadow-sm flex flex-col">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
                 <div>
-                  <h3 className="font-bold text-sm text-slate-900 tracking-tight font-display">Chronological Performance Chart (कमाई का उतार-चढ़ाव)</h3>
+                  <h3 className="font-bold text-sm text-slate-900 tracking-tight font-display">Chronological Performance Chart</h3>
                   <p className="text-[10px] text-slate-400 mt-0.5">Estimated sales and net profit margins drawn continuously over selected intervals.</p>
                 </div>
                 <div className="flex gap-4 text-xs font-bold">
@@ -1045,12 +1044,11 @@ export default function Dashboard({
             <div className="p-4 border-b border-slate-150 bg-slate-50/50 flex flex-wrap justify-between items-center gap-2">
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-sm text-slate-900 font-display">Daily Performance Breakdowns (दैनिक रिपोर्ट)</h3>
+                  <h3 className="font-bold text-sm text-slate-900 font-display">Daily Performance Breakdowns</h3>
                   <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-full border border-indigo-100 hidden sm:inline-flex items-center gap-1">
                     <Eye className="w-3 h-3" /> Click any row to view full order bills
                   </span>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-0.5">Calculated financial breakdown matrices per calendar day. Click on any date row to see individual customer order receipts.</p>
               </div>
               <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-bold rounded-md font-mono">
                 {periodAnalytics.chartData.filter(r => r.orders > 0).length} active dates
@@ -1242,7 +1240,7 @@ export default function Dashboard({
                       <div className="flex-1 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono font-black text-sm text-slate-900 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                            #{order.orderNumber || order.id.slice(-4)}
+                            #{displayOrderNumber(order.orderNumber || order.id.slice(-4))}
                           </span>
                           <span className="text-xs font-semibold text-slate-500 font-mono flex items-center gap-1">
                             <Clock className="w-3 h-3 text-slate-400" />
@@ -1307,7 +1305,7 @@ export default function Dashboard({
                 onClick={() => setSelectedDrilldownDay(null)}
                 className="px-4 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-colors cursor-pointer"
               >
-                Close (बंद करें)
+                Close
               </button>
             </div>
 
@@ -1353,7 +1351,7 @@ export default function Dashboard({
               <div className="grid grid-cols-2 gap-2 text-[11px] border-b border-dashed border-slate-300 pb-3">
                 <div>
                   <span className="text-slate-400 block text-[9px] uppercase font-bold">Order ID</span>
-                  <span className="font-bold text-slate-900">#{selectedOrderReceipt.orderNumber || selectedOrderReceipt.id.slice(-4)}</span>
+                  <span className="font-bold text-slate-900">#{displayOrderNumber(selectedOrderReceipt.orderNumber || selectedOrderReceipt.id.slice(-4))}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[9px] uppercase font-bold">Date & Time</span>
@@ -1431,12 +1429,12 @@ export default function Dashboard({
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
               <button
                 onClick={() => {
-                  window.print();
+                  printReceipt('.historical-receipt-print-body');
                 }}
                 className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
               >
                 <Printer className="w-3.5 h-3.5" />
-                <span>Print Bill (प्रिंट बिल)</span>
+                <span>Print Bill</span>
               </button>
 
               <button
