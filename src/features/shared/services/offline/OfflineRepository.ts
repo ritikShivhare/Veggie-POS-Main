@@ -1,3 +1,4 @@
+import {projectAddon} from '../../../../../shared/runningOrder';
 /**
  * Veggie POS - Tenant-Scoped Offline Repository
  * 
@@ -138,7 +139,9 @@ export class OfflineRepository {
   // Orders & Order Items Stores
   // =========================================================================
   public async getOrders(tenantId: string): Promise<OfflineOrder[]> {
-    return this.db.orders.where("tenantId").equals(tenantId).toArray();
+    const [orders,commands]=await Promise.all([this.db.orders.where("tenantId").equals(tenantId).toArray(),this.getAllOutbox(tenantId)]);
+    const addons=commands.filter(q=>q.endpoint.endsWith('/add-items') && !['SYNCED','completed'].includes(q.status)).sort((a,b)=>a.clientTimestamp-b.clientTimestamp);
+    return orders.map(order=>addons.filter(q=>q.entityId===order.id).reduce((current,q)=>projectAddon(current as any,{...q.payload,createdAt:q.createdAt}),order as any));
   }
 
   public async getOrderItems(tenantId: string, orderId?: string): Promise<OfflineOrderItem[]> {
@@ -155,7 +158,7 @@ export class OfflineRepository {
     await this.db.transaction("rw",[this.db.orders,this.db.orderItems,this.db.outbox],async()=>{
       const queued=(await this.getAllOutbox(tenantId)).filter(q=>!["SYNCED","completed"].includes(q.status) && ["order","payment"].includes(q.entityType));
       const pendingIds=new Set(queued.map(q=>q.entityId));
-      const pending=(await this.getOrders(tenantId)).filter(o=>pendingIds.has(o.id));
+      const pending=(await this.db.orders.where("tenantId").equals(tenantId).toArray()).filter(o=>pendingIds.has(o.id));
       const merged=[...items.filter(i=>!pendingIds.has(i.id)),...pending];
       await this.db.orders.where("tenantId").equals(tenantId).delete();
       await this.db.orderItems.where("tenantId").equals(tenantId).delete();
@@ -699,6 +702,14 @@ export class OfflineRepository {
     });
   }
 
+  public async recordAddonOffline(tenantId:string,orderId:string,operationId:string,items:any[],expectedVersion:number):Promise<OfflineOutboxItem> {
+    return this.db.transaction('rw',[this.db.orders,this.db.outbox],async()=>{
+      const existing=await this.db.orders.get([tenantId,orderId] as any);
+      if(!existing || existing.paidAt || ['Completed','Cancelled'].includes(existing.status))throw new Error('Choose an unpaid running bill.');
+      return this.enqueueOutbox(tenantId,{entityType:'order',entityId:orderId,operationType:'APPEND',payload:{operationId,items,expectedVersion},endpoint:`/api/orders/${encodeURIComponent(orderId)}/add-items`,method:'POST',idempotencyKey:`ik_addon_${operationId}`});
+    });
+  }
+
   /**
    * Records an order payment / status update offline:
    * 1. Commits status change directly to IndexedDB
@@ -734,7 +745,7 @@ export class OfflineRepository {
       entityType: updateData.paymentMethod ? "payment" : "order",
       entityId: orderId,
       operationType: "UPDATE",
-      payload: updateData.paymentMethod ? {paymentMethod:updateData.paymentMethod,amount:existing?.total} : {status:updateData.status},
+      payload: updateData.paymentMethod ? {paymentMethod:updateData.paymentMethod,amount:existing?.total,...((existing as any)?.running?{expectedVersion:(existing as any)?.running?.billVersion ?? existing?.version,discountPercent:0,customDiscount:false,cashReceived:existing?.total}: {})} : {status:updateData.status},
       endpoint: `/api/orders/${encodeURIComponent(orderId)}${updateData.paymentMethod ? "/pay" : ""}`,
       method: updateData.paymentMethod ? "POST" : "PUT",
       idempotencyKey

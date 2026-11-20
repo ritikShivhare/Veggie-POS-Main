@@ -30,6 +30,7 @@ export function validateSettings(settings:any):void {
   if(['managerPin','pin','password','passwordHash'].some(k=>Object.hasOwn(settings,k))) fail('Credentials must use the authenticated credential endpoint.');
   for(const key of ['autoDeductStock','blockOrdersIfInsufficient','managerCanAddPurchases','managerCanEditRecipes','kdsSoundAlerts','quickPinRequired']) if(settings[key]!==undefined && typeof settings[key]!=='boolean') fail(`Invalid ${key}.`);
   if(settings.gstPercentage!==undefined) finiteAmount(settings.gstPercentage,'GST',0,30);
+  if(settings.standardDiscountPercentage!==undefined) finiteAmount(settings.standardDiscountPercentage,'Standard discount',0,100);
   if(settings.maxDiscountPercentage!==undefined) finiteAmount(settings.maxDiscountPercentage,'Maximum discount',0,100);
   if(settings.slackWebhookUrl || settings.sentryDsn || settings.emailAlertAddress) fail('Global integrations must be configured by the SaaS administrator on the server.');
   if(settings.upiVpa && (typeof settings.upiVpa!=='string' || !/^[\w.\-]+@[\w.\-]+$/.test(settings.upiVpa))) fail('Invalid UPI address.');

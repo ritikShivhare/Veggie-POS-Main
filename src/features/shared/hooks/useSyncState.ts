@@ -497,6 +497,11 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
   // Global order creation handler
   // POS write operations commit to IndexedDB first; UI does NOT wait for cloud API
   const handleOrderCreated=async(newOrder:Order)=>{
+    if(newOrder.appendToOrderId) {
+      await offlineRepository.recordAddonOffline(activeTenantId,newOrder.appendToOrderId,newOrder.id,newOrder.items,newOrder.expectedVersion || 1);
+      setOrders(await offlineRepository.getOrders(activeTenantId) as Order[]);
+      OutboxProcessor.triggerDrain(activeTenantId).catch(console.warn);return;
+    }
     if(newOrder.managerPin) {
       if(!navigator.onLine) throw new Error("Manager PIN discounts require an online connection.");
       const response=await ApiClient.authenticatedFetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json','x-tenant-id':activeTenantId,'Idempotency-Key':`manager-order-${newOrder.id}`},body:JSON.stringify(newOrder)});

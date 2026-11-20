@@ -1,6 +1,7 @@
+import {kitchenTickets} from '../../../shared/runningOrder';
 import { displayOrderNumber } from "../../../shared/orderNumber";
 import {ApiClient} from '../shared/services/api';
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Order, OrderStatus } from "../shared/types";
 import { ChefHat, Play, CheckCircle, Flame, Clock, AlertTriangle } from "lucide-react";
 
@@ -10,8 +11,10 @@ interface KitchenKDSProps {
   kdsSoundAlerts: boolean;
 }
 
-export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts }: KitchenKDSProps) {
+export default function KitchenKDS({ orders:billOrders, onUpdateOrderStatus, kdsSoundAlerts }: KitchenKDSProps) {
   const [servedIds,setServedIds]=useState<string[]>([]),[servingId,setServingId]=useState<string|null>(null),[serveError,setServeError]=useState('');
+  const [batchOverrides,setBatchOverrides]=useState<Record<string,{status:OrderStatus;version:number}>>({});
+  const orders=useMemo(()=>kitchenTickets(billOrders).map(order=>{const local=batchOverrides[order.id];return local && (order.version || 1)<local.version?{...order,...local}:order;}),[billOrders,batchOverrides]);
   const [soundMessage, setSoundMessage] = useState('');
   const seenPendingIdsRef = useRef<Set<string> | null>(null);
   const pendingAnnouncementIdsRef = useRef<Set<string>>(new Set());
@@ -76,7 +79,7 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
   }, [orders, kdsSoundAlerts]);
   const markServed=async(order:Order)=>{
     if(servingId)return;setServingId(order.id);setServeError('');
-    try {const res=await ApiClient.authenticatedFetch(`/api/orders/${encodeURIComponent(order.id)}/serve`,{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':ApiClient.generateIdempotencyKey('serve')},body:JSON.stringify({version:order.version || 1})});const data=await res.json();if(!res.ok || !data.success)throw new Error(data.message || 'Order was not marked served.');setServedIds(ids=>[...ids,order.id]);}
+    try {const res=await ApiClient.authenticatedFetch((order as any).kotBatchId?`/api/orders/${encodeURIComponent((order as any).parentOrderId)}/kot/${encodeURIComponent((order as any).kotBatchId)}/status`:`/api/orders/${encodeURIComponent(order.id)}/serve`,{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':ApiClient.generateIdempotencyKey('serve')},body:JSON.stringify({version:order.version || 1,...((order as any).kotBatchId?{status:'Served'}:{})})});const data=await res.json();if(!res.ok || !data.success)throw new Error(data.message || 'Order was not marked served.');setServedIds(ids=>[...ids,order.id]);}
     catch(e:any){setServeError(e.message);}finally{setServingId(null);}
   };
   // Local sub-tab state under Kitchen KDS
@@ -116,8 +119,18 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
     return "text-slate-500";
   };
 
-  const handleActionClick = (order: Order, nextStatus: OrderStatus) => {
-    onUpdateOrderStatus(order.id, nextStatus);
+  const handleActionClick = async (order: Order, nextStatus: OrderStatus) => {
+    if(servingId)return;
+    const ticket=order as any;
+    if(ticket.kotBatchId){
+      setServingId(order.id);setServeError('');
+      try {
+        const response=await ApiClient.authenticatedFetch(`/api/orders/${encodeURIComponent(ticket.parentOrderId)}/kot/${encodeURIComponent(ticket.kotBatchId)}/status`,{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':ApiClient.generateIdempotencyKey('kot-status')},body:JSON.stringify({version:order.version || 1,status:nextStatus})});
+        const result=await response.json();if(!response.ok || !result.success)throw new Error(result.message || 'KOT update failed.');
+        const batch=result.data.running.batches.find((b:any)=>b.id===ticket.kotBatchId);
+        setBatchOverrides(previous=>({...previous,[order.id]:{status:nextStatus,version:batch.version}}));
+      }catch(error:any){setServeError(error.message);return;}finally{setServingId(null);}
+    } else onUpdateOrderStatus(order.id, nextStatus);
 
     // Automatically switch active tab to match the new order status for seamless UX
     if (nextStatus === "Preparing") {
@@ -267,7 +280,7 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
                       }`}>
                         {order.type} {order.tableNo ? `• ${order.tableNo}` : ""}
                       </span>
-                      <h4 className="font-bold text-slate-800 text-sm mt-1.5">Order #{displayOrderNumber(order.orderNumber)}</h4>
+                      <h4 className="font-bold text-slate-800 text-sm mt-1.5">Bill #{displayOrderNumber(order.orderNumber)}{(order as any).batchNumber?` · KOT ${(order as any).batchNumber}`:""}</h4>
                     </div>
                     <div className="flex items-center space-x-1 text-xs">
                       <Clock className={`w-3.5 h-3.5 ${order.status === "Ready" ? "text-emerald-500" : "text-slate-400"}`} />
@@ -322,7 +335,7 @@ export default function KitchenKDS({ orders, onUpdateOrderStatus, kdsSoundAlerts
                   )}
 
                   {order.status === "Ready" && (
-                    <button type="button" disabled={servingId!==null} onClick={()=>markServed(order)} className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl text-xs disabled:opacity-50">{servingId===order.id?'Saving…':'Mark Served to Customer'}</button>
+                    <button id={`kds-serve-btn-${order.id}`} type="button" disabled={servingId!==null} onClick={()=>markServed(order)} className="w-full py-2.5 bg-emerald-600 text-white font-bold rounded-xl text-xs disabled:opacity-50">{servingId===order.id?'Saving…':'Mark Served to Customer'}</button>
                   )}
                 </div>
               </div>

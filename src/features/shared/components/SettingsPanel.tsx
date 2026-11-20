@@ -972,6 +972,11 @@ export default function SettingsPanel({
                 />
               </div>
 
+              <div className="flex flex-wrap items-center justify-between gap-3 py-3 pt-4">
+                <label htmlFor="settings-standard-discount" className="text-sm font-semibold text-slate-800">Preset discount allowed without Manager PIN (%)</label>
+                <input id="settings-standard-discount" type="number" min={0} max={100} step={1} value={settings.standardDiscountPercentage ?? 0} onChange={e=>{const value=Number(e.target.value);if(Number.isInteger(value)&&value>=0&&value<=100)setSettings({...settings,standardDiscountPercentage:value});}} className="min-h-11 w-24 rounded-lg border border-slate-300 px-3 text-base"/>
+                <p className="w-full text-xs text-slate-600">Custom discounts always require approval. The maximum discount limit still applies.</p>
+              </div>
               <div className="flex items-center justify-between py-3 pt-4">
                 <div>
                   <h3 className="font-bold text-slate-800 text-sm">Maximum POS Discount Policy Limit (%)</h3>

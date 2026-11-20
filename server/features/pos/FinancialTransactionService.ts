@@ -16,6 +16,7 @@ import { InventoryMovementRepository } from "../inventory/InventoryMovementRepos
 import { Order, OrderItem, Payment, InventoryMovement, Customer, Ingredient } from "../../../src/features/shared/types";
 import crypto from "node:crypto";
 import { allocateOrderNumber } from './OrderNumberService';
+import {initializeRunning} from './RunningOrderStore';
 
 export class OrderAlreadyPaidError extends Error {
   public code = "ORDER_ALREADY_PAID";
@@ -96,6 +97,7 @@ export class FinancialTransactionService {
     return Database.getInstance().runTransaction(tenantId, async (trx) => {
     const existing = rawOrder.id ? await orderRepo.getById(tenantId, rawOrder.id) : null;
     if (existing) return {order:existing,items:await (await this.orderItemRepo.getAll(tenantId) || []).filter(i=>i.orderId===existing.id),payment:(await this.paymentRepo.getAll(tenantId))?.find(p=>p.orderId===existing.id)};
+    if(rawOrder.runningOrderFlow && (rawOrder.paymentMethod || rawOrder.status==='Completed' || rawOrder.discount || rawOrder.appliedDiscount || rawOrder.managerPin || rawOrder.redeemPoints || (rawOrder as any).discountPercentage || (rawOrder as any).discountAmount)) throw new FinancialValidationError('SETTLEMENT_ONLY','Apply discounts and collect payment at settlement.');
     await assertOrderCreation(tenantId,rawOrder);
     if (rawOrder.paymentMethod && !["Cash","UPI"].includes(rawOrder.paymentMethod)) throw new FinancialValidationError("INVALID_PAYMENT_METHOD","Choose Cash or UPI.");
     if (rawOrder.status && !["Pending","Preparing","Completed"].includes(rawOrder.status)) throw new FinancialValidationError("INVALID_ORDER_STATUS","Invalid initial order status.");
@@ -139,6 +141,7 @@ export class FinancialTransactionService {
       version: 1
     }));
 
+    if(rawOrder.runningOrderFlow) finalOrder.items=finalOrder.items.map((item,index)=>({...item,lineId:orderItemsToInsert[index].id,batchId:`initial-${orderId}`}));
     let paymentRecord: Payment | undefined;
     if (isPaidImmediately) {
       paymentRecord = {
@@ -200,7 +203,7 @@ export class FinancialTransactionService {
       }
 
       // 2e. Update Customer Loyalty Points and Spend if applicable
-      if (calculation.customerUpdate) {
+      if (calculation.customerUpdate && !rawOrder.runningOrderFlow) {
         const c = calculation.customerUpdate.customer;
         (finalOrder as any).redeemedPoints = calculation.customerUpdate.pointsRedeemed;
         (finalOrder as any).earnedPoints = calculation.customerUpdate.pointsEarned;
@@ -233,6 +236,7 @@ export class FinancialTransactionService {
         },
         trx
       );
+    if(rawOrder.runningOrderFlow) finalOrder.running=await initializeRunning(tenantId,finalOrder,finalOrder.cashierId);
     await operationalAlerts.newOrder(tenantId,finalOrder);
     return { order: finalOrder, items: orderItemsToInsert, payment: paymentRecord };
     });

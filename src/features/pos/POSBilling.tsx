@@ -1,6 +1,8 @@
+import {matchingBills,projectAddon,openBill} from '../../../shared/runningOrder';
+import {RunningSettlement} from './RunningSettlement';
 import { displayOrderNumber } from "../../../shared/orderNumber";
 import { printReceipt } from '../shared/utils/printReceipt';
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import QRCode from "qrcode";
 import { offlineRepository } from "../shared/services/offline/OfflineRepository";
 import ReceiptTotals from "../shared/components/ReceiptTotals";
@@ -65,6 +67,10 @@ export default function POSBilling({
   activeTenant
 }: POSBillingProps) {
   const [billingTab, setBillingTab] = useState<"catalog" | "billing">("catalog");
+  const canSettle=['Owner','SaaS Owner'].includes(currentStaff.role) || currentStaff.permissions.includes('billing');
+  const [orderChoice,setOrderChoice]=useState('');
+  const submitting=useRef(false);
+  const [sendingOrder,setSendingOrder]=useState(false);
   const [billingOrder, setBillingOrder] = useState<Order | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -72,12 +78,20 @@ export default function POSBilling({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCartOnMobile, setShowCartOnMobile] = useState(false);
 
+  // KOT print copies contain only their selected batch.
+  const kotView=(order:Order,number?:number):Order=>{
+    const batch=number?order.running?.batches.find(b=>b.number===number):order.running?.batches.at(-1);
+    return batch?{...order,items:batch.items,date:batch.createdAt,batchNumber:batch.number}:order;
+  };
   // Checkout Form
   const [orderType, setOrderType] = useState<"Dine-In" | "Takeaway">("Dine-In");
   const [tableNo, setTableNo] = useState("T-01");
   const [customerName, setCustomerName] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
-  const [redeemPoints, setRedeemPoints] = useState<boolean>(false);
+  const candidates=matchingBills(orders,orderType,tableNo,selectedCustomerId);
+  const appendTarget=orders.find(o=>o.id===orderChoice && openBill(o));
+  const chooseBill=(order:Order)=>{setOrderType(order.type);setTableNo(order.tableNo || '');setSelectedCustomerId(order.customerId || '');setCustomerName(order.customerName || '');setOrderChoice(order.id);setBillingTab('catalog');};
+  const changeIdentity=()=>setOrderChoice('');
   const [itemNotes, setItemNotes] = useState<{ [key: string]: string }>({});
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
@@ -102,7 +116,7 @@ export default function POSBilling({
   }, []);
   const [kotModalOrder, setKotModalOrder] = useState<Order | null>(null);
   useEffect(() => {
-    setKotModalOrder(previous => previous ? (orders.find(order => order.id === previous.id) || previous) : null);
+    setKotModalOrder(previous => previous ? kotView(orders.find(order => order.id === previous.id) || previous,previous.batchNumber) : null);
   }, [orders]);
   const [showFloorMap, setShowFloorMap] = useState<boolean>(false);
   const [billsFilter, setBillsFilter] = useState<"unpaid" | "settled" | "all">("unpaid");
@@ -148,18 +162,6 @@ export default function POSBilling({
   const [showDrawerPopModal, setShowDrawerPopModal] = useState(false);
   const [drawerPopReason, setDrawerPopReason] = useState("");
   const [drawerPopError, setDrawerPopError] = useState<string | null>(null);
-
-  // Custom Discount Modal State (Problem 2)
-  const [showDiscountModal, setShowDiscountModal] = useState(false);
-  const [discountMode, setDiscountMode] = useState<"fixed" | "percentage">("fixed");
-  const [customDiscountVal, setCustomDiscountVal] = useState<string>("");
-  const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
-  const [discountReason, setDiscountReason] = useState("");
-  const [discountManagerPin, setDiscountManagerPin] = useState("");
-  const [appliedDiscountReason, setAppliedDiscountReason] = useState("");
-  const [appliedDiscountPin, setAppliedDiscountPin] = useState("");
-  const [appliedDiscountAuthorizer, setAppliedDiscountAuthorizer] = useState("");
-  const [discountError, setDiscountError] = useState<string | null>(null);
 
   // Handle Order Cancellation with Manager PIN & Reason
   const handleConfirmCancelOrder = async () => {
@@ -259,126 +261,6 @@ export default function POSBilling({
       setDrawerPopError(null);
     } catch (err: any) {
       setDrawerPopError(err.message || "Failed to communicate with server.");
-    }
-  };
-
-  // Handle Custom Discount Application with Manager PIN
-  const handleApplyDiscountSubmit = async () => {
-    setDiscountError(null);
-    if(billingOrder) {
-      setDiscountError("Apply discounts before sending the order to the kitchen. Submitted bills keep their recorded total.");
-      return;
-    }
-    const numVal = parseFloat(customDiscountVal);
-    if (isNaN(numVal) || !isFinite(numVal) || numVal <= 0) {
-      setDiscountError(discountMode === "percentage" ? "Please enter a valid discount percentage (e.g. 10)." : "Please enter a valid discount amount.");
-      return;
-    }
-
-    const origTotal = billingOrder ? (billingOrder.subtotal + (billingOrder.tax || 0)) : Number((subtotal + tax).toFixed(2));
-    if (origTotal <= 0) {
-      setDiscountError("Cannot apply discount to an empty order or zero-total bill.");
-      return;
-    }
-
-    let calculatedDiscountToApply = 0;
-    if (discountMode === "percentage") {
-      if (numVal > 100) {
-        setDiscountError("Discount percentage cannot exceed 100%.");
-        return;
-      }
-      calculatedDiscountToApply = Number((origTotal * (numVal / 100)).toFixed(2));
-    } else {
-      calculatedDiscountToApply = Number(numVal.toFixed(2));
-    }
-
-    if (calculatedDiscountToApply <= 0) {
-      setDiscountError("Calculated discount amount must be greater than ₹0.");
-      return;
-    }
-
-    if (calculatedDiscountToApply > origTotal) {
-      setDiscountError(`Discount amount (₹${calculatedDiscountToApply.toFixed(2)}) cannot exceed bill total (₹${origTotal.toFixed(2)}).`);
-      return;
-    }
-
-    // Policy percentage ceiling check
-    if (settings.maxDiscountPercentage !== undefined && settings.maxDiscountPercentage > 0 && settings.maxDiscountPercentage < 100) {
-      const maxPolicyDiscount = Number((origTotal * (settings.maxDiscountPercentage / 100)).toFixed(2));
-      if (calculatedDiscountToApply > maxPolicyDiscount) {
-        setDiscountError(
-          `Discount of ₹${calculatedDiscountToApply.toFixed(2)} exceeds restaurant maximum discount policy limit of ${settings.maxDiscountPercentage}% (₹${maxPolicyDiscount.toFixed(2)}).`
-        );
-        return;
-      }
-    }
-
-    if (!discountReason.trim()) {
-      setDiscountError("Discount reason is mandatory for audit logging.");
-      return;
-    }
-
-    if (!discountManagerPin || discountManagerPin.trim().length < 4 || discountManagerPin.trim().length > 6) {
-      setDiscountError("Please enter a valid 4 to 6-digit Owner/Manager PIN.");
-      return;
-    }
-
-    try {
-      const sessId = ApiClient.getSessionId() || "";
-      const currentTenantId = localStorage.getItem("veggiepos_active_tenant_id") || "";
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (sessId) headers["x-session-id"] = sessId;
-      if (currentTenantId) headers["x-tenant-id"] = currentTenantId;
-
-      const expectedFinal = Math.max(0, Number((origTotal - calculatedDiscountToApply).toFixed(2)));
-
-      const res = await fetch("/api/orders/audit-discount", {
-        method: "POST",
-        headers: {
-          ...headers,
-          "Idempotency-Key": ApiClient.generateIdempotencyKey(`disc_${billingOrder?.id || "cart"}_${Date.now()}`)
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          orderId: billingOrder?.id || "cart",
-          originalAmount: origTotal,
-          discountAmount: calculatedDiscountToApply,
-          finalAmount: expectedFinal,
-          managerPin: discountManagerPin.trim(),
-          reason: discountReason.trim(),
-          discountType: discountMode,
-          discountPercentage: discountMode === "percentage" ? numVal : undefined,
-          sessionId: sessId,
-          tenantId: currentTenantId
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        setDiscountError(data.message || data.error || "Discount authorization failed.");
-        return;
-      }
-
-      setAppliedDiscount(calculatedDiscountToApply);
-      setAppliedDiscountReason(discountReason.trim());
-      setAppliedDiscountPin(discountManagerPin.trim());
-      setAppliedDiscountAuthorizer(data.authorizer || "Authorized Manager");
-
-      if (billingOrder) {
-        setBillingOrder({
-          ...billingOrder,
-          discount: calculatedDiscountToApply,
-          total: expectedFinal
-        });
-      }
-
-      setShowDiscountModal(false);
-      setCustomDiscountVal("");
-      setDiscountReason("");
-      setDiscountManagerPin("");
-      setDiscountError(null);
-    } catch (err: any) {
-      setDiscountError(err.message || "Server communication error.");
     }
   };
 
@@ -483,14 +365,7 @@ export default function POSBilling({
     return customers.find((c) => c.id === selectedCustomerId) || null;
   }, [customers, selectedCustomerId]);
 
-  const loyaltyDiscount = useMemo(() => {
-    if (!selectedCustomer || !redeemPoints) return 0;
-    return Math.min(selectedCustomer.loyaltyPoints, Number((subtotal + tax).toFixed(2)));
-  }, [selectedCustomer, redeemPoints, subtotal, tax]);
-
-  const total = useMemo(() => {
-    return Math.max(0, Number((subtotal + tax - loyaltyDiscount - appliedDiscount).toFixed(2)));
-  }, [subtotal, tax, loyaltyDiscount, appliedDiscount]);
+  const total = Number((subtotal + tax).toFixed(2));
 
   const orderAmount = billingOrder ? billingOrder.total : total;
   const parsedReceived = parseFloat(receivedAmount);
@@ -546,7 +421,9 @@ export default function POSBilling({
 
   // Submit order to kitchen (KDS)
   const handleSubmitOrderToKitchen = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || submitting.current) return;
+    if(candidates.length && !orderChoice){setCheckoutError('Choose an existing bill or Start separate bill.');return;}
+    if(orderChoice && orderChoice!=='new' && !appendTarget){setCheckoutError('This bill was settled or closed. Choose a new bill.');return;}
 
     // Validate inventory stock deductions before sending to kitchen
     let insufficientIngredients: { name: string; shortBy: number; unit: string }[] = [];
@@ -602,9 +479,12 @@ export default function POSBilling({
       ? crypto.randomUUID()
       : `ord_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-    const totalOrderDiscount = Number((loyaltyDiscount + appliedDiscount).toFixed(2));
+
     const newOrder: Order = {
       id: orderUuid,
+      runningOrderFlow:true,
+      appendToOrderId:appendTarget?.id,
+      expectedVersion:appendTarget?.running?.billVersion ?? appendTarget?.version ?? 1,
       orderNumber: `Pending sync · ${orderUuid.slice(0, 6).toUpperCase()}`,
       date: new Date().toISOString(),
       type: orderType,
@@ -614,31 +494,27 @@ export default function POSBilling({
       items: finalCartItems,
       subtotal,
       tax,
-      discount: appliedDiscount > 0 ? appliedDiscount : undefined,
-      discountReason: appliedDiscountReason || undefined,
+
       total,
       status: "Pending",
       cashierId: currentStaff.id,
-      cashierName: currentStaff.name,
-      managerPin: appliedDiscountPin || undefined
+      cashierName: currentStaff.name
     };
 
-    (newOrder as any).redeemPoints=redeemPoints;
-    try {await onOrderCreated(newOrder);}catch(error:any){setCheckoutError(`Order was not saved: ${error.message}`);return;}
+    if(!appendTarget)newOrder.running={billVersion:1,gstRate:gstRate*100,operations:{},batches:[{id:`initial-${orderUuid}`,number:1,items:finalCartItems,status:'Pending',createdAt:newOrder.date,createdBy:currentStaff.id,version:1}]};
+    submitting.current=true;setSendingOrder(true);
+    try {await onOrderCreated(newOrder);}catch(error:any){setCheckoutError(`Order was not saved: ${error.message}`);return;}finally{submitting.current=false;setSendingOrder(false);}
 
     // 4. Reset Cart State
     setCart([]);
     setItemNotes({});
     setCustomerName("");
     setSelectedCustomerId("");
-    setRedeemPoints(false);
-    setAppliedDiscount(0);
-    setAppliedDiscountReason("");
-    setAppliedDiscountPin("");
-    setAppliedDiscountAuthorizer("");
+
     setShowCartOnMobile(false);
     // Open KOT ticket print modal for immediate kitchen ticket printing
-    setKotModalOrder(newOrder);
+    setKotModalOrder(kotView(appendTarget?projectAddon(appendTarget,{operationId:orderUuid,items:finalCartItems}):newOrder));
+    setOrderChoice('');
   };
 
   // Settle billing & payment for a kitchen order
@@ -688,9 +564,9 @@ export default function POSBilling({
             <Receipt className="w-4 h-4" />
             <span>2. Active & Served Bills</span>
             {/* Active unpaid orders count */}
-            {orders.filter(o => !o.paidAt || !o.paymentMethod).length > 0 && (
+            {orders.filter(openBill).length > 0 && (
               <span className="bg-rose-500 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full font-mono">
-                {orders.filter(o => !o.paidAt || !o.paymentMethod).length}
+                {orders.filter(openBill).length}
               </span>
             )}
             {/* Highlight with a pulsing ring if any order is served & ready */}
@@ -765,6 +641,7 @@ export default function POSBilling({
                       <button
                         key={tbl}
                         onClick={() => {
+                          changeIdentity();
                           setTableNo(tbl);
                           setOrderType("Dine-In");
                           if (occ.order) {
@@ -923,7 +800,7 @@ export default function POSBilling({
                 >
                   <span>Pending</span>
                   <span className="bg-rose-500 text-white text-[10px] font-mono px-1.5 py-0.2 rounded-full">
-                    {orders.filter(o => !o.paidAt || !o.paymentMethod).length}
+                    {orders.filter(openBill).length}
                   </span>
                 </button>
                 <button
@@ -956,7 +833,7 @@ export default function POSBilling({
 
             <div className="flex-1 overflow-y-auto pr-1">
               {orders.filter(o => {
-                if (billsFilter === "unpaid") return !o.paidAt || !o.paymentMethod;
+                if (billsFilter === "unpaid") return openBill(o);
                 if (billsFilter === "settled") return Boolean(o.paidAt && o.paymentMethod);
                 return true;
               }).length === 0 ? (
@@ -973,7 +850,7 @@ export default function POSBilling({
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                   {orders
                     .filter(o => {
-                      if (billsFilter === "unpaid") return !o.paidAt || !o.paymentMethod;
+                      if (billsFilter === "unpaid") return openBill(o);
                       if (billsFilter === "settled") return Boolean(o.paidAt && o.paymentMethod);
                       return true;
                     })
@@ -1081,10 +958,11 @@ export default function POSBilling({
                               </span>
                             </div>
 
+                            {!isPaid && openBill(order) && <button type="button" onClick={()=>chooseBill(order)} className="mb-2 min-h-11 w-full rounded-xl border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-800">Add Items</button>}
                             <div className="flex flex-wrap gap-2">
                               {/* Print KOT Slip Button */}
                               <button
-                                onClick={() => setKotModalOrder(order)}
+                                onClick={() => setKotModalOrder(kotView(order))}
                                 className="px-2.5 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition flex items-center justify-center gap-1"
                                 title="Print Kitchen Order Ticket (KOT Slip)"
                                 id={`pos-print-kot-btn-${order.id}`}
@@ -1109,7 +987,7 @@ export default function POSBilling({
                                     <Trash2 className="w-3.5 h-3.5" />
                                     <span>Void</span>
                                   </button>
-                                  <button
+                                  {canSettle && (                                  <button
                                     onClick={() => {
                                       setBillingOrder(order);
                                       setReceivedAmount(order.total.toFixed(2));
@@ -1124,7 +1002,7 @@ export default function POSBilling({
                                   >
                                     <Coins className="w-3.5 h-3.5" />
                                     <span>{isReady ? "Collect & Settle Bill" : "Pre-Settle"}</span>
-                                  </button>
+                                  </button>)}
                                 </>
                               ) : isPaid ? (
                                 <button
@@ -1153,7 +1031,7 @@ export default function POSBilling({
       </div>
         {/* Floating Mobile Cart Trigger Bar */}
         {cart.length > 0 && !showCartOnMobile && (
-          <div className="lg:hidden fixed bottom-4 left-4 right-4 z-30 bg-blue-600 text-white rounded-2xl p-4 flex items-center justify-between shadow-xl animate-bounce shadow-blue-600/30">
+          <div className="lg:hidden fixed bottom-4 left-4 right-4 z-30 bg-blue-600 text-white rounded-2xl p-4 flex items-center justify-between shadow-xl shadow-blue-600/30">
             <div className="flex items-center gap-3">
               <span className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-sm">
                 {cart.reduce((sum, item) => sum + item.quantity, 0)}
@@ -1165,7 +1043,7 @@ export default function POSBilling({
             </div>
             <button
               onClick={() => setShowCartOnMobile(true)}
-              className="bg-white text-blue-600 font-bold text-xs uppercase tracking-wider px-4 py-2 rounded-xl active:scale-95 transition shadow-sm"
+              className="min-h-11 bg-white text-blue-600 font-bold text-xs uppercase tracking-wider px-4 py-2 rounded-xl active:scale-95 transition shadow-sm"
             >
               View Cart →
             </button>
@@ -1301,7 +1179,7 @@ export default function POSBilling({
           {/* Order Type Selector */}
           <div className="flex gap-2">
             <button
-              onClick={() => setOrderType("Dine-In")}
+              onClick={() => {changeIdentity();setOrderType("Dine-In");}} disabled={Boolean(appendTarget)}
               className={`flex-1 py-2 rounded-xl text-xs font-bold border transition ${
                 orderType === "Dine-In"
                   ? "bg-white border-blue-500 text-blue-600 shadow-sm"
@@ -1311,7 +1189,7 @@ export default function POSBilling({
               🍽️ Dine-In
             </button>
             <button
-              onClick={() => setOrderType("Takeaway")}
+              onClick={() => {changeIdentity();setOrderType("Takeaway");}} disabled={Boolean(appendTarget)}
               className={`flex-1 py-2 rounded-xl text-xs font-bold border transition ${
                 orderType === "Takeaway"
                   ? "bg-white border-blue-500 text-blue-600 shadow-sm"
@@ -1322,12 +1200,22 @@ export default function POSBilling({
             </button>
           </div>
 
+          {(candidates.length>0 || appendTarget) && <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50 p-3">
+            <label htmlFor="pos-running-bill-select" className="block text-sm font-semibold text-blue-950">Continue a running bill?</label>
+            <select id="pos-running-bill-select" value={orderChoice} onChange={e=>{const order=orders.find(o=>o.id===e.target.value);if(order)chooseBill(order);else setOrderChoice(e.target.value);}} className="min-h-11 w-full rounded-lg border bg-white p-2 text-sm">
+              <option value="">Choose a bill or start separate</option><option value="new">Start separate bill</option>
+              {candidates.map(o=><option key={o.id} value={o.id}>Add to bill #{displayOrderNumber(o.orderNumber)} · ₹{o.total.toFixed(2)}{o.customerName?` · ${o.customerName}`:''}</option>)}
+            </select>
+            {appendTarget&&<><p className="text-sm text-blue-950">Already sent: {appendTarget.items.reduce((n,i)=>n+i.quantity,0)} items · ₹{appendTarget.total.toFixed(2)}. Only new cart items go to the next KOT.</p><ul aria-label="Previously sent items" className="max-h-32 overflow-y-auto text-xs text-slate-700">{appendTarget.items.map((i,index)=><li key={i.lineId || index}>{i.quantity} × {i.menuItem.name}{i.note?` · ${i.note}`:''}</li>)}</ul><p className="text-sm font-semibold">Combined estimate: ₹{(appendTarget.total+total).toFixed(2)}</p></>}
+          </div>}
           {/* Loyalty Guest Selection */}
           <div className="space-y-1 bg-slate-100 p-2.5 rounded-xl border border-slate-200/50">
             <label className="text-[9px] text-slate-500 font-bold uppercase tracking-wider block">Registered Loyalty Guest (Optional)</label>
             <select
+              disabled={Boolean(appendTarget)}
               value={selectedCustomerId}
               onChange={(e) => {
+                changeIdentity();
                 const cid = e.target.value;
                 setSelectedCustomerId(cid);
                 if (cid) {
@@ -1338,7 +1226,7 @@ export default function POSBilling({
                 } else {
                   setCustomerName("");
                 }
-                setRedeemPoints(false);
+
               }}
               className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500 text-slate-800 shadow-sm font-semibold"
               id="pos-loyalty-customer-select"
@@ -1346,26 +1234,18 @@ export default function POSBilling({
               <option value="">-- No Loyalty Profile (Walk-in) --</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({c.phone}) - {c.loyaltyPoints} pts
+                  {c.name} ({c.phone}){canSettle?` - ${c.loyaltyPoints} pts`:''}
                 </option>
               ))}
             </select>
 
-            {selectedCustomer && (
+            {selectedCustomer && canSettle && (
               <div className="mt-2 flex items-center justify-between text-xs bg-amber-500/10 border border-amber-500/20 px-2 py-1.5 rounded-lg">
                 <div className="flex items-center gap-1.5 text-amber-800">
                   <Coins className="w-3.5 h-3.5" />
                   <span className="font-bold">{selectedCustomer.loyaltyPoints} pts</span>
                 </div>
-                <label className="flex items-center gap-1.5 font-bold text-amber-900 cursor-pointer text-[10px] uppercase">
-                  <input
-                    type="checkbox"
-                    checked={redeemPoints}
-                    onChange={(e) => setRedeemPoints(e.target.checked)}
-                    className="rounded text-amber-500 focus:ring-amber-500 w-3 h-3"
-                  />
-                  <span>Redeem Points</span>
-                </label>
+
               </div>
             )}
           </div>
@@ -1377,7 +1257,7 @@ export default function POSBilling({
                 <label className="text-xs text-slate-500 font-semibold">Table Number:</label>
                 <select
                   value={tableNo}
-                  onChange={(e) => setTableNo(e.target.value)}
+                  onChange={(e) => {changeIdentity();setTableNo(e.target.value);}} disabled={Boolean(appendTarget)}
                   className="bg-white border border-slate-200 text-xs font-bold rounded-lg px-3 py-1.5 text-blue-600 focus:outline-none focus:border-blue-500 shadow-sm"
                 >
                   {["T-01", "T-02", "T-03", "T-04", "T-05", "T-06", "T-07", "T-08"].map((t) => (
@@ -1396,7 +1276,7 @@ export default function POSBilling({
                   type="text"
                   placeholder="Enter customer name..."
                   value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
+                  onChange={(e) => setCustomerName(e.target.value)} disabled={Boolean(appendTarget)}
                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 text-slate-800 shadow-sm"
                 />
               </div>
@@ -1407,7 +1287,7 @@ export default function POSBilling({
           <div className="bg-slate-100/60 p-3 rounded-xl border border-slate-200/40 text-xs space-y-2">
             <h4 className="font-bold text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-200 pb-1 flex items-center gap-1">
               <Receipt className="w-3.5 h-3.5" />
-              <span>Order Summary Breakdown</span>
+              <span>{appendTarget?'New KOT summary':'Order Summary Breakdown'}</span>
             </h4>
 
             <div className="space-y-1 text-slate-600">
@@ -1421,32 +1301,11 @@ export default function POSBilling({
                   <span className="font-mono font-semibold text-slate-700">INR {tax.toFixed(2)}</span>
                 </div>
               )}
-              {loyaltyDiscount > 0 && (
-                <div className="flex justify-between text-amber-600 font-bold">
-                  <span>Loyalty Discount:</span>
-                  <span className="font-mono">- INR {loyaltyDiscount.toFixed(2)}</span>
-                </div>
-              )}
-              {appliedDiscount > 0 && (
-                <div className="flex justify-between text-purple-600 font-bold">
-                  <span>Custom Discount:</span>
-                  <span className="font-mono">- INR {appliedDiscount.toFixed(2)}</span>
-                </div>
-              )}
               <div className="flex justify-between border-t border-slate-200 pt-1.5 font-bold text-slate-800 text-sm">
-                <span>Total Bill Value:</span>
+                <span>{appendTarget?'New items total:':'Order total (estimate):'}</span>
                 <span className="font-mono text-emerald-600">INR {total.toFixed(2)}</span>
               </div>
-              <button
-                onClick={() => {
-                  setShowDiscountModal(true);
-                  setDiscountError(null);
-                }}
-                className="w-full mt-1.5 py-1.5 px-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1"
-                id="pos-apply-discount-btn"
-              >
-                <span>🏷️ Apply Custom Discount (Manager PIN)</span>
-              </button>
+
             </div>
 
             <div className="text-[10px] font-semibold text-slate-500 flex items-center gap-1.5 pt-1 border-t border-dashed border-slate-200">
@@ -1472,7 +1331,7 @@ export default function POSBilling({
         {/* Checkout Submit trigger button */}
         <button
           onClick={handleSubmitOrderToKitchen}
-          disabled={cart.length === 0}
+          disabled={cart.length === 0 || sendingOrder}
           className={`w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center space-x-2 shadow-md transition duration-150 ${
             cart.length === 0
               ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
@@ -1481,13 +1340,18 @@ export default function POSBilling({
           id="pos-submit-to-kitchen-btn"
         >
           <ChefHat className="w-4.5 h-4.5" />
-          <span>Submit Order (Send to KDS)</span>
+          <span>{sendingOrder?'Saving order…':appendTarget?'Add Items & Send to KDS':'Submit Order (Send to KDS)'}</span>
         </button>
       </div>
     </div>
 
+      {showPaymentModal && billingOrder?.running && <RunningSettlement
+        order={orders.find(o=>o.id===billingOrder.id) || billingOrder} settings={settings} customers={customers}
+        tenantId={activeTenant?.tenantId || ''} tenantVpa={activeTenant?.vpa}
+        onClose={()=>{setShowPaymentModal(false);setBillingOrder(null);}}
+        onPaid={paid=>{setReceiptModalOrder(paid);setShowPaymentModal(false);setBillingOrder(null);}}/>}
       {/* PAYMENT SELECTION POPUP MODAL */}
-      {showPaymentModal && (
+      {showPaymentModal && !billingOrder?.running && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-6 shadow-xl text-slate-800">
             <h3 className="text-lg font-display font-bold text-slate-800 mb-1">Process Payment</h3>
@@ -1830,224 +1694,6 @@ export default function POSBilling({
         </div>
       )}
 
-      {/* CUSTOM DISCOUNT MODAL (Problem 2) */}
-      {showDiscountModal && (() => {
-        const previewOrigTotal = billingOrder ? (billingOrder.subtotal + (billingOrder.tax || 0)) : Number((subtotal + tax).toFixed(2));
-        const parsedDiscountInput = parseFloat(customDiscountVal);
-        const validDiscountInput = !isNaN(parsedDiscountInput) && parsedDiscountInput > 0 ? parsedDiscountInput : 0;
-        const previewDiscountAmount = discountMode === "percentage"
-          ? Number((previewOrigTotal * (validDiscountInput / 100)).toFixed(2))
-          : validDiscountInput;
-        const previewFinalAmount = Math.max(0, Number((previewOrigTotal - previewDiscountAmount).toFixed(2)));
-        const maxPolicyDiscount = (settings.maxDiscountPercentage !== undefined && settings.maxDiscountPercentage > 0 && settings.maxDiscountPercentage < 100)
-          ? Number((previewOrigTotal * (settings.maxDiscountPercentage / 100)).toFixed(2))
-          : null;
-        const isExceedingPolicy = maxPolicyDiscount !== null && previewDiscountAmount > maxPolicyDiscount;
-        const isExceedingTotal = previewDiscountAmount > previewOrigTotal;
-
-        return (
-          <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-            <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl text-slate-800 space-y-4">
-              <div className="flex items-center space-x-3 text-purple-600">
-                <span className="text-2xl">🏷️</span>
-                <div>
-                  <h3 className="text-base font-display font-bold">Apply Custom Discount</h3>
-                  <p className="text-xs text-slate-500 font-medium">Requires Owner/Manager PIN approval.</p>
-                </div>
-              </div>
-
-              {/* Mode Selector */}
-              <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDiscountMode("fixed");
-                    setDiscountError(null);
-                  }}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
-                    discountMode === "fixed" ? "bg-white text-purple-700 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                  }`}
-                  id="pos-discount-mode-fixed"
-                >
-                  <span>₹ Flat Amount</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDiscountMode("percentage");
-                    setDiscountError(null);
-                  }}
-                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
-                    discountMode === "percentage" ? "bg-white text-purple-700 shadow-xs" : "text-slate-500 hover:text-slate-800"
-                  }`}
-                  id="pos-discount-mode-percent"
-                >
-                  <span>% Percentage</span>
-                </button>
-              </div>
-
-              {/* Quick Presets */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Quick:</span>
-                <div className="flex gap-1.5 flex-1">
-                  {discountMode === "percentage" ? (
-                    [5, 10, 15, 20].map((pct) => (
-                      <button
-                        key={pct}
-                        type="button"
-                        onClick={() => {
-                          setCustomDiscountVal(String(pct));
-                          setDiscountError(null);
-                        }}
-                        className="flex-1 py-1 text-[11px] font-mono font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg border border-purple-200 transition cursor-pointer"
-                      >
-                        {pct}%
-                      </button>
-                    ))
-                  ) : (
-                    [20, 50, 100, 200].map((amt) => (
-                      <button
-                        key={amt}
-                        type="button"
-                        onClick={() => {
-                          setCustomDiscountVal(String(amt));
-                          setDiscountError(null);
-                        }}
-                        className="flex-1 py-1 text-[11px] font-mono font-bold bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg border border-purple-200 transition cursor-pointer"
-                      >
-                        ₹{amt}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Live Preview Box */}
-              <div className="bg-purple-50/60 p-3 rounded-xl border border-purple-100 text-xs space-y-1 font-mono">
-                <div className="flex justify-between text-slate-500">
-                  <span>Gross Order Amount:</span>
-                  <span>₹{previewOrigTotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-purple-700 font-bold">
-                  <span>Discount ({discountMode === "percentage" ? `${validDiscountInput}%` : "Flat"}):</span>
-                  <span>- ₹{previewDiscountAmount.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-emerald-700 font-extrabold border-t border-purple-200 pt-1 text-sm">
-                  <span>Net Payable Amount:</span>
-                  <span>₹{previewFinalAmount.toFixed(2)}</span>
-                </div>
-              </div>
-
-              {/* Policy ceiling notice */}
-              {maxPolicyDiscount !== null && (
-                <div className={`text-[10px] px-2.5 py-1.5 rounded-lg border font-medium flex items-center gap-1.5 ${
-                  isExceedingPolicy ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-amber-50 text-amber-700 border-amber-200"
-                }`}>
-                  <span>🛡️</span>
-                  <span>
-                    Store Policy: Max {settings.maxDiscountPercentage}% discount (Up to ₹{maxPolicyDiscount.toFixed(2)})
-                  </span>
-                </div>
-              )}
-
-              {previewOrigTotal <= 0 && (
-                <div className="text-xs bg-rose-50 text-rose-600 p-2.5 rounded-lg border border-rose-200 font-bold">
-                  ⚠️ Cart is empty. Add items before applying discounts.
-                </div>
-              )}
-
-              <div className="space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    {discountMode === "percentage" ? "Discount Percentage (%)*" : "Discount Amount (INR)*"}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      step={discountMode === "percentage" ? "1" : "any"}
-                      min="0"
-                      max={discountMode === "percentage" ? "100" : undefined}
-                      value={customDiscountVal}
-                      onChange={(e) => setCustomDiscountVal(e.target.value)}
-                      placeholder={discountMode === "percentage" ? "e.g. 10" : "e.g. 50"}
-                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm font-bold font-mono text-slate-800 focus:outline-none focus:border-purple-500 shadow-xs"
-                      id="pos-discount-amount-input"
-                    />
-                    <span className="absolute right-3 top-2.5 font-mono text-xs font-bold text-slate-400">
-                      {discountMode === "percentage" ? "%" : "₹"}
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Discount Reason*:
-                  </label>
-                  <input
-                    type="text"
-                    value={discountReason}
-                    onChange={(e) => setDiscountReason(e.target.value)}
-                    placeholder="e.g. VIP Customer / Loyalty Promo"
-                    className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:border-purple-500 shadow-xs"
-                    id="pos-discount-reason-input"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Manager/Owner PIN (4-6 Digits)*:
-                  </label>
-                  <input
-                    type="password"
-                    maxLength={6}
-                    value={discountManagerPin}
-                    onChange={(e) => setDiscountManagerPin(e.target.value)}
-                    placeholder="PIN Code"
-                    className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm font-bold font-mono tracking-widest text-slate-800 focus:outline-none focus:border-purple-500 text-center shadow-xs"
-                    id="pos-discount-pin-input"
-                  />
-                </div>
-              </div>
-
-              {discountError && (
-                <p className="text-xs text-rose-600 font-bold bg-rose-50 p-2.5 rounded-lg border border-rose-200">
-                  ⚠️ {discountError}
-                </p>
-              )}
-
-              <div className="flex space-x-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowDiscountModal(false);
-                    setCustomDiscountVal("");
-                    setDiscountReason("");
-                    setDiscountManagerPin("");
-                    setDiscountError(null);
-                  }}
-                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl text-xs transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={previewOrigTotal <= 0 || isExceedingTotal || isExceedingPolicy}
-                  onClick={handleApplyDiscountSubmit}
-                  className={`flex-1 py-2.5 text-white font-bold rounded-xl text-xs transition shadow-md ${
-                    previewOrigTotal <= 0 || isExceedingTotal || isExceedingPolicy
-                      ? "bg-slate-300 cursor-not-allowed opacity-60"
-                      : "bg-purple-600 hover:bg-purple-700 shadow-purple-600/20 cursor-pointer"
-                  }`}
-                  id="pos-confirm-discount-btn"
-                >
-                  Authorize & Apply
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
       {/* THERMAL RECEIPT & TAX INVOICE PRINT MODAL */}
       {receiptModalOrder && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto animate-fade-in">
@@ -2194,6 +1840,7 @@ export default function POSBilling({
               </button>
             </div>
 
+            {kotModalOrder.running && <label className="no-print px-4 py-3 text-sm">KOT batch<select aria-label="KOT batch" value={kotModalOrder.batchNumber} onChange={e=>setKotModalOrder(kotView(kotModalOrder,Number(e.target.value)))} className="ml-2 min-h-11 rounded border p-2">{kotModalOrder.running.batches.map(b=><option key={b.id} value={b.number}>KOT {b.number} · {b.status}</option>)}</select></label>}
             {/* Printable KOT Slip */}
             <div className="p-6 overflow-y-auto max-h-[70vh] bg-white">
               <div id="pos-kot-print-body" data-paper-size={receiptPaperSize} className="printable-thermal-receipt bg-white text-black p-4 border border-dashed border-slate-400 rounded font-mono text-[11px] leading-relaxed mx-auto">
@@ -2208,7 +1855,7 @@ export default function POSBilling({
 
                 <div className="py-2 border-b border-dashed border-black space-y-0.5 text-[10px]">
                   <div className="flex justify-between font-bold">
-                    <span>KOT #: {displayOrderNumber(kotModalOrder.orderNumber)}</span>
+                    <span>KOT #: {displayOrderNumber(kotModalOrder.orderNumber)}{kotModalOrder.batchNumber?` / ${kotModalOrder.batchNumber}`:""}</span>
                     <span>TIME: {new Date(kotModalOrder.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                   <div className="flex justify-between">

@@ -1,3 +1,4 @@
+import {runningOrderService} from '../server/features/pos/RunningOrderService';
 import {assertKotMutable} from '../server/features/billing/SubscriptionLifecycle';
 import {operationalAlerts} from '../server/features/notifications/OperationalAlerts';
 import express from "express";
@@ -32,6 +33,7 @@ import {
 } from "../server/features/auth/PinSecurityService";
 
 const router = express.Router();
+const discountApprovalLimiter=rateLimit({windowMs:15*60*1000,limit:10,skipSuccessfulRequests:true,standardHeaders:true,legacyHeaders:false,message:{success:false,error:'DISCOUNT_APPROVAL_LIMIT',message:'Too many failed approval attempts. Try again later.'}});
 
 // ============================================================================
 // REST ENDPOINTS: STAFF (Protected: Staff Management requires Owner/Manager role)
@@ -197,11 +199,26 @@ router.post('/orders/:id/serve',authMiddleware,requirePermission('orders','billi
  try {const tenant=(req as any).tenantId,session=(req as any).session;
   const order=await orderRepo.getById(tenant,req.params.id);
   if(!order || !publicState({orders:[order]},session.role,session.permissions,session.userId).orders.length)return res.status(404).json({success:false,error:'NOT_FOUND'});
+  if(order.running)return res.status(400).json({success:false,error:'KOT_BATCH_REQUIRED'});
   const data=await operationalAlerts.serve(tenant,req.params.id,req.body.version,session.userId);res.json({success:true,data});}catch(error){handleApiError(res,error);}
 });
 
+// Each add-on is a business command; it never creates a separate payable bill.
+router.post('/orders/:id/add-items',authMiddleware,requirePermission('orders','billing'),idempotencyMiddleware,async(req,res)=>{
+ try {const session=(req as any).session,tenant=(req as any).tenantId;
+  const data=await runningOrderService.append(tenant,req.params.id,req.body,{staffId:session.userId,staffName:session.userName,role:session.role,permissions:session.permissions});
+  realtimeService.broadcastSyncUpdate(tenant,'orders');res.json({success:true,data});
+ }catch(error){handleApiError(res,error);}
+});
+router.post('/orders/:id/kot/:batchId/status',authMiddleware,requirePermission('orders','billing'),idempotencyMiddleware,async(req,res)=>{
+ try {const session=(req as any).session,tenant=(req as any).tenantId;
+  const data=await runningOrderService.batch(tenant,req.params.id,req.params.batchId,req.body.status,req.body.version,{staffId:session.userId,staffName:session.userName});
+  realtimeService.broadcastSyncUpdate(tenant,'orders');res.json({success:true,data});
+ }catch(error){handleApiError(res,error);}
+});
+
 // Dedicated Payment Endpoint: Validates and atomically commits order payment
-router.post("/orders/:id/pay", authMiddleware, requirePermission("billing"), idempotencyMiddleware, async (req, res) => {
+router.post("/orders/:id/pay", authMiddleware, requirePermission("billing"), (req,res,next)=>req.body.managerPin?discountApprovalLimiter(req,res,next):next(), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const user = (req as any).user;
   const session = (req as any).session;
@@ -210,9 +227,10 @@ router.post("/orders/:id/pay", authMiddleware, requirePermission("billing"), ide
   try {
     const { amount, paymentMethod = "Cash", transactionReference } = req.body;
     const cashierId = user?.id || session?.userId || (req.body && req.body.cashierId);
-    const cashierName = user?.name || session?.name || (req.body && req.body.cashierName) || "Cashier";
+    const cashierName = session?.userName || user?.name || "Cashier";
 
-    const { order, payment } = await financialTransactionService.executeOrderPayment(
+    const runningBill=await orderRepo.getById(tenantId,orderId);
+    const { order, payment } = runningBill?.running ? await runningOrderService.settle(tenantId,orderId,req.body,{staffId:cashierId,staffName:cashierName,role:session.role,permissions:session.permissions}) : await financialTransactionService.executeOrderPayment(
       tenantId,
       orderId,
       {
@@ -248,6 +266,7 @@ router.put("/orders/:id",authMiddleware,requirePermission("orders","billing"),id
     if(req.body.status==="Cancelled" && !["Owner","Manager"].includes((req as any).session.role)) return res.status(403).json({success:false,error:"FORBIDDEN"});
     const existing=await orderRepo.getById(tenantId,req.params.id);
     if(!existing) return res.status(404).json({success:false,error:"NOT_FOUND"});
+    if(existing.running)return res.status(400).json({success:false,error:"KOT_BATCH_REQUIRED",message:"Update the selected KOT batch."});
     if(existing.paidAt || ["Completed","Cancelled"].includes(existing.status)) return res.status(400).json({success:false,error:"ORDER_SEALED"});
     const allowed=Object.keys(req.body).every(k=>["status","version","tenantId","branchId","deviceId","updatedAt"].includes(k));
     if(!allowed || !["Preparing","Ready"].includes(req.body.status)) return res.status(400).json({success:false,error:"BUSINESS_COMMAND_REQUIRED",message:"Use the payment or cancellation command for financial changes."});
@@ -683,6 +702,7 @@ router.post("/orders/audit-discount", authMiddleware, idempotencyMiddleware, asy
     if (orderId && orderId !== "cart" && !String(orderId).startsWith("temp")) {
       targetOrder = await orderRepo.get(tenantId, orderId);
       if (targetOrder) {
+        if(targetOrder.running)throw Object.assign(new Error("Apply the running bill discount during settlement."),{status:400});
         await assertKotMutable(tenantId,targetOrder.id);
         if (targetOrder.status === "Cancelled") {
           return res.status(400).json({

@@ -1,0 +1,37 @@
+import type {Order, KotBatch} from '../src/features/shared/types';
+
+export const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+/** Restaurant menu prices are tax-exclusive. Loyalty remains a post-tax credit. */
+export function runningTotals(subtotal:number, gstRate:number, percent=0, loyalty=0) {
+  if (![subtotal,gstRate,percent,loyalty].every(Number.isFinite) || subtotal<0 || gstRate<0 || gstRate>30 || percent<0 || percent>100 || loyalty<0) throw new Error('Invalid bill calculation.');
+  const manualDiscount=money(subtotal*percent/100), taxableAmount=money(subtotal-manualDiscount);
+  const tax=money(taxableAmount*gstRate/100), gross=money(taxableAmount+tax);
+  const redeemedPoints=money(Math.min(loyalty,gross));
+  return {subtotal,manualDiscount,taxableAmount,tax,redeemedPoints,discount:money(manualDiscount+redeemedPoints),total:money(gross-redeemedPoints)};
+}
+export function openBill(order:Order) {return !order.paidAt && !['Completed','Cancelled'].includes(order.status);}
+export function matchingBills(orders:Order[],type:Order['type'],table:string,customerId:string) {
+  return orders.filter(o=>openBill(o) && o.type===type && (type==='Dine-In' && table.trim()
+    ? o.tableNo?.trim().toLowerCase()===table.trim().toLowerCase()
+    : Boolean(customerId) && o.customerId===customerId));
+}
+/** Batch tickets are projections, never independent payable bills. */
+export function kitchenTickets(orders:Order[]):(Order & {parentOrderId?:string;kotBatchId?:string;batchNumber?:number})[] {
+ return orders.flatMap(order=>order.running ? order.running.batches.filter(b=>order.status!=='Cancelled' && !['Served','Cancelled'].includes(b.status)).map(b=>({
+   ...order,id:`${order.id}:${b.id}`,parentOrderId:order.id,kotBatchId:b.id,batchNumber:b.number,
+   items:b.items,status:b.status as Order['status'],date:b.createdAt,servedAt:undefined,version:b.version
+ })) : [order]);
+}
+export function batchProgress(batches:KotBatch[]):Order['status'] {
+ const active=batches.filter(b=>!['Served','Cancelled'].includes(b.status));
+ return active.some(b=>b.status==='Pending')?'Pending':active.some(b=>b.status==='Preparing')?'Preparing':'Ready';
+}
+/** Local preview only; server revalidates prices, stock and version on replay. */
+export function projectAddon(order:Order, payload:{operationId:string;items:Order['items'];createdAt?:string}) : Order {
+ if(order.running?.operations[payload.operationId])return order;
+ const items=payload.items.map((i,index)=>({...i,lineId:`oi-${payload.operationId}-${index}`,batchId:payload.operationId}));
+ const running=order.running || {gstRate:order.subtotal?money(order.tax/order.subtotal*100):5,batches:[],operations:{}};
+ const subtotal=money(order.subtotal+items.reduce((sum,i)=>sum+i.menuItem.price*i.quantity,0));
+ const totals=runningTotals(subtotal,running.gstRate);
+ return {...order,items:[...order.items,...items],subtotal,tax:totals.tax,total:totals.total,status:'Pending',servedAt:undefined,version:(order.version || 1)+1,running:{...running,billVersion:(running.billVersion ?? order.version ?? 1)+1,batches:[...running.batches,{id:payload.operationId,number:running.batches.length+1,items,status:'Pending',createdAt:payload.createdAt || order.date,createdBy:order.cashierId,version:1}]}};
+}
