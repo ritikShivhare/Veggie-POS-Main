@@ -14,7 +14,7 @@ export function RunningSettlement({order,settings,customers,tenantId,tenantVpa,o
  const attempt=useRef<{signature:string;key:string}|null>(null),sending=useRef(false);
  const pct=Number(preset==='custom'?custom:preset),points=customers.find(c=>c.id===order.customerId)?.loyaltyPoints || 0;
  const valid=Number.isFinite(pct)&&pct>=0&&pct<=100;
- const totals=runningTotals(order.subtotal,order.running!.gstRate,valid?pct:0,redeem?points:0);
+ const totals=order.running?.frozen?{subtotal:order.subtotal,manualDiscount:0,taxableAmount:order.subtotal,tax:order.tax,redeemedPoints:order.redeemedPoints||0,discount:order.discount||0,total:order.total}:runningTotals(order.subtotal,order.running!.gstRate,valid?pct:0,redeem?points:0);
  const approval=pct>0&&(preset==='custom'||pct>Number(settings.standardDiscountPercentage??0));
  const vpa=(settings.upiVpa || tenantVpa || '').trim();
  useEffect(()=>{if(order.paidAt)onPaid(order);},[order.paidAt]);
@@ -32,7 +32,7 @@ export function RunningSettlement({order,settings,customers,tenantId,tenantVpa,o
    if(pending.some(q=>q.endpoint.endsWith('/add-items'))){throw new Error('New KOT items are still syncing. Settle after the bill is confirmed.');}
    if(!navigator.onLine){
     if(pct>0||redeem)throw new Error('Discount approval and loyalty redemption need an online connection.');
-    await offlineRepository.recordPaymentOffline(tenantId,order.id,{status:'Completed',paymentMethod:method});
+    await offlineRepository.recordPaymentOffline(tenantId,order.id,{status:'Completed',paymentMethod:method,cashReceived:method==='Cash'?Number(cash):undefined});
     void OutboxProcessor.triggerDrain(tenantId);onClose();return;
    }
    if(pending.length)throw new Error('This bill is still syncing. Please wait before collecting payment.');
@@ -52,11 +52,12 @@ export function RunningSettlement({order,settings,customers,tenantId,tenantVpa,o
  return <Dialog open onOpenChange={open=>{if(!open&&!busy)onClose();}} title={`Collect & Settle Bill #${displayOrderNumber(order.orderNumber)}`} className="max-w-lg">
   <form onSubmit={submit} className="space-y-4">
    <p className="text-sm text-slate-700">{order.type}{order.tableNo?` · Table ${order.tableNo}`:''}{order.customerName?` · ${order.customerName}`:''}</p>
+   {order.running?.frozen&&<p className="text-sm text-amber-800">This trial bill keeps its original recorded amount.</p>}
    <ul aria-label="All bill items" className="max-h-48 overflow-y-auto divide-y text-sm">{order.items.map((i,index)=><li key={i.lineId || index} className="py-2"><div className="flex justify-between gap-3"><span>{i.quantity} × {i.menuItem.name}</span><span>₹{(i.quantity*i.menuItem.price).toFixed(2)}</span></div>{i.note&&<p className="text-xs text-slate-600">{i.note}</p>}</li>)}</ul>
-   <label className="block text-sm font-semibold">Discount %<select id="settlement-discount" value={preset} onChange={e=>setPreset(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border p-2">{[0,5,10,15].map(p=><option key={p} value={p}>{p}%</option>)}<option value="custom">Custom percentage</option></select></label>
+   <label className="block text-sm font-semibold">Discount %<select id="settlement-discount" disabled={order.running?.frozen} value={preset} onChange={e=>setPreset(e.target.value)} className="mt-1 min-h-11 w-full rounded-lg border p-2">{[0,5,10,15].map(p=><option key={p} value={p}>{p}%</option>)}<option value="custom">Custom percentage</option></select></label>
    {preset==='custom'&&<InputField id="settlement-custom-discount" label="Custom discount %" type="number" min={0} max={100} value={custom} onChange={e=>setCustom(e.target.value)}/>}
    {approval&&<><InputField id="settlement-reason" label="Discount reason" value={reason} onChange={e=>setReason(e.target.value)}/><InputField id="settlement-manager-pin" label="Approving Manager / Owner PIN" type="password" inputMode="numeric" autoComplete="off" value={pin} onChange={e=>setPin(e.target.value)}/></>}
-   {order.customerId&&<label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={redeem} onChange={e=>setRedeem(e.target.checked)}/>Use loyalty points (available: {points})</label>}
+   {order.customerId&&<label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" disabled={order.running?.frozen} checked={redeem} onChange={e=>setRedeem(e.target.checked)}/>Use loyalty points (available: {points})</label>}
    <dl className="space-y-2 rounded-xl bg-slate-50 p-4 text-sm">{[['Subtotal',order.subtotal],['Discount',totals.manualDiscount],['Taxable amount',totals.taxableAmount],[`GST (${order.running!.gstRate}%)`,totals.tax],['Loyalty credit',totals.redeemedPoints],['Final amount',totals.total]].map(([label,value])=><div key={String(label)} className="flex justify-between gap-3"><dt>{label}</dt><dd className="font-semibold" data-testid={label==='Final amount'?'settlement-final':undefined}>₹{Number(value).toFixed(2)}</dd></div>)}</dl>
    <label className="block text-sm font-semibold">Payment method<select aria-label="Payment method" value={method} onChange={e=>setMethod(e.target.value as any)} className="mt-1 min-h-11 w-full rounded-lg border p-2"><option>Cash</option><option>UPI</option></select></label>
    {method==='Cash'?<><InputField id="settlement-cash" label="Cash received" type="number" min={0} step="0.01" value={cash} onChange={e=>setCash(e.target.value)}/><p className="text-sm">Change: ₹{Math.max(0,Number(cash || 0)-totals.total).toFixed(2)}</p></>:<div className="space-y-2 text-sm"><p>Collect the final amount via your restaurant UPI QR.</p>{qr&&<img src={qr} alt={`UPI payment QR for ₹${totals.total.toFixed(2)}`} className="mx-auto h-44 w-44"/>}<p className="break-all">{vpa || 'UPI address is not configured'}</p></div>}

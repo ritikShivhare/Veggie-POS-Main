@@ -1,4 +1,6 @@
+import {businessDay,paidDate,isPaidBill,paidSummary} from '../../../shared/reporting';
 import {getSubscription} from '../billing/SubscriptionLifecycle';
+import {operationalAlerts} from '../notifications/OperationalAlerts';
 import {reconcileAllPayments} from '../billing/CashfreeBilling';
 import { Database } from "../shared/database";
 import { Ingredient, Order, Customer } from "../../../src/features/shared/types";
@@ -55,8 +57,8 @@ export class BackgroundJobsService {
         id: "job-1",
         type: "low_stock_alert",
         name: "Low Stock Alert Scanner",
-        description: "Scans restaurant inventory and flags ingredients below the safety threshold.",
-        schedule: "Every 1 minute",
+        description: "Checks low stock; notifications repeat at most once every 4 hours and follow Settings → Notifications.",
+        schedule: "Checks every minute · alerts every 4 hours",
         intervalMs: 60 * 1000,
         lastRun: null,
         nextRun: new Date(now + 60 * 1000).toISOString(),
@@ -310,18 +312,7 @@ export class BackgroundJobsService {
       totalLow += lowStockItems.length;
 
       if (lowStockItems.length > 0) {
-        const itemsList = lowStockItems.map((i) => `${i.name} (Current: ${i.currentStock}${i.unit}, safety: ${i.minStock}${i.unit})`).join(", ");
-        const currentNotifications = (await this.db.getObject<any[]>(tenantId, "system_notifications")) || [];
-        const newNotification = {
-          id: `notify-${Date.now()}-${tenantId}`,
-          title: "⚠️ Low Stock Alert",
-          message: `The following items require immediate restock: ${itemsList}`,
-          timestamp: new Date().toISOString(),
-          read: false,
-          severity: "warning",
-        };
-        currentNotifications.unshift(newNotification);
-        await this.db.saveObject(tenantId, "system_notifications", currentNotifications.slice(0, 50));
+        await operationalAlerts.stock(tenantId,ingredients);
         allLowItems.push(...lowStockItems.map(i => ({ tenantId, ...i })));
       }
     }
@@ -341,7 +332,7 @@ export class BackgroundJobsService {
       const orders = await this.db.getSlice<Order>(tenantId, "orders");
       if (!orders || orders.length === 0) continue;
 
-      const completedOrders = orders.filter((o) => o.status === "Completed" || o.status === "Ready");
+      const completedOrders = orders.filter(o=>isPaidBill(o)&&businessDay(paidDate(o))===businessDay(Date.now()));
       const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
       const cashRevenue = completedOrders.filter((o) => o.paymentMethod === "Cash").reduce((sum, o) => sum + o.total, 0);
       const upiRevenue = completedOrders.filter((o) => o.paymentMethod === "UPI").reduce((sum, o) => sum + o.total, 0);

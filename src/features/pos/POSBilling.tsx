@@ -1,3 +1,6 @@
+import {registerBills} from '../../../shared/reporting';
+import {decimalMultiply,percentOf,sumMoney} from '../../../shared/decimal';
+import {runningTotals} from '../../../shared/runningOrder';
 import {matchingBills,projectAddon,openBill} from '../../../shared/runningOrder';
 import {RunningSettlement} from './RunningSettlement';
 import { displayOrderNumber } from "../../../shared/orderNumber";
@@ -46,7 +49,7 @@ interface POSBillingProps {
   onOrderCreated: (order: Order) => void;
   onUpdateIngredients: (updated: Ingredient[]) => void;
   orders: Order[];
-  onUpdateOrderStatus: (orderId: string, status: OrderStatus, paymentMethod?: 'Cash' | 'UPI', paidAt?: string) => void;
+  onUpdateOrderStatus: (orderId: string, status: OrderStatus, paymentMethod?: 'Cash' | 'UPI', paidAt?: string,cashReceived?:number) => void;
   customers: Customer[];
   setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
   activeTenant?: { name: string; tenantId?: string; vpa?: string; gstin?: string; upiMerchantName?: string };
@@ -120,6 +123,7 @@ export default function POSBilling({
   }, [orders]);
   const [showFloorMap, setShowFloorMap] = useState<boolean>(false);
   const [billsFilter, setBillsFilter] = useState<"unpaid" | "settled" | "all">("unpaid");
+  const billsInView=registerBills(orders,billsFilter);
   const [paymentSync, setPaymentSync] = useState<Record<string, "pending" | "attention">>({});
   useEffect(() => {
     const tenantId = activeTenant?.tenantId;
@@ -157,6 +161,16 @@ export default function POSBilling({
   const [cancelReason, setCancelReason] = useState("");
   const [cancelManagerPin, setCancelManagerPin] = useState("");
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelStock,setCancelStock]=useState<{ingredientId:string;name:string;unit:string;issued:number;costBasisKnown:boolean}[]>([]);
+  const [stockRecovery,setStockRecovery]=useState<Record<string,number>>({});
+  const [cancelStockLoading,setCancelStockLoading]=useState(false);
+  const [cancelVersion,setCancelVersion]=useState<number>();
+  useEffect(()=>{
+    if(!cancelModalOrder)return;let active=true;setCancelVersion(undefined);setCancelStockLoading(true);setCancelStock([]);setStockRecovery({});
+    ApiClient.authenticatedFetch(`/api/orders/${encodeURIComponent(cancelModalOrder.id)}/cancellation-stock`).then(async response=>{const result=await response.json();if(!response.ok||!result.success)throw new Error(result.message||'Unable to load issued stock.');if(!active)return;setCancelStock(result.data.ingredients);setCancelVersion(result.data.version);setStockRecovery(Object.fromEntries(result.data.ingredients.map((row:any)=>[row.ingredientId,(!result.data.prepared&&row.costBasisKnown)?row.issued:0])));}).catch(error=>{if(active)setCancelError(error.message);}).finally(()=>{if(active)setCancelStockLoading(false);});
+    return()=>{active=false};
+  },[cancelModalOrder?.id]);
+
 
   // Cash Drawer Pop Modal State (Problem 3)
   const [showDrawerPopModal, setShowDrawerPopModal] = useState(false);
@@ -165,7 +179,7 @@ export default function POSBilling({
 
   // Handle Order Cancellation with Manager PIN & Reason
   const handleConfirmCancelOrder = async () => {
-    if (!cancelModalOrder) return;
+    if (!cancelModalOrder || cancelStockLoading) return;
     setCancelError(null);
 
     if (!cancelReason.trim()) {
@@ -196,6 +210,7 @@ export default function POSBilling({
           managerPin: cancelManagerPin,
           refundConfirmed: cancelModalOrder.paidAt ? window.confirm("Confirm that you have already refunded the customer manually. This app does not transfer money.") : false,
           reason: cancelReason.trim(),
+          stockRecovery,version:cancelVersion,
           staffName: currentStaff?.name || "Staff",
           sessionId: sessId,
           tenantId: currentTenantId
@@ -353,12 +368,12 @@ export default function POSBilling({
 
   // Pricing calculations
   const subtotal = useMemo(() => {
-    return cart.reduce((sum, item) => sum + item.menuItem.price * item.quantity, 0);
+    return sumMoney(cart.map(item=>decimalMultiply(item.menuItem.price,item.quantity)));
   }, [cart]);
 
   const gstRate = (settings.gstPercentage !== undefined ? settings.gstPercentage : 5) / 100;
   const tax = useMemo(() => {
-    return Number((subtotal * gstRate).toFixed(2));
+    return percentOf(subtotal,settings.gstPercentage ?? 5);
   }, [subtotal, gstRate]);
 
   const selectedCustomer = useMemo(() => {
@@ -525,7 +540,7 @@ export default function POSBilling({
     const paidTimestamp = new Date().toISOString();
 
     // Update existing order status to Completed and record payment details
-    try {await onUpdateOrderStatus(billingOrder.id,"Completed",selectedPayment,paidTimestamp);}catch(error:any){setCheckoutError(`Payment was not saved: ${error.message}`);return;}
+    try {await onUpdateOrderStatus(billingOrder.id,"Completed",selectedPayment,paidTimestamp,selectedPayment==='Cash'?actualReceived:undefined);}catch(error:any){setCheckoutError(`Payment was not saved: ${error.message}`);return;}
 
     // Remember this checkout only. A confirmed canonical payment will open
     // its receipt; a rejected/unconfirmed payment never prints as Paid.
@@ -784,7 +799,7 @@ export default function POSBilling({
           <div className="flex-1 flex flex-col overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-slate-200 pb-3 shrink-0">
               <div>
-                <h2 className="font-display font-bold text-slate-800 text-base">Bills & Settlement Register</h2>
+                <h2 className="font-display font-bold text-slate-800 text-base">Bills & Settlement Register</h2><p className="mt-1 text-xs text-slate-500">Today’s settled bills. Older unpaid bills stay available until closed.</p>
               </div>
 
               {/* Filter Tabs: Unpaid vs Settled vs All */}
@@ -814,7 +829,7 @@ export default function POSBilling({
                 >
                   <span>Settled</span>
                   <span className="bg-emerald-100 text-emerald-700 text-[10px] font-mono px-1.5 py-0.2 rounded-full">
-                    {orders.filter(o => Boolean(o.paidAt && o.paymentMethod)).length}
+                    {registerBills(orders,"settled").length}
                   </span>
                 </button>
                 <button
@@ -826,34 +841,25 @@ export default function POSBilling({
                   }`}
                   id="pos-bills-filter-all"
                 >
-                  <span>All ({orders.length})</span>
+                  <span>All ({registerBills(orders,"all").length})</span>
                 </button>
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto pr-1">
-              {orders.filter(o => {
-                if (billsFilter === "unpaid") return openBill(o);
-                if (billsFilter === "settled") return Boolean(o.paidAt && o.paymentMethod);
-                return true;
-              }).length === 0 ? (
+              {billsInView.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-12 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                   <span className="text-5xl filter grayscale mb-3">🛎️</span>
                   <h3 className="text-sm font-bold text-slate-700">No orders found in this view</h3>
                   <p className="text-xs text-slate-400 max-w-xs mt-1.5 leading-relaxed">
                     {billsFilter === "unpaid"
                       ? "There are no unpaid orders right now. New orders taken by waiters will appear here for checkout once dispatched to KDS."
-                      : "No settled orders recorded yet in this session."}
+                      : "No settled bills for today."}
                   </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                  {orders
-                    .filter(o => {
-                      if (billsFilter === "unpaid") return openBill(o);
-                      if (billsFilter === "settled") return Boolean(o.paidAt && o.paymentMethod);
-                      return true;
-                    })
+                  {billsInView
                     .map((order) => {
                       const syncState = paymentSync[order.id];
                       const isPaid = !syncState && Boolean(order.paidAt && order.paymentMethod);
@@ -1206,7 +1212,7 @@ export default function POSBilling({
               <option value="">Choose a bill or start separate</option><option value="new">Start separate bill</option>
               {candidates.map(o=><option key={o.id} value={o.id}>Add to bill #{displayOrderNumber(o.orderNumber)} · ₹{o.total.toFixed(2)}{o.customerName?` · ${o.customerName}`:''}</option>)}
             </select>
-            {appendTarget&&<><p className="text-sm text-blue-950">Already sent: {appendTarget.items.reduce((n,i)=>n+i.quantity,0)} items · ₹{appendTarget.total.toFixed(2)}. Only new cart items go to the next KOT.</p><ul aria-label="Previously sent items" className="max-h-32 overflow-y-auto text-xs text-slate-700">{appendTarget.items.map((i,index)=><li key={i.lineId || index}>{i.quantity} × {i.menuItem.name}{i.note?` · ${i.note}`:''}</li>)}</ul><p className="text-sm font-semibold">Combined estimate: ₹{(appendTarget.total+total).toFixed(2)}</p></>}
+            {appendTarget&&<><p className="text-sm text-blue-950">Already sent: {appendTarget.items.reduce((n,i)=>n+i.quantity,0)} items · ₹{appendTarget.total.toFixed(2)}. Only new cart items go to the next KOT.</p><ul aria-label="Previously sent items" className="max-h-32 overflow-y-auto text-xs text-slate-700">{appendTarget.items.map((i,index)=><li key={i.lineId || index}>{i.quantity} × {i.menuItem.name}{i.note?` · ${i.note}`:''}</li>)}</ul><p className="text-sm font-semibold">Combined estimate: ₹{runningTotals(sumMoney([appendTarget.subtotal,subtotal]),appendTarget.running?.gstRate ?? (appendTarget.subtotal?appendTarget.tax/appendTarget.subtotal*100:5)).total.toFixed(2)}</p></>}
           </div>}
           {/* Loyalty Guest Selection */}
           <div className="space-y-1 bg-slate-100 p-2.5 rounded-xl border border-slate-200/50">
@@ -1579,6 +1585,15 @@ export default function POSBilling({
                 />
               </div>
 
+              <fieldset className="space-y-2"><legend className="font-bold">Recovered stock and wastage</legend>
+                {cancelStockLoading&&<p>Loading original issued quantities…</p>}
+                {cancelStock.map(row=><label key={row.ingredientId} className="block">{row.name} · issued {row.issued} {row.unit}
+                  <input aria-label={`Recovered ${row.name}`} type="number" min="0" max={row.issued} step="any" disabled={!row.costBasisKnown} value={stockRecovery[row.ingredientId]??0} onChange={e=>setStockRecovery({...stockRecovery,[row.ingredientId]:Number(e.target.value)})} className="ml-2 w-24 rounded border p-2"/>
+                  <span className="block">Wastage: {Math.max(0,row.issued-(stockRecovery[row.ingredientId]||0))} {row.unit}</span>
+                  {!row.costBasisKnown&&<span>Historical issue cost needs reconciliation before stock can be restored.</span>}
+                </label>)}
+              </fieldset>
+
               <div>
                 <label className="block text-[11px] font-bold text-rose-900 mb-1">
                   Manager / Owner PIN (4-6 Digits)*:
@@ -1616,6 +1631,7 @@ export default function POSBilling({
               <button
                 onClick={handleConfirmCancelOrder}
                 className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs transition shadow-md shadow-rose-600/20"
+                disabled={cancelStockLoading || cancelVersion===undefined}
                 id="pos-confirm-cancel-btn"
               >
                 Confirm Cancellation & Audit
@@ -1628,7 +1644,7 @@ export default function POSBilling({
       {/* CASH DRAWER POP MODAL (Problem 3) */}
       {showDrawerPopModal && (
         <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl text-slate-800 space-y-4">
+          <div className="w-full max-w-sm max-h-[90dvh] overflow-y-auto bg-white border border-slate-200 rounded-2xl p-6 shadow-2xl text-slate-800 space-y-4">
             <div className="flex items-center space-x-3 text-amber-600">
               <Coins className="w-6 h-6 shrink-0" />
               <div>
@@ -1718,9 +1734,8 @@ export default function POSBilling({
               <div id="pos-receipt-print-body" data-paper-size={receiptPaperSize} className="printable-thermal-receipt bg-white text-black p-4 border border-dashed border-slate-300 rounded font-mono text-[11px] leading-relaxed mx-auto">
                 <div className="text-center pb-2 border-b border-dashed border-slate-400">
                   <h2 className="text-sm font-black uppercase tracking-wider">
-                    {activeTenant?.name || "VEGGIE RESTAURANT & POS"}
+                    {activeTenant?.name || "Aatmyam Pos"}
                   </h2>
-                  <p className="text-[10px] text-slate-600">Pure Vegetarian Hospitality Suite</p>
                   <FssaiRegistration number={settings.fssaiNumber} className="text-[9px] text-slate-700 mt-0.5" />
                   {(settings.gstin || activeTenant?.gstin) ? (
                     <p className="text-[9px] text-slate-700 font-bold mt-0.5">
@@ -1760,19 +1775,19 @@ export default function POSBilling({
 
                 {/* Items Table */}
                 <div className="py-2 border-b border-dashed border-slate-400">
-                  <div className="flex justify-between font-bold pb-1 text-[10px] border-b border-slate-200">
-                    <span className="w-1/2">ITEM</span>
-                    <span className="w-1/6 text-center">QTY</span>
-                    <span className="w-1/6 text-right">RATE</span>
-                    <span className="w-1/6 text-right">AMT</span>
+                  <div className="grid grid-cols-[minmax(0,1fr)_1.5rem_2.25rem_3.25rem] gap-x-1 font-bold pb-1 text-[10px] border-b border-slate-200">
+                    <span className="min-w-0">ITEM</span>
+                    <span className="text-center">QTY</span>
+                    <span className="min-w-0 text-right break-all">RATE</span>
+                    <span className="min-w-0 text-right break-all">AMT</span>
                   </div>
                   <div className="pt-1.5 space-y-1">
                     {(receiptModalOrder.items || []).map((item, idx) => (
-                      <div key={idx} className="flex justify-between text-[10px]">
-                        <span className="w-1/2 truncate">{item.menuItem.name}</span>
-                        <span className="w-1/6 text-center">{item.quantity}</span>
-                        <span className="w-1/6 text-right font-mono">{item.menuItem.price}</span>
-                        <span className="w-1/6 text-right font-mono">{(item.quantity * item.menuItem.price).toFixed(0)}</span>
+                      <div key={idx} className="grid grid-cols-[minmax(0,1fr)_1.5rem_2.25rem_3.25rem] gap-x-1 text-[10px]">
+                        <span className="min-w-0 truncate">{item.menuItem.name}</span>
+                        <span className="text-center">{item.quantity}</span>
+                        <span className="min-w-0 text-right break-all font-mono">{item.menuItem.price.toFixed(2)}</span>
+                        <span className="min-w-0 text-right break-all font-mono">{decimalMultiply(item.quantity,item.menuItem.price).toFixed(2)}</span>
                       </div>
                     ))}
                   </div>

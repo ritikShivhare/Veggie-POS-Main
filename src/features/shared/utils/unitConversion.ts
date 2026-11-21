@@ -5,6 +5,7 @@
  */
 
 import { Ingredient } from "../types";
+import {decimalMultiply} from '../../../../shared/decimal';
 
 export type UnitCategory = "weight" | "volume" | "count" | "other";
 
@@ -100,7 +101,7 @@ export function getUnitConversionRatio(fromUnit?: string, toUnit?: string): numb
   const defTo = getUnitDefinition(normTo);
 
   // If in the same physical category (e.g. weight: g -> kg, or volume: ml -> l)
-  if (defFrom.category === defTo.category && defFrom.category !== "other") {
+  if (defFrom.category === defTo.category && ['weight','volume'].includes(defFrom.category)) {
     // E.g. from g (factor 1) to kg (factor 1000) => 1 / 1000 = 0.001
     // E.g. from kg (factor 1000) to g (factor 1) => 1000 / 1 = 1000
     return defFrom.factorToBase / defTo.factorToBase;
@@ -111,8 +112,7 @@ export function getUnitConversionRatio(fromUnit?: string, toUnit?: string): numb
     return 1;
   }
 
-  // Incompatible categories
-  return 1;
+  throw new Error(`Cannot convert ${fromUnit} to ${toUnit} without an explicit conversion mapping.`);
 }
 
 /**
@@ -134,7 +134,7 @@ export function convertRecipeQuantityToIngredientStock(
   }
 
   const ratio = getUnitConversionRatio(recipeUnit, ingredientUnit);
-  return Number((recipeQty * ratio).toFixed(4));
+  return decimalMultiply(recipeQty,ratio,12);
 }
 
 /**
@@ -163,7 +163,7 @@ export function getCompatibleUnits(ingredientUnit: string): { value: string; lab
 
   if (def.category === "count") {
     return [
-      { value: "pcs", label: "Pieces (pcs)" }
+      { value: def.canonical, label: def.label }
     ];
   }
 
@@ -186,7 +186,7 @@ export function getDefaultRecipeUnit(ingredientUnit: string): string {
     return "ml";
   }
   if (def.category === "count") {
-    return "pcs";
+    return def.canonical;
   }
   return ingredientUnit || "g";
 }
@@ -202,13 +202,13 @@ export function calculatePortionCost(
 ): number {
   if (!ingredient || recipeQty <= 0) return 0;
   const stockQty = convertRecipeQuantityToIngredientStock(recipeQty, recipeUnit, ingredient.unit);
-  return Number((stockQty * (ingredient.costPerUnit || 0)).toFixed(2));
+  return decimalMultiply(stockQty,ingredient.costPerUnit || 0,10);
 }
 
 /**
  * Formats a quantity with its unit cleanly (e.g. "200 g" or "0.2 kg")
  */
 export function formatQuantityWithUnit(qty: number, unit?: string): string {
-  const formattedQty = Number(qty.toFixed(3));
+  const formattedQty = Number(qty.toFixed(9));
   return `${formattedQty} ${unit || ""}`.trim();
 }

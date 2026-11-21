@@ -1,3 +1,4 @@
+import {businessDay} from '../../../shared/reporting';
 import { isActiveStaff } from "../../../src/features/shared/staffStatus";
 import crypto from 'node:crypto';
 
@@ -27,7 +28,7 @@ export function publicState(state: any, role: string, permissions:string[] = [],
   if (!['Owner', 'Manager', 'SaaS Owner'].includes(role)) {
     const day=(value:any)=>new Date(value).toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});
     const today=day(Date.now());
-    result.orders = result.orders.filter((o: any) => o.date && (day(o.date) === today || (o.running && !o.paidAt && !['Completed','Cancelled'].includes(o.status))));
+    result.orders = result.orders.filter((o: any) => o.date && (day(o.date) === today || businessDay(o.paidAt)===businessDay(Date.now()) || (o.running && !o.paidAt && !['Completed','Cancelled'].includes(o.status))));
     result.purchases = permissions.includes('inventory') ? result.purchases : [];
     result.customers = permissions.includes('billing') ? result.customers : permissions.includes('orders') ? (result.customers || []).map(({id,name,phone}:any)=>({id,name,phone})) : [];
     result.shifts = (result.shifts || []).filter((s:any)=>s.staffId===userId);

@@ -1,3 +1,4 @@
+import {decimalDivide} from '../../../shared/decimal';
 import { GoogleGenAI } from "@google/genai";
 
 export class ReportService {
@@ -7,7 +8,7 @@ export class ReportService {
     shiftsData: any,
     language: "hindi" | "hinglish" | "english" = "hindi"
   ): string {
-    const avgOrderVal = salesData.totalOrders > 0 ? (salesData.totalRevenue / salesData.totalOrders).toFixed(0) : "0";
+    const avgOrderVal = salesData.totalOrders > 0 ? decimalDivide(salesData.totalRevenue,salesData.totalOrders,2).toFixed(2) : "0";
     const upiPercent = salesData.totalRevenue > 0 ? ((salesData.upiRevenue / salesData.totalRevenue) * 100).toFixed(0) : "0";
     const cashPercent = salesData.totalRevenue > 0 ? ((salesData.cashRevenue / salesData.totalRevenue) * 100).toFixed(0) : "0";
     
@@ -17,7 +18,7 @@ export class ReportService {
         : "*   ✅ **सभी सामग्री पर्याप्त है**: किसी भी आवश्यक कच्चा माल की कमी नहीं है।";
 
       return `### 🟢 1. बिक्री व राजस्व सारांश (Sales & Revenue Summary)
-*   **कुल बिक्री (Net Revenue)**: कुल **${salesData.totalOrders}** ऑर्डर्स से **INR ${salesData.totalRevenue.toLocaleString()}** का राजस्व प्राप्त हुआ। औसत बिल साइज **INR ${avgOrderVal}** रहा।
+*   **कुल बिक्री (Net Revenue)**: कुल **${salesData.totalOrders}** ऑर्डर्स से **INR ${(salesData.netSales??salesData.totalRevenue).toLocaleString()}** का राजस्व प्राप्त हुआ। औसत बिल साइज **INR ${avgOrderVal}** रहा।
 *   **पेमेंट विभाजन (Payment Breakdown)**: ग्राहकों ने **${upiPercent}%** भुगतान डिजिटल UPI (INR ${salesData.upiRevenue.toLocaleString()}) और **${cashPercent}%** भुगतान नकद/Cash (INR ${salesData.cashRevenue.toLocaleString()}) के माध्यम से किया।
 *   **सलाह**: डिजिटल पेमेंट की गति बढ़ाने के लिए डाइनिंग टेबल और काउंटर पर क्यूआर कोड स्पष्ट रूप से लगाएं।
 
@@ -43,7 +44,7 @@ ${lowStockListHindi}
         : "*   ✅ **Stock Sahi Hai**: Koi bhi raw material low stock alert me nahi hai.";
 
       return `### 🟢 1. Sales & Revenue Summary (कमाई का हिसाब)
-*   **Total Sales Momentum**: Aaj total **${salesData.totalOrders}** orders se **INR ${salesData.totalRevenue.toLocaleString()}** ka net revenue collect hua. Average customer ticket size **INR ${avgOrderVal}** raha.
+*   **Total Sales Momentum**: Aaj total **${salesData.totalOrders}** orders se **INR ${(salesData.netSales??salesData.totalRevenue).toLocaleString()}** ka net revenue collect hua. Average customer ticket size **INR ${avgOrderVal}** raha.
 *   **Payment Split**: Digital UPI se **${upiPercent}%** revenue (INR ${salesData.upiRevenue.toLocaleString()}) aur Cash se **${cashPercent}%** (INR ${salesData.cashRevenue.toLocaleString()}) receive hua.
 *   **Action Tip**: Counter aur sabhi tables par UPI QR code visible rakhein taaki checkout aur service speed fast bani rahe.
 
@@ -69,7 +70,7 @@ ${lowStockListHinglish}
       : "*   No critical low stock alerts found. Current holding quantities are sufficient.";
 
     return `### Executive Operational Summary
-*   **Sales Momentum**: Total revenue recorded at **INR ${salesData.totalRevenue.toLocaleString()}** across **${salesData.totalOrders}** orders, yielding a robust average ticket size of **INR ${avgOrderVal}** per checkout.
+*   **Sales Momentum**: Total revenue recorded at **INR ${(salesData.netSales??salesData.totalRevenue).toLocaleString()}** across **${salesData.totalOrders}** orders, yielding a robust average ticket size of **INR ${avgOrderVal}** per checkout.
 *   **Settlement Preferences**: Digital transactions lead with UPI comprising **${upiPercent}%** of revenue (INR ${salesData.upiRevenue.toLocaleString()}), compared to Cash at **${cashPercent}%** (INR ${salesData.cashRevenue.toLocaleString()}). Recommended: Ensure QR codes are highly visible at tables to sustain speed of service.
 
 ### Inventory Audit & Action Matrix
@@ -122,7 +123,8 @@ ${lowStockList}
       const prompt = `You are an elite Restaurant POS & Inventory Operations Consultant for an Indian restaurant. Analyze the following real-time operating data:
       
       1. Sales & Revenue:
-      - Total Revenue: INR ${salesData.totalRevenue}
+      - Paid collections (GST included): INR ${salesData.totalRevenue}
+      - Net sales (GST excluded): INR ${salesData.netSales??salesData.totalRevenue}
       - Total Orders: ${salesData.totalOrders}
       - Payment Split: Cash (INR ${salesData.cashRevenue}), UPI (INR ${salesData.upiRevenue})
       - Top Selling Items: ${JSON.stringify(salesData.topSellingItems)}

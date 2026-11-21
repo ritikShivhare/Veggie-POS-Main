@@ -10,7 +10,7 @@ export default function ReceiptTotals({ order, variant = "dashboard" }: ReceiptT
   const tax = order.tax ?? 0;
   const discount = order.discount ?? 0;
   const subtotal = order.subtotal ?? (order.total - tax + discount);
-  const rate = order.running?.gstRate ?? (subtotal > 0 ? Number(((tax / subtotal) * 100).toFixed(2)) : null);
+  const rate = order.running?.gstRate ?? null;
   const prefix = variant === "thermal" ? "INR " : "₹";
   const money = (amount: number) => `${prefix}${amount.toFixed(2)}`;
 

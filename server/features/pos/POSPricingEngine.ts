@@ -1,4 +1,5 @@
 import {getSubscription} from '../billing/SubscriptionLifecycle';
+import {decimalMultiply,percentOf,sumMoney,quantity as stockQuantity,isCurrency} from '../../../shared/decimal';
 import { MenuRepository } from "./MenuRepository";
 import { CustomerRepository } from "../crm/CustomerRepository";
 import { SettingsRepository } from "../shared/SettingsRepository";
@@ -48,6 +49,10 @@ export interface AuthoritativeOrderCalculation {
     quantityDeducted: number;
     previousStock: number;
     newStock: number;
+    requiredQuantity:number;
+    shortageQuantity:number;
+    unit:string;
+    unitCost:number;
   }[];
   updatedIngredients: Ingredient[];
 }
@@ -173,6 +178,7 @@ export class POSPricingEngine {
       if (!Number.isFinite(unitPrice) || unitPrice < 0) {
         throw new FinancialValidationError("INVALID_PRICE", `Authoritative price for '${authoritativeMenuItem.name}' is negative.`, 500);
       }
+      if(!isCurrency(unitPrice))throw new FinancialValidationError('INVALID_PRICE_PRECISION','Update this menu price to two decimal places before ordering.');
 
       // Detect client item price tampering if client supplied a price
       const clientPrice = (item as any).price ?? (item as any).unitPrice;
@@ -208,8 +214,8 @@ export class POSPricingEngine {
         }
       }
 
-      const itemSubtotal = Number((unitPrice * quantity).toFixed(2));
-      calculatedSubtotal = Number((calculatedSubtotal + itemSubtotal).toFixed(2));
+      const itemSubtotal = decimalMultiply(unitPrice,quantity);
+      calculatedSubtotal = sumMoney([calculatedSubtotal,itemSubtotal]);
 
       validatedItems.push({
         id: `oi-${rawOrder.id || "temp"}-${i + 1}`,
@@ -229,7 +235,7 @@ export class POSPricingEngine {
     const settings = (await settingsRepo.get(tenantId)) || ({} as any);
     const gstRate = Number(settings.gstPercentage ?? 5) / 100;
     if (!Number.isFinite(gstRate) || gstRate < 0 || gstRate > 0.3) throw new FinancialValidationError("INVALID_TAX_RATE","Restaurant GST setting is invalid.");
-    const calculatedTax = Number((calculatedSubtotal * gstRate).toFixed(2));
+    const calculatedTax = percentOf(calculatedSubtotal,Number(settings.gstPercentage ?? 5));
 
     // 4. Validate Discounts (Loyalty points & manual discount)
     let loyaltyDiscount = 0;
@@ -430,7 +436,7 @@ export class POSPricingEngine {
             required: 0,
             unit: ingUnit
           };
-          current.required = Number((current.required + needed).toFixed(4));
+          current.required = stockQuantity(current.required + needed);
           requiredIngredientQuantities.set(ri.ingredientId, current);
         }
       }
@@ -462,15 +468,18 @@ export class POSPricingEngine {
         const ing = ingredientMap.get(ingId);
         if (ing) {
           const previousStock = ing.currentStock;
-          const newStock = Math.max(0, Number((previousStock - req.required).toFixed(4)));
+          const newStock = Math.max(0, stockQuantity(previousStock - req.required));
           ing.currentStock = newStock;
           ing.updated_at = new Date().toISOString();
           ing.version = (ing.version || 1) + 1;
 
-          if (previousStock !== newStock) inventoryDeductions.push({
+          inventoryDeductions.push({
             ingredientId: ing.id,
             ingredientName: ing.name,
-            quantityDeducted: Number((previousStock-newStock).toFixed(4)),
+            quantityDeducted: stockQuantity(previousStock-newStock),
+            requiredQuantity:req.required,
+            shortageQuantity:stockQuantity(Math.max(0,req.required-previousStock)),
+            unit:ing.unit,unitCost:ing.costPerUnit,
             previousStock,
             newStock
           });

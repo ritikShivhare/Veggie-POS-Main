@@ -1,3 +1,4 @@
+import {decimalDivide} from '../../../../shared/decimal';
 import React, { useState } from "react";
 import {
   Sparkles,
@@ -30,6 +31,8 @@ interface AIReportsViewProps {
   aiReport: string;
   dashboardStats?: {
     totalRevenue: number;
+    netSales?:number;
+    paidCheckouts?:number;
     cashRevenue: number;
     upiRevenue: number;
     totalOrders: number;
@@ -70,8 +73,8 @@ export default function AIReportsView({
   const totalRev = dashboardStats?.totalRevenue ?? 0;
   const cashRev = dashboardStats?.cashRevenue ?? 0;
   const upiRev = dashboardStats?.upiRevenue ?? 0;
-  const totalOrders = dashboardStats?.totalOrders ?? 0;
-  const avgTicket = totalOrders > 0 ? Math.round(totalRev / totalOrders) : 0;
+  const totalOrders = dashboardStats?.paidCheckouts ?? dashboardStats?.totalOrders ?? 0;
+  const avgTicket = totalOrders > 0 ? decimalDivide(totalRev,totalOrders,2) : 0;
   const upiPercent = totalRev > 0 ? Math.round((upiRev / totalRev) * 100) : 0;
   const cashPercent = totalRev > 0 ? Math.round((cashRev / totalRev) * 100) : 0;
   const lowStock = dashboardStats?.lowStockItems ?? ingredients.filter(i => i.currentStock <= i.minStock);
@@ -271,7 +274,7 @@ export default function AIReportsView({
                         {selectedLanguage === "hindi" ? "कुल बिक्री" : "Total Net Sales"}
                       </span>
                       <span className="text-lg font-black text-slate-900">
-                        ₹{totalRev.toLocaleString()}
+                        ₹{(dashboardStats?.netSales ?? totalRev).toLocaleString()}
                       </span>
                     </div>
                     <div className="p-2.5 bg-indigo-50/60 rounded-xl border border-indigo-100">

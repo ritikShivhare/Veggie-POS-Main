@@ -1,3 +1,5 @@
+import {businessDay,paidDate,paidSummary,isPaidBill} from '../../../../shared/reporting';
+import {money,decimalMultiply,sumMoney} from '../../../../shared/decimal';
 import { useState, useEffect, useRef, useMemo } from "react";
 import { MenuItem, Ingredient, Recipe, Purchase, StaffMember, Shift, Order, InventorySettings, Customer } from "../types";
 import { ApiClient, SyncResponse } from "../services/api";
@@ -452,7 +454,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     const baseline=JSON.parse(lastFetchedStateRef.current || "{}");
     const current:any={menuItems,ingredients,recipes,...(currentStaff?.role==="Owner"?{settings}:{})};
     const payload:any={},deletions:any={};
-    const clean=(row:any)=>{const {tenantId,branchId,deviceId,updatedAt,createdAt,...safe}=row;return safe;};
+    const clean=(row:any)=>{const {tenantId,branchId,deviceId,updatedAt,createdAt,untrackedConsumption,...safe}=row;return safe;};
     for(const key of Object.keys(current)) {
       if(key==="settings") {if(JSON.stringify(current.settings)!==JSON.stringify(baseline.settings)) payload.settings=current.settings;continue;}
       const previous=baseline[key] || [],idKey=key==="recipes"?"menuItemId":"id";
@@ -516,13 +518,13 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     setOrders(prev=>[newOrder,...prev]);
     OutboxProcessor.triggerDrain(activeTenantId).catch(console.warn);
   };
-  const handleUpdateOrderStatus=async(orderId:string,status:any,paymentMethod?:"Cash"|"UPI",paidAt?:string)=>{
+  const handleUpdateOrderStatus=async(orderId:string,status:any,paymentMethod?:"Cash"|"UPI",paidAt?:string,cashReceived?:number)=>{
     if(status==="Cancelled") {
       const response=await ApiClient.authenticatedFetch(`/api/orders/${encodeURIComponent(orderId)}`);const result=await response.json();
       if(!response.ok || !result.success) throw new Error(result.message || "Failed to refresh cancellation.");
       await offlineRepository.putOrder(activeTenantId,result.data);setOrders(prev=>prev.map(o=>o.id===orderId?result.data:o));return;
     }
-    await offlineRepository.recordPaymentOffline(activeTenantId,orderId,{status,paymentMethod,paidAt});
+    await offlineRepository.recordPaymentOffline(activeTenantId,orderId,{status,paymentMethod,paidAt,cashReceived});
     // Payment is queued, not settled: do not mark Paid in React state until
     // the canonical server response arrives via the offline sync event.
     if (!paymentMethod) setOrders(prev=>prev.map(o=>o.id===orderId?{...o,status}:o));
@@ -567,27 +569,19 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     const safeShifts = shifts || [];
     const safeIngredients = ingredients || [];
 
-    const today = new Date().toDateString();
-    const todayOrders = safeOrders.filter((o) => o && o.date && new Date(o.date).toDateString() === today);
-    const totalRevenue = todayOrders
-      .filter((o) => o && o.status === "Completed" && Boolean(o.paidAt))
-      .reduce((sum, o) => sum + (o.total || 0), 0);
-
-    const cashRevenue = todayOrders
-      .filter((o) => o && o.status === "Completed" && Boolean(o.paidAt) && o.paymentMethod === "Cash")
-      .reduce((sum, o) => sum + (o.total || 0), 0);
-
-    const upiRevenue = todayOrders
-      .filter((o) => o && o.status === "Completed" && Boolean(o.paidAt) && o.paymentMethod === "UPI")
-      .reduce((sum, o) => sum + (o.total || 0), 0);
+    const today = businessDay(Date.now());
+    const todayOrders = safeOrders.filter(o=>businessDay(o.date)===today);
+    const todayPaid=safeOrders.filter(o=>isPaidBill(o)&&businessDay(paidDate(o))===today);
+    const summary=paidSummary(todayPaid);
+    const {totalRevenue,cashRevenue,upiRevenue}=summary;
 
     const activeShiftsCount = safeShifts.filter((s) => s && s.status === "Active").length;
     const lowStockItems = safeIngredients.filter((ing) => ing && ing.currentStock <= ing.minStock);
     const totalStockValue = safeIngredients.reduce((sum, ing) => sum + (ing ? (ing.currentStock || 0) * (ing.costPerUnit || 0) : 0), 0);
 
     const itemSalesMap: { [id: string]: { name: string; qty: number; sales: number } } = {};
-    safeOrders
-      .filter((o) => o && o.status === "Completed" && Boolean(o.paidAt))
+    todayPaid
+      .filter(isPaidBill)
       .forEach((order) => {
         if (!order || !order.items) return;
         order.items.forEach((item) => {
@@ -610,9 +604,7 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
     const topSellingItems = sortedSales.slice(0, 3);
 
     return {
-      totalRevenue,
-      cashRevenue,
-      upiRevenue,
+      ...summary,
       totalOrders: todayOrders.length,
       activeShiftsCount,
       lowStockItems,
@@ -632,7 +624,8 @@ export function useSyncState({ activeTenantId, currentStaff, currentSessionId }:
         language,
         salesData: {
           totalRevenue: dashboardStats.totalRevenue,
-          totalOrders: dashboardStats.totalOrders,
+          totalOrders: dashboardStats.paidCheckouts,
+          netSales: dashboardStats.netSales,
           cashRevenue: dashboardStats.cashRevenue,
           upiRevenue: dashboardStats.upiRevenue,
           topSellingItems: dashboardStats.topSellingItems

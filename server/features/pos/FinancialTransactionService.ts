@@ -1,4 +1,8 @@
 import {assertOrderCreation,assertSettlement,assertKotMutable,assertOwnerFrozenKotRecovery,getSubscription} from '../billing/SubscriptionLifecycle';
+import {isCurrency,quantity,decimalDivide,decimalMultiply,decimalRound,sumMoney} from '../../../shared/decimal';
+import {recordStockIssues,inventoryAccounting,INVENTORY_ACCOUNTING,issueValue} from '../inventory/InventoryAccounting';
+import {recordTender,recordRefunds} from './SettlementLedger';
+import {updateCustomerBillExtremes} from '../crm/CustomerBillStats';
 import {operationalAlerts} from '../notifications/OperationalAlerts';
 import { Database, NotFoundError, CrossTenantViolationError, DatabaseUnavailableError, OptimisticLockConflictError } from "../shared/database";
 import { posPricingEngine, FinancialValidationError } from "./POSPricingEngine";
@@ -162,7 +166,7 @@ export class FinancialTransactionService {
     const inventoryMovementsToInsert: InventoryMovement[] = [];
     if (calculation.inventoryDeductions && calculation.inventoryDeductions.length > 0) {
       for (const deduction of calculation.inventoryDeductions) {
-        inventoryMovementsToInsert.push({
+        if(deduction.quantityDeducted>0)inventoryMovementsToInsert.push({
           id: `mov-${orderId}-${deduction.ingredientId}-${Date.now()}`,
           ingredientId: deduction.ingredientId,
           movementType: "SALE_DEDUCTION",
@@ -180,6 +184,7 @@ export class FinancialTransactionService {
     }
 
     // 2. ATOMIC TRANSACTION EXECUTION
+    await recordStockIssues(tenantId,calculation.inventoryDeductions.map((d,index)=>({id:inventoryMovementsToInsert.find(m=>m.ingredientId===d.ingredientId)?.id || `issue-${orderId}-${index}`,orderId,ingredientId:d.ingredientId,name:d.ingredientName,unit:d.unit,unitCost:d.unitCost,issued:d.quantityDeducted,required:d.requiredQuantity,shortage:d.shortageQuantity})));
     // All staged writes commit together.
       // 2a. Insert Order
       await orderRepo.add(tenantId, finalOrder, trx);
@@ -237,6 +242,7 @@ export class FinancialTransactionService {
         trx
       );
     if(rawOrder.runningOrderFlow) finalOrder.running=await initializeRunning(tenantId,finalOrder,finalOrder.cashierId);
+    if(isPaidImmediately)await updateCustomerBillExtremes(tenantId,finalOrder.customerId);
     await operationalAlerts.newOrder(tenantId,finalOrder);
     return { order: finalOrder, items: orderItemsToInsert, payment: paymentRecord };
     });
@@ -280,6 +286,7 @@ export class FinancialTransactionService {
       cashierId?: string;
       cashierName?: string;
       frozenRecovery?: {ownerId:string;reason:string};
+      cashReceived?:number;
     }
   ): Promise<{ order: Order; payment: Payment }> {
     if (!tenantId) {
@@ -308,7 +315,7 @@ export class FinancialTransactionService {
       throw new FinancialValidationError("INVALID_PAYMENT_AMOUNT", "Payment amount must be greater than zero.", 400);
     }
 
-    if (Math.abs(paymentAmount - order.total) > 0.05) {
+    if (!isCurrency(paymentAmount) || paymentAmount !== order.total) {
       throw new FinancialValidationError(
         "INVALID_PAYMENT_AMOUNT",
         `Payment amount (₹${paymentAmount}) does not match authoritative order total (₹${order.total}).`,
@@ -317,6 +324,7 @@ export class FinancialTransactionService {
     }
 
     if (!["Cash","UPI"].includes(paymentDetails.paymentMethod)) throw new FinancialValidationError("INVALID_PAYMENT_METHOD","Choose Cash or UPI.");
+    if(paymentDetails.paymentMethod==='Cash' && paymentDetails.cashReceived!==undefined && (!isCurrency(paymentDetails.cashReceived)||paymentDetails.cashReceived<paymentAmount))throw new FinancialValidationError('INSUFFICIENT_CASH','Cash received must cover the bill in rupees and paise.');
     const nowIso = new Date().toISOString();
     const paymentId = `pay-${order.id}-${Date.now()}`;
     const paymentRecord: Payment = {
@@ -344,6 +352,7 @@ export class FinancialTransactionService {
     // All staged writes commit together.
       // 1. Insert Payment
       await this.paymentRepo.add(tenantId, paymentRecord, trx);
+      if(paymentDetails.paymentMethod==='Cash')await recordTender(tenantId,paymentId,paymentAmount,paymentDetails.cashReceived);
 
       // 2. Update Order Status
       await orderRepo.update(tenantId, updatedOrder, order.version, trx);
@@ -352,6 +361,7 @@ export class FinancialTransactionService {
         const c = await customerRepo.getById(tenantId,order.customerId);
         if (c) await customerRepo.update(tenantId,{...c,loyaltyPoints:c.loyaltyPoints+((order as any).earnedPoints || 0),totalSpend:Number((c.totalSpend+paymentAmount).toFixed(2)),totalVisits:c.totalVisits+1,lastVisited:nowIso},undefined,trx);
       }
+      await updateCustomerBillExtremes(tenantId,order.customerId);
       // 3. Log Audit Trail
       await auditLogService.log(
         tenantId,
@@ -386,6 +396,7 @@ export class FinancialTransactionService {
       expectedVersion?: number;
       refundConfirmed?: boolean;
       staffId?: string;
+      stockRecovery?:Record<string,number>;
     }
   ): Promise<Order> {
     if (!tenantId) {
@@ -435,17 +446,33 @@ export class FinancialTransactionService {
     const ingredientMap = new Map(ingredients.map(i=>[i.id,{...i}]));
     const previousMovements = (await this.inventoryMovementRepo.getAll(tenantId)) || [];
     const returnMovements: InventoryMovement[] = [];
+    const accounting=await inventoryAccounting(tenantId);
+    const saleMovements=previousMovements.filter(m=>m.referenceId===orderId && m.movementType==='SALE_DEDUCTION');
+    const prepared=order.running?order.running.batches.some(b=>b.status!=='Pending'):order.status!=='Pending';
+    if(cancelDetails.stockRecovery!==undefined && (!cancelDetails.stockRecovery || typeof cancelDetails.stockRecovery!=='object' || Array.isArray(cancelDetails.stockRecovery)))throw new FinancialValidationError('INVALID_STOCK_RECOVERY','Recovered quantities must be keyed by ingredient.');
+    if(prepared && saleMovements.length && !cancelDetails.stockRecovery)throw new FinancialValidationError('STOCK_RECOVERY_REQUIRED','Manager must record recovered quantities; the remainder is wastage.');
+    const recoverable=new Map<string,number>();for(const sale of saleMovements)recoverable.set(sale.ingredientId,quantity((recoverable.get(sale.ingredientId)||0)-sale.quantityDelta));
+    const requested=cancelDetails.stockRecovery?{...Object.fromEntries([...recoverable.keys()].map(id=>[id,0])),...cancelDetails.stockRecovery}:Object.fromEntries(recoverable);
+    for(const [ingredientId,recovered] of Object.entries(requested))if(!recoverable.has(ingredientId)||!Number.isFinite(recovered)||recovered<0||recovered>(recoverable.get(ingredientId)||0)||quantity(recovered)!==recovered)throw new FinancialValidationError('INVALID_STOCK_RECOVERY','Recovery must be between zero and the original issued quantity.');
     // Reverse exactly the original committed stock movements, not today's recipe.
     if((await getSubscription(tenantId)).inventoryFrozen && previousMovements.some(m=>m.referenceId===orderId && m.movementType==="SALE_DEDUCTION")) throw new FinancialValidationError("INVENTORY_FROZEN","Inventory is frozen; upgrade before reversing stock movements.",403);
-    for (const sale of previousMovements.filter(m=>m.referenceId===orderId && m.movementType==="SALE_DEDUCTION")) {
+    for (const sale of saleMovements) {
       if (previousMovements.some(m=>m.id===`return-${sale.id}`)) continue;
       const ing = ingredientMap.get(sale.ingredientId);
       if (!ing) throw new FinancialValidationError("MISSING_INGREDIENT","Original stock ingredient no longer exists.");
       const previousStock = ing.currentStock;
-      ing.currentStock = Number((previousStock-sale.quantityDelta).toFixed(4));
+      const recovered=quantity(Math.min(requested[ing.id]||0,-sale.quantityDelta));requested[ing.id]=quantity((requested[ing.id]||0)-recovered);
+      const issue=accounting.issues[sale.id];
+      if(recovered>0&&!issue)throw new FinancialValidationError('LEGACY_STOCK_COST_REVIEW','Original inventory cost is missing. Reconcile this historical stock before restoring it.');
+      if(issue){issue.returned=recovered;issue.wasted=quantity(issue.issued-recovered);issue.closedAt=nowIso;issue.shortageWasConsumed=prepared;}
+      if(!recovered)continue;
+      ing.currentStock = quantity(previousStock+recovered);
+      ing.costPerUnit=decimalDivide(decimalRound(decimalMultiply(previousStock,ing.costPerUnit,12)+issueValue(issue,recovered),12),ing.currentStock,12);
       ing.version = (ing.version || 1)+1; ing.updated_at = nowIso;
-      returnMovements.push({id:`return-${sale.id}`,ingredientId:ing.id,movementType:"RETURN",quantityDelta:-sale.quantityDelta,previousStock,newStock:ing.currentStock,referenceId:orderId,reason:cancelDetails.reason,performedBy:cancelDetails.staffId,version:1,created_at:nowIso,updated_at:nowIso});
+      returnMovements.push({id:`return-${sale.id}`,ingredientId:ing.id,movementType:"RETURN",quantityDelta:recovered,previousStock,newStock:ing.currentStock,referenceId:orderId,reason:cancelDetails.reason,performedBy:cancelDetails.staffId,version:1,created_at:nowIso,updated_at:nowIso});
     }
+    for(const issue of Object.values(accounting.issues).filter(i=>i.orderId===orderId&&!i.closedAt)){issue.closedAt=nowIso;issue.returned=0;issue.wasted=issue.issued;issue.shortageWasConsumed=prepared;}
+    await Database.getInstance().saveObject(tenantId,INVENTORY_ACCOUNTING,accounting);
 
     // Check payments for this order to mark as Refunded
     const updatedPayments = payments.map(p => {
@@ -474,12 +501,14 @@ export class FinancialTransactionService {
       // 3. Update payments to Refunded if applicable
       if (orderPayments.length > 0) {
         await this.paymentRepo.saveAll(tenantId, updatedPayments, trx);
+        await recordRefunds(tenantId,orderPayments.map(p=>({paymentId:p.id,orderId,amount:p.amount,method:p.paymentMethod,staffId:cancelDetails.staffId || p.cashierId || order.cashierId,at:nowIso})));
       }
 
       if (order.customerId) {
         const c = await customerRepo.getById(tenantId,order.customerId);
         if (c) await customerRepo.update(tenantId,{...c,loyaltyPoints:Math.max(0,c.loyaltyPoints+((order as any).redeemedPoints || 0)-(orderPayments.length?((order as any).earnedPoints || 0):0)),totalSpend:Math.max(0,Number((c.totalSpend-(orderPayments.length?order.total:0)).toFixed(2))),totalVisits:Math.max(0,c.totalVisits-(orderPayments.length?1:0))},undefined,trx);
       }
+      await updateCustomerBillExtremes(tenantId,order.customerId);
       // 4. Log Audit Trail
       await auditLogService.log(
         tenantId,

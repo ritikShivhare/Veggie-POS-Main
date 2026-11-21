@@ -5,6 +5,7 @@ import {defaultNotificationRules,NotificationRules,OperationalAlert,alertRoles} 
 import {Ingredient,Order,StaffMember,Shift} from '../../../src/features/shared/types';
 import {realtimeService} from '../shared/RealtimeService';
 export const RULES_KEY='operational_notification_rules';
+export const LOW_STOCK_INTERVAL_MS=4*60*60*1000;
 export class OperationalAlerts {
  private db=Database.getInstance();
  async rules(tenant:string):Promise<NotificationRules>{return await this.db.getObject<NotificationRules>(tenant,RULES_KEY) || structuredClone(defaultNotificationRules);}
@@ -28,9 +29,20 @@ export class OperationalAlerts {
  }
  async newOrder(tenant:string,order:Order){await this.enqueue(tenant,'newOrder',`order-new:${order.id}`,`New order ${order.orderNumber}`,`${order.type}${order.tableNo?` · Table ${order.tableNo}`:''} · ${order.items.reduce((n,i)=>n+i.quantity,0)} items. Open Kitchen (KDS).`);}
  async stock(tenant:string,ingredients:Ingredient[]){
-  const state=(await this.db.getObject<Record<string,{low:boolean;sequence:number}>>(tenant,'stock_alert_state')) || {};let changed=false;
-  for(const i of ingredients){const low=i.currentStock<=i.minStock,previous=state[i.id];if(previous?.low===low)continue;const sequence=(previous?.sequence || 0)+1;state[i.id]={low,sequence};changed=true;if(low)await this.enqueue(tenant,'lowStock',`stock:${i.id}:${sequence}`,`Reorder: ${i.name}`,`${i.currentStock} ${i.unit} remaining; reorder level ${i.minStock} ${i.unit}.`);}
-  if(changed)await this.db.saveObject(tenant,'stock_alert_state',state);
+  return this.db.runTransaction(tenant,async()=>{
+   if(!(await this.rules(tenant)).lowStock.enabled)return;
+   const now=Date.now(),key='stock_alert_schedule_v1';
+   const saved=await this.db.getObject<{lastSentAt:number;sequence:number}>(tenant,key);
+   const existing=await this.db.getObject<any[]>(tenant,'system_notifications')||[];
+   const legacyLatest=Math.max(0,...existing.filter(n=>n.metadata?.kind==='lowStock'||/low stock|^reorder:/i.test(n.title||'')).map(n=>Date.parse(n.timestamp)||0));
+   const lastSentAt=saved?.lastSentAt ?? legacyLatest;
+   if(lastSentAt && now-lastSentAt<LOW_STOCK_INTERVAL_MS)return;
+   const all=await this.db.getSlice<Ingredient>(tenant,'ingredients')||ingredients;
+   const low=all.filter(i=>i.currentStock<=i.minStock);if(!low.length)return;
+   const sequence=(saved?.sequence||0)+1;
+   await this.enqueue(tenant,'lowStock',`stock-summary:${sequence}:${now}`,'Low Stock Alert',low.map(i=>`${i.name}: ${i.currentStock} ${i.unit} remaining (reorder level ${i.minStock} ${i.unit})`).join('; '));
+   await this.db.saveObject(tenant,key,{lastSentAt:now,sequence});
+  });
  }
  async serve(tenant:string,id:string,version:number,actor:string){
   return this.db.runTransaction(tenant,async()=>{

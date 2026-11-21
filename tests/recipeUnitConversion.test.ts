@@ -56,8 +56,8 @@ describe("Recipe Unit vs Raw Material Unit (Grams vs Kilograms) Mismatch Resolut
       expect(convertRecipeQuantityToIngredientStock(2, "", "pcs")).toBe(2);
     });
 
-    it("should fallback gracefully to 1:1 for unconvertible mixed unit categories", () => {
-      expect(convertRecipeQuantityToIngredientStock(5, "pcs", "kg")).toBe(5);
+    it("rejects unconvertible mixed unit categories without guessing a ratio", () => {
+      expect(()=>convertRecipeQuantityToIngredientStock(5,"pcs","kg")).toThrow("Cannot convert");
     });
 
     it("should compute accurate portion costs based on converted weights and WAC rates", () => {
@@ -230,7 +230,8 @@ describe("Recipe Unit vs Raw Material Unit (Grams vs Kilograms) Mismatch Resolut
       // 2. Cancel order
       await finService.executeOrderCancellation(tenantId, "ord-test-restock", {
         reason: "Customer changed mind",
-        cancelledBy: "usr-manager"
+        cancelledBy: "usr-manager",
+        stockRecovery:{"ing-bulk-paneer":0.5,"ing-bulk-capsicum":0.1}
       });
 
       // Verify stock was returned back by 0.5kg to 5.0kg

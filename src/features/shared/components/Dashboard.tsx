@@ -1,3 +1,5 @@
+import {businessDay,paidDate,salesBeforeTax,businessWallTime} from '../../../../shared/reporting';
+import {money,sumMoney,decimalDivide} from '../../../../shared/decimal';
 import { displayOrderNumber } from "../../../../shared/orderNumber";
 import { printReceipt } from '../utils/printReceipt';
 import React, { useState, useMemo } from "react";
@@ -36,6 +38,7 @@ import { Ingredient, Order, Shift, RestaurantTenant, InventorySettings } from ".
 interface DashboardProps {
   dashboardStats: {
     totalRevenue: number;
+    netSales?:number;
     cashRevenue: number;
     upiRevenue: number;
     totalOrders: number;
@@ -109,21 +112,21 @@ export default function Dashboard({
   }, [orders]);
 
   const liveOrderSummary = useMemo(() => {
-    const today = new Date().toDateString();
-    const todaysOrders = (orders || []).filter((order) => order.date && new Date(order.date).toDateString() === today);
+    const today = businessDay(Date.now());
+    const todaysOrders = orders || [];
     return {
-      paid: todaysOrders.filter(isPaidOrder).length,
+      paid: todaysOrders.filter(o=>isPaidOrder(o)&&businessDay(paidDate(o))===today).length,
       pending: todaysOrders.filter((order) => order.status !== "Cancelled" && !order.paidAt).length,
     };
   }, [orders]);
 
   // Compute stats based on the selected period
   const periodAnalytics = useMemo(() => {
-    const now = new Date();
+    const now = businessWallTime();
 
     // 1. Define active period boundaries
     let startDate: Date;
-    let endDate: Date = new Date();
+    let endDate: Date = businessWallTime();
     endDate.setHours(23, 59, 59, 999);
 
     // Comparative periods boundaries for calculating trend percentages (Option 4)
@@ -131,11 +134,11 @@ export default function Dashboard({
     let compEndDate: Date;
 
     if (selectedPeriod === "yesterday") {
-      const yesterdayStart = new Date();
+      const yesterdayStart = businessWallTime();
       yesterdayStart.setDate(now.getDate() - 1);
       yesterdayStart.setHours(0, 0, 0, 0);
 
-      const yesterdayEnd = new Date();
+      const yesterdayEnd = businessWallTime();
       yesterdayEnd.setDate(now.getDate() - 1);
       yesterdayEnd.setHours(23, 59, 59, 999);
 
@@ -143,47 +146,47 @@ export default function Dashboard({
       endDate = yesterdayEnd;
 
       // Comparative: Day before yesterday
-      const dayBeforeStart = new Date();
+      const dayBeforeStart = businessWallTime();
       dayBeforeStart.setDate(now.getDate() - 2);
       dayBeforeStart.setHours(0, 0, 0, 0);
 
-      const dayBeforeEnd = new Date();
+      const dayBeforeEnd = businessWallTime();
       dayBeforeEnd.setDate(now.getDate() - 2);
       dayBeforeEnd.setHours(23, 59, 59, 999);
 
       compStartDate = dayBeforeStart;
       compEndDate = dayBeforeEnd;
     } else if (selectedPeriod === "week") {
-      const weekStart = new Date();
+      const weekStart = businessWallTime();
       weekStart.setDate(now.getDate() - 6); // Last 7 days
       weekStart.setHours(0, 0, 0, 0);
 
       startDate = weekStart;
 
       // Comparative: Previous 7 days
-      const lastWeekStart = new Date();
+      const lastWeekStart = businessWallTime();
       lastWeekStart.setDate(now.getDate() - 13);
       lastWeekStart.setHours(0, 0, 0, 0);
 
-      const lastWeekEnd = new Date();
+      const lastWeekEnd = businessWallTime();
       lastWeekEnd.setDate(now.getDate() - 7);
       lastWeekEnd.setHours(23, 59, 59, 999);
 
       compStartDate = lastWeekStart;
       compEndDate = lastWeekEnd;
     } else if (selectedPeriod === "month") {
-      const monthStart = new Date();
+      const monthStart = businessWallTime();
       monthStart.setDate(now.getDate() - 29); // Last 30 days
       monthStart.setHours(0, 0, 0, 0);
 
       startDate = monthStart;
 
       // Comparative: Previous 30 days (days 31 to 60 ago)
-      const lastMonthStart = new Date();
+      const lastMonthStart = businessWallTime();
       lastMonthStart.setDate(now.getDate() - 59);
       lastMonthStart.setHours(0, 0, 0, 0);
 
-      const lastMonthEnd = new Date();
+      const lastMonthEnd = businessWallTime();
       lastMonthEnd.setDate(now.getDate() - 30);
       lastMonthEnd.setHours(23, 59, 59, 999);
 
@@ -191,9 +194,9 @@ export default function Dashboard({
       compEndDate = lastMonthEnd;
     } else {
       // Custom date range
-      const start = new Date(customStartDate);
+      const start = new Date(customStartDate+'T00:00:00');
       start.setHours(0, 0, 0, 0);
-      const end = new Date(customEndDate);
+      const end = new Date(customEndDate+'T00:00:00');
       end.setHours(23, 59, 59, 999);
 
       startDate = start;
@@ -210,12 +213,12 @@ export default function Dashboard({
 
     // 2. Filter orders for current period vs comparative period
     const currentPeriodOrders = allOrdersCombined.filter(o => {
-      const orderTime = new Date(o.date).getTime();
+      const orderTime = businessWallTime(paidDate(o)).getTime();
       return orderTime >= startDate.getTime() && orderTime <= endDate.getTime() && isPaidOrder(o);
     });
 
     const comparativePeriodOrders = allOrdersCombined.filter(o => {
-      const orderTime = new Date(o.date).getTime();
+      const orderTime = businessWallTime(paidDate(o)).getTime();
       return orderTime >= compStartDate.getTime() && orderTime <= compEndDate.getTime() && isPaidOrder(o);
     });
 
@@ -233,25 +236,26 @@ export default function Dashboard({
         cost += (itemPrice * 0.35) * itemQuantity;
       });
 
-      return Math.round(cost);
+      return money(cost);
     };
 
     // Calculate current stats
-    const totalRevenue = currentPeriodOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+    const totalRevenue = sumMoney(currentPeriodOrders.map(salesBeforeTax));
+    const totalCollections=sumMoney(currentPeriodOrders.map(o=>o.total));
     const totalFoodCost = currentPeriodOrders.reduce((sum, o) => sum + calculateOrderFoodCost(o), 0);
-    const estimatedProfit = Math.max(0, totalRevenue - totalFoodCost);
+    const estimatedProfit = sumMoney([totalRevenue,-totalFoodCost]);
     const orderCount = currentPeriodOrders.length;
-    const avgTicket = orderCount > 0 ? Math.round(totalRevenue / orderCount) : 0;
+    const avgTicket = orderCount > 0 ? decimalDivide(totalCollections,orderCount,2) : 0;
 
     const upiRevenue = currentPeriodOrders.filter(o => o.paymentMethod === "UPI").reduce((sum, o) => sum + (o.total || 0), 0);
     const cashRevenue = currentPeriodOrders.filter(o => o.paymentMethod === "Cash").reduce((sum, o) => sum + (o.total || 0), 0);
 
     // Calculate comparative stats
-    const compRevenue = comparativePeriodOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+    const compRevenue = sumMoney(comparativePeriodOrders.map(salesBeforeTax));
     const compFoodCost = comparativePeriodOrders.reduce((sum, o) => sum + calculateOrderFoodCost(o), 0);
-    const compProfit = Math.max(0, compRevenue - compFoodCost);
+    const compProfit = sumMoney([compRevenue,-compFoodCost]);
     const compOrderCount = comparativePeriodOrders.length;
-    const compAvgTicket = compOrderCount > 0 ? Math.round(compRevenue / compOrderCount) : 0;
+    const compAvgTicket = compOrderCount > 0 ? decimalDivide(sumMoney(comparativePeriodOrders.map(o=>o.total)),compOrderCount,2) : 0;
 
     // Calculate Trend Percentages (Option 4)
     const calculateTrend = (current: number, past: number) => {
@@ -275,9 +279,9 @@ export default function Dashboard({
 
     if (isHourlySplit) {
       // Hourly slots (e.g. "12 PM", "2 PM", etc.)
-      for (let h = 11; h <= 22; h += 2) {
+      for (let h = 0; h <= 22; h += 2) {
         const slotKey = `${h}:00`;
-        const displayLabel = h > 12 ? `${h - 12} PM` : h === 12 ? "12 PM" : `${h} AM`;
+        const displayLabel = h > 12 ? `${h - 12} PM` : h === 12 ? "12 PM" : h===0?"12 AM":`${h} AM`;
         dailyMap[slotKey] = {
           dateLabel: displayLabel,
           sales: 0,
@@ -291,16 +295,16 @@ export default function Dashboard({
       }
 
       currentPeriodOrders.forEach(o => {
-        const oDate = new Date(o.date);
+        const oDate = businessWallTime(paidDate(o));
         const hour = oDate.getHours();
         // Snap to nearest 2 hour slot
-        const snappedHour = Math.max(11, Math.min(21, Math.floor(hour / 2) * 2 + 1));
+        const snappedHour = Math.max(0, Math.min(22, Math.floor(hour / 2) * 2));
         const slotKey = `${snappedHour}:00`;
         if (dailyMap[slotKey]) {
           const cost = calculateOrderFoodCost(o);
-          dailyMap[slotKey].sales += o.total || 0;
+          dailyMap[slotKey].sales = sumMoney([dailyMap[slotKey].sales,salesBeforeTax(o)]);
           dailyMap[slotKey].cost += cost;
-          dailyMap[slotKey].profit += (o.total || 0) - cost;
+          dailyMap[slotKey].profit += salesBeforeTax(o) - cost;
           dailyMap[slotKey].orders += 1;
           dailyMap[slotKey].ordersList.push(o);
           if (o.paymentMethod === "UPI") dailyMap[slotKey].upi += o.total || 0;
@@ -325,12 +329,12 @@ export default function Dashboard({
       }
 
       currentPeriodOrders.forEach(o => {
-        const key = new Date(o.date).toDateString();
+        const key = businessWallTime(paidDate(o)).toDateString();
         if (dailyMap[key]) {
           const cost = calculateOrderFoodCost(o);
-          dailyMap[key].sales += o.total || 0;
+          dailyMap[key].sales = sumMoney([dailyMap[key].sales,salesBeforeTax(o)]);
           dailyMap[key].cost += cost;
-          dailyMap[key].profit += (o.total || 0) - cost;
+          dailyMap[key].profit += salesBeforeTax(o) - cost;
           dailyMap[key].orders += 1;
           dailyMap[key].ordersList.push(o);
           if (o.paymentMethod === "UPI") dailyMap[key].upi += o.total || 0;
@@ -448,7 +452,7 @@ export default function Dashboard({
           <section aria-label="Today's summary" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
             <article aria-labelledby="dashboard-sales-label" className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
               <p id="dashboard-sales-label" className="text-xs font-semibold text-slate-600">Net Sales Today</p>
-              <p data-testid="dashboard-net-sales" className="mt-3 text-xl sm:text-2xl font-extrabold tabular-nums text-slate-900 [overflow-wrap:anywhere]">{formatRupees(dashboardStats.totalRevenue)}</p>
+              <p data-testid="dashboard-net-sales" className="mt-3 text-xl sm:text-2xl font-extrabold tabular-nums text-slate-900 [overflow-wrap:anywhere]">{formatRupees(dashboardStats.netSales ?? dashboardStats.totalRevenue)}</p>
               <p className="mt-2 text-xs text-slate-600">{dashboardStats.totalRevenue > 0 ? "Paid sales only" : "No paid sales yet"}</p>
               {dashboardStats.totalRevenue > 0 && <p className="mt-3 text-xs text-slate-600 [overflow-wrap:anywhere]">Cash {Math.round(dashboardStats.cashRevenue / dashboardStats.totalRevenue * 100)}% · UPI {Math.round(dashboardStats.upiRevenue / dashboardStats.totalRevenue * 100)}%</p>}
             </article>
@@ -765,9 +769,9 @@ export default function Dashboard({
                     {/* Visual columns bars container */}
                     <div className="flex-1 w-full flex items-end justify-between px-2 gap-3">
                       {periodAnalytics.chartData.map((d, index) => {
-                        const maxSales = Math.max(...periodAnalytics.chartData.map(cd => cd.sales)) || 1;
+                        const maxSales = Math.max(...periodAnalytics.chartData.flatMap(cd => [cd.sales,Math.abs(cd.profit)])) || 1;
                         const salesHeightPct = maxSales > 0 ? (d.sales / maxSales) * 85 : 0; // Max height 85% to fit margins
-                        const profitHeightPct = maxSales > 0 ? (d.profit / maxSales) * 85 : 0;
+                        const profitHeightPct = maxSales > 0 ? (Math.abs(d.profit) / maxSales) * 85 : 0;
 
                         return (
                           <div key={index} className="flex-1 flex flex-col items-center justify-end group h-full relative">
@@ -797,8 +801,9 @@ export default function Dashboard({
                               />
                               {/* Profit Bar */}
                               <div
-                                style={{ height: d.profit > 0 ? `${Math.max(4, profitHeightPct)}%` : "0%" }}
-                                className="w-1/2 bg-emerald-500 hover:bg-emerald-600 transition-all rounded-t-sm relative"
+                                style={{ height: d.profit !== 0 ? `${Math.max(4, profitHeightPct)}%` : "0%" }}
+                                aria-label={`Estimated ${d.profit<0?'loss':'profit'} ${formatRupees(d.profit)}`}
+                                className={`w-1/2 ${d.profit<0?'bg-rose-600':'bg-emerald-500 hover:bg-emerald-600'} transition-all rounded-t-sm relative`}
                               />
                             </div>
 

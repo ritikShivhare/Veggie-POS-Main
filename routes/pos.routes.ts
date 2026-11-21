@@ -1,3 +1,6 @@
+import {money,isCurrency,sumMoney,percentOf,quantity} from '../shared/decimal';
+import {settlementLedger} from '../server/features/pos/SettlementLedger';
+import {inventoryAccounting} from '../server/features/inventory/InventoryAccounting';
 import {runningOrderService} from '../server/features/pos/RunningOrderService';
 import {assertKotMutable} from '../server/features/billing/SubscriptionLifecycle';
 import {operationalAlerts} from '../server/features/notifications/OperationalAlerts';
@@ -235,6 +238,7 @@ router.post("/orders/:id/pay", authMiddleware, requirePermission("billing"), (re
       orderId,
       {
         amount: Number(amount),
+        cashReceived:req.body.cashReceived===undefined?undefined:Number(req.body.cashReceived),
         paymentMethod,
         transactionReference,
         cashierId,
@@ -323,7 +327,7 @@ router.delete("/orders/:id", authMiddleware, requireRole("Owner", "Manager"), as
       {
         cancelledBy,
         reason: String(reason).trim(),
-        expectedVersion: req.body?.version,refundConfirmed:req.body?.refundConfirmed===true,staffId:(req as any).session.userId
+        expectedVersion: req.body?.version,stockRecovery:req.body?.stockRecovery,refundConfirmed:req.body?.refundConfirmed===true,staffId:(req as any).session.userId
       }
     );
 
@@ -470,6 +474,7 @@ router.post("/shifts", authMiddleware, idempotencyMiddleware, async (req, res) =
     if(req.body.staffId!==session.userId && !["Owner","Manager"].includes(session.role)) return res.status(403).json({success:false,error:"FORBIDDEN"});
     if(req.body.status!=="Active") return res.status(400).json({success:false,error:"INVALID_SHIFT"});
     finiteAmount(req.body.openingCash ?? 0,"Opening cash");
+    if(!isCurrency(req.body.openingCash??0))return res.status(400).json({success:false,error:"INVALID_CASH_AMOUNT"});
     const existingShifts = await shiftRepo.getAll(tenantId);
     if (existingShifts.some(s => s.staffId === req.body.staffId && s.status === "Active" && !s.endTime)) {
       return res.status(409).json({success:false,error:"ACTIVE_SHIFT_EXISTS",message:"This staff member already has an active duty shift. Close it before starting another."});
@@ -561,6 +566,21 @@ router.post("/pos/verify-pin", authMiddleware, rateLimit({windowMs:15*60*1000,li
   }
 });
 
+router.get('/orders/:id/cancellation-stock',authMiddleware,requireRole('Owner','Manager'),async(req,res)=>{
+ try {
+  const tenant=(req as any).tenantId,order=await orderRepo.getById(tenant,req.params.id);if(!order)return res.status(404).json({success:false});
+  const state=await inventoryAccounting(tenant),ingredients=await ingredientRepo.getAll(tenant)||[],movements=await financialTransactionService.getInventoryMovementRepo().getAll(tenant)||[];
+  const rows=new Map<string,any>();
+  for(const movement of movements.filter(m=>m.referenceId===order.id&&m.movementType==='SALE_DEDUCTION')){
+   const ingredient=ingredients.find(i=>i.id===movement.ingredientId),issue=state.issues[movement.id];
+   const row=rows.get(movement.ingredientId)||{ingredientId:movement.ingredientId,name:ingredient?.name||movement.ingredientId,unit:issue?.unit||ingredient?.unit||'',issued:0,costBasisKnown:true};
+   row.issued=quantity(row.issued-movement.quantityDelta);row.costBasisKnown&&=Boolean(issue);rows.set(movement.ingredientId,row);
+  }
+  const prepared=order.running?order.running.batches.some(b=>b.status!=='Pending'):order.status!=='Pending';
+  res.json({success:true,data:{version:order.version,prepared,ingredients:[...rows.values()]}});
+ }catch(e){handleApiError(res,e);}
+});
+
 // Problem 1: Order Cancellation with Manager PIN & Required Reason
 router.post("/orders/:id/cancel", authMiddleware, requireRole("Owner", "Manager"), idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
@@ -589,7 +609,7 @@ router.post("/orders/:id/cancel", authMiddleware, requireRole("Owner", "Manager"
       orderId,
       {
         cancelledBy: manager.name,
-        reason: reason.trim(),refundConfirmed:req.body.refundConfirmed===true,staffId:(req as any).session.userId
+        reason: reason.trim(),expectedVersion:req.body.version,stockRecovery:req.body.stockRecovery,refundConfirmed:req.body.refundConfirmed===true,staffId:(req as any).session.userId
       }
     );
 
@@ -609,7 +629,7 @@ router.post("/orders/:id/cancel", authMiddleware, requireRole("Owner", "Manager"
 });
 
 // Problem 2: Audit Discount Application & Custom Price Edits with Robust Validation
-router.post("/orders/audit-discount", authMiddleware, idempotencyMiddleware, async (req, res) => {
+router.post("/orders/audit-discount", authMiddleware, discountApprovalLimiter, idempotencyMiddleware, async (req, res) => {
   const tenantId = (req as any).tenantId;
   const { orderId, originalAmount, discountAmount, finalAmount, managerPin, reason = "Custom Discount" } = req.body;
 
@@ -671,6 +691,7 @@ router.post("/orders/audit-discount", authMiddleware, idempotencyMiddleware, asy
   }
 
   try {
+    await Database.getInstance().runTransaction(tenantId,async()=>{
     // 7. Check restaurant maximum discount percentage policy
     const settings = (await settingsRepo.get(tenantId)) || ({} as any);
     if (settings.maxDiscountPercentage !== undefined && settings.maxDiscountPercentage > 0 && settings.maxDiscountPercentage < 100) {
@@ -686,7 +707,7 @@ router.post("/orders/audit-discount", authMiddleware, idempotencyMiddleware, asy
 
     // 8. Constant-time Manager/Owner PIN verification
     const staffList = (await staffRepo.getAll(tenantId)) || [];
-    const authorizedStaff = staffList.filter((s) => s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("apply_discount" as any));
+    const authorizedStaff = staffList.filter((s) => isActiveStaff(s) && (s.role === "Owner" || s.role === "Manager" || s.permissions?.includes("apply_discount" as any)));
     const manager = await findStaffByPinConstantTime(authorizedStaff, managerPin.trim());
 
     if (!manager) {
@@ -719,15 +740,20 @@ router.post("/orders/audit-discount", authMiddleware, idempotencyMiddleware, asy
           });
         }
 
-        // Apply discount to the existing order in storage
-        targetOrder.discount = numDiscount;
+        if(!isCurrency(numOrig)||!isCurrency(numDiscount)||numOrig!==targetOrder.total)throw Object.assign(new Error('Refresh the bill. Original amount must match the saved unpaid bill.'),{status:409,code:'AMOUNT_CHANGED'});
+        if(sumMoney([targetOrder.subtotal,targetOrder.tax,-(targetOrder.discount||0)])!==targetOrder.total)throw Object.assign(new Error('Historical bill totals need reconciliation before another discount.'),{status:409});
+        const cumulative=sumMoney([targetOrder.discount||0,numDiscount]);
+        const manual=sumMoney([cumulative,-(targetOrder.redeemedPoints||0)]);
+        if(settings.maxDiscountPercentage>0 && manual>percentOf(sumMoney([targetOrder.subtotal,targetOrder.tax]),settings.maxDiscountPercentage))throw Object.assign(new Error('Combined discount exceeds the restaurant limit.'),{status:400});
+        // Preserve previous manual discounts and loyalty credit in saved totals.
+        targetOrder.discount = cumulative;
         targetOrder.total = expectedFinal;
         targetOrder.updated_at = new Date().toISOString();
-        await orderRepo.save(tenantId, targetOrder);
+        await orderRepo.update(tenantId, targetOrder,targetOrder.version);
         try {
           realtimeService.broadcastToTenant(tenantId, "order:updated", { entityId: targetOrder.id, slice: "orders" });
         } catch (e) {}
-      }
+      } else throw Object.assign(new Error("Bill not found."),{status:404});
     }
 
     // 10. Audit log recording
@@ -753,6 +779,7 @@ router.post("/orders/audit-discount", authMiddleware, idempotencyMiddleware, asy
       originalAmount: numOrig,
       discountAmount: numDiscount,
       finalAmount: expectedFinal
+    });
     });
   } catch (error: any) {
     handleApiError(res, error);
@@ -840,14 +867,16 @@ router.post("/shifts/:id/close-blind", authMiddleware, rateLimit({windowMs:15*60
     // Count settlements received during the shift, including older pending orders.
     const payments = await financialTransactionService.getPaymentRepo().getAll(tenantId);
     const shiftStartTime = new Date(activeShift.startTime).getTime();
+    const ledger=await settlementLedger(tenantId);
     const shiftCashPayments = payments.filter((p) => {
       const settlementTime = new Date(p.created_at).getTime();
-      return settlementTime >= shiftStartTime && p.cashierId===activeShift.staffId && p.paymentMethod === "Cash" && p.status === "Completed";
+      return settlementTime >= shiftStartTime && p.cashierId===activeShift.staffId && p.paymentMethod === "Cash" && (p.status === "Completed" || (p.status === "Refunded" && Boolean(ledger.refunds[p.id])));
     });
 
     const totalCashCollected = shiftCashPayments.reduce((sum, p) => sum + p.amount, 0);
     const openingCash = (activeShift as any).openingCash ?? 0; // default initial drawer float
-    const expectedCash = openingCash + totalCashCollected;
+    const refundedCash=sumMoney(Object.values(ledger.refunds).filter(r=>r.method==='Cash'&&r.staffId===activeShift.staffId&&Date.parse(r.at)>=shiftStartTime).map(r=>r.amount));
+    const expectedCash = sumMoney([openingCash,totalCashCollected,-refundedCash]);
     const physicalCount = Number(physicalCashCount);
     const variance = Number((physicalCount - expectedCash).toFixed(2));
 

@@ -13,6 +13,7 @@ export interface MenuItem {
 }
 
 export interface Ingredient {
+  untrackedConsumption?:number;
   id: string;
   name: string;
   unit: string; // e.g., 'g', 'ml', 'pcs', 'kg'
@@ -69,6 +70,7 @@ export interface StaffMember {
 }
 
 export interface Shift {
+  openingCash?:number;
   id: string;
   staffId: string;
   staffName: string;
@@ -104,6 +106,7 @@ export interface KotBatch {
   version: number;
 }
 export interface RunningOrderState {
+  frozen?:boolean;
   billVersion?: number;
   gstRate: number;
   batches: KotBatch[];

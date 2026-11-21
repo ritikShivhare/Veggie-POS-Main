@@ -1,4 +1,7 @@
 import {runAiReport} from '../server/features/billing/SubscriptionLifecycle';
+import {inventoryAccounting} from '../server/features/inventory/InventoryAccounting';
+import {settlementLedger} from '../server/features/pos/SettlementLedger';
+import {paidSummary} from '../shared/reporting';
 import {operationalAlerts} from '../server/features/notifications/OperationalAlerts';
 import express from "express";
 import { validateSettings } from "../server/features/shared/validation";
@@ -62,7 +65,8 @@ router.get("/privacy/export",authMiddleware,requireRole("Owner"),async(req,res)=
     const state=publicState(await syncService.getFullState(tenantId),"Owner");
     const [items,payments,movements]=await Promise.all([orderItemRepo.getAll(tenantId),paymentRepo.getAll(tenantId),inventoryMovementRepo.getAll(tenantId)]);
     const tenant=(await getGlobalTenantsList()).find(t=>t.tenantId===tenantId);
-    res.json({success:true,data:{exportedAt:new Date().toISOString(),tenant:publicTenant(tenant),...state,orderItems:items,payments,inventoryMovements:movements}});
+    const [inventoryCosts,settlements]=await Promise.all([inventoryAccounting(tenantId),settlementLedger(tenantId)]);
+    res.json({success:true,data:{exportedAt:new Date().toISOString(),tenant:publicTenant(tenant),...state,orderItems:items,payments,inventoryMovements:movements,inventoryAccounting:inventoryCosts,settlementLedger:settlements}});
   } catch(error) {handleApiError(res,error);}
 });
 
@@ -134,6 +138,8 @@ router.get("/reports", authMiddleware, requireRole("Owner"), async (req, res) =>
         totalOrders: orders.length,
         completedOrders: completedOrders.length,
         totalRevenue,
+        netSales:paidSummary(completedOrders).netSales,
+        totalCollections:totalRevenue,
         cashRevenue,
         upiRevenue,
         ingredientCount: ingredients.length,

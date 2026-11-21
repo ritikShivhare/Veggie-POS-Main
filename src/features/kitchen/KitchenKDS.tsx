@@ -27,7 +27,7 @@ export default function KitchenKDS({ orders:billOrders, onUpdateOrderStatus, kds
       const utterance = new SpeechSynthesisUtterance(message);
       utterance.rate = 1.05;
       utterance.onstart = () => setSoundMessage('Sound playing');
-      utterance.onerror = () => setSoundMessage('Browser blocked speech. Tap Test Sound to enable audio.');
+      utterance.onerror = () => setSoundMessage('Browser blocked audio. Check your browser sound permission.');
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(utterance);
     } catch {
@@ -148,8 +148,7 @@ export default function KitchenKDS({ orders:billOrders, onUpdateOrderStatus, kds
     <div className="h-full bg-[#f8fafc] flex flex-col p-4 sm:p-6 font-sans text-slate-800 overflow-hidden">
       {serveError && <p role="alert" className="text-red-700">{serveError}</p>}
       <div className="flex items-center gap-2">
-        <button type="button" id="kds-test-sound-btn" onClick={() => speak('Kitchen sound test. New order received.')}
-          className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white">Test Sound</button>
+
         <span role="status" className="text-xs text-slate-600">{soundMessage}</span>
       </div>
       {/* Title & Header Section */}

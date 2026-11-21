@@ -1,6 +1,6 @@
 import {beforeEach,describe,it,expect,vi} from 'vitest';
 import {Database} from '../server/features/shared/database';
-import {OperationalAlerts} from '../server/features/notifications/OperationalAlerts';
+import {OperationalAlerts,LOW_STOCK_INTERVAL_MS} from '../server/features/notifications/OperationalAlerts';
 import {NotificationService} from '../server/features/notifications/NotificationService';
 import {defaultNotificationRules} from '../src/features/shared/notificationRules';
 import {IngredientRepository} from '../server/features/inventory/IngredientRepository';
@@ -22,7 +22,32 @@ describe('operational recipient routing',()=>{
  it('rolls an alert back with its business transaction',async()=>{await expect(db.runTransaction(tenant,async()=>{await alerts.newOrder(tenant,order);throw new Error('rollback');})).rejects.toThrow('rollback');expect(await inbox.getInbox(tenant,actor('cook'))).toHaveLength(0);});
  it('alerts Cashier only after explicit served confirmation; retries do not alter money or stock',async()=>{await db.saveSlice(tenant,'orders',[order]);expect(await inbox.getInbox(tenant,actor('cashier','Cashier'))).toHaveLength(0);const result=await alerts.serve(tenant,order.id,2,'cook');expect(result.servedAt).toBeTruthy();await alerts.serve(tenant,order.id,2,'cook');expect(await inbox.getInbox(tenant,actor('cashier','Cashier'))).toHaveLength(1);expect((await db.getSlice(tenant,'orders'))?.[0]).toEqual(order);expect(await db.getSlice(tenant,'payments')).toEqual([]);});
  it('rejects missing, non-ready and stale service confirmations',async()=>{await expect(alerts.serve(tenant,'missing',1,'cook')).rejects.toMatchObject({status:404});await db.saveSlice(tenant,'orders',[{...order,status:'Preparing'}]);await expect(alerts.serve(tenant,order.id,2,'cook')).rejects.toMatchObject({status:400});await db.saveSlice(tenant,'orders',[order]);await expect(alerts.serve(tenant,order.id,1,'cook')).rejects.toMatchObject({status:409});expect(await inbox.getInbox(tenant,actor('cashier','Cashier'))).toHaveLength(0);});
- it('uses each ingredient reorder threshold, suppresses repeated low alerts and rearms after restock',async()=>{const repo=new IngredientRepository(),stock={id:'rice',name:'Rice',unit:'kg',currentStock:20,minStock:25,costPerUnit:10};await repo.saveAll(tenant,[stock]);await repo.saveAll(tenant,[{...stock,currentStock:19}]);expect(await inbox.getInbox(tenant,actor('manager','Manager'))).toHaveLength(1);await repo.saveAll(tenant,[{...stock,currentStock:30}]);await repo.saveAll(tenant,[{...stock,currentStock:24}]);expect(await inbox.getInbox(tenant,actor('manager','Manager'))).toHaveLength(2);});
- it('detects adjustments and rearms after purchases through the update path',async()=>{const repo=new IngredientRepository(),stock={id:'flour',name:'Flour',unit:'kg',currentStock:30,minStock:25,costPerUnit:10};await repo.add(tenant,stock);let item=(await repo.getById(tenant,'flour'))!;await repo.update(tenant,{...item,currentStock:24},item.version);expect(await inbox.getInbox(tenant,actor('manager','Manager'))).toHaveLength(1);item=(await repo.getById(tenant,'flour'))!;await repo.update(tenant,{...item,currentStock:40},item.version);item=(await repo.getById(tenant,'flour'))!;await repo.update(tenant,{...item,currentStock:20},item.version);expect(await inbox.getInbox(tenant,actor('manager','Manager'))).toHaveLength(2);});
+ it('uses each ingredient reorder threshold, suppresses repeated low alerts including restock transitions within four hours',async()=>{const repo=new IngredientRepository(),stock={id:'rice',name:'Rice',unit:'kg',currentStock:20,minStock:25,costPerUnit:10};await repo.saveAll(tenant,[stock]);await repo.saveAll(tenant,[{...stock,currentStock:19}]);expect(await inbox.getInbox(tenant,actor('manager','Manager'))).toHaveLength(1);await repo.saveAll(tenant,[{...stock,currentStock:30}]);await repo.saveAll(tenant,[{...stock,currentStock:24}]);expect(await inbox.getInbox(tenant,actor('manager','Manager'))).toHaveLength(1);});
+ it('detects adjustments but keeps the four-hour cooldown across purchases',async()=>{const repo=new IngredientRepository(),stock={id:'flour',name:'Flour',unit:'kg',currentStock:30,minStock:25,costPerUnit:10};await repo.add(tenant,stock);let item=(await repo.getById(tenant,'flour'))!;await repo.update(tenant,{...item,currentStock:24},item.version);expect(await inbox.getInbox(tenant,actor('manager','Manager'))).toHaveLength(1);item=(await repo.getById(tenant,'flour'))!;await repo.update(tenant,{...item,currentStock:40},item.version);item=(await repo.getById(tenant,'flour'))!;await repo.update(tenant,{...item,currentStock:20},item.version);expect(await inbox.getInbox(tenant,actor('manager','Manager'))).toHaveLength(1);});
 
+});
+
+
+describe('four-hour low-stock notification cadence',()=>{
+ it('shares a durable cooldown between stock mutations and periodic scans',async()=>{
+  const clock=vi.spyOn(Date,'now');const start=Date.now();clock.mockReturnValue(start);
+  try{
+   const stock={id:'flour',name:'Flour',unit:'kg',currentStock:1,minStock:5,costPerUnit:10};await new IngredientRepository().saveAll(tenant,[stock]);
+   for(let minute=1;minute<240;minute++){clock.mockReturnValue(start+minute*60000);await new OperationalAlerts().stock(tenant,[stock]);}
+   expect(await inbox.getInbox(tenant,actor('manager','Manager'))).toHaveLength(1);
+   clock.mockReturnValue(start+LOW_STOCK_INTERVAL_MS);await new OperationalAlerts().stock(tenant,[stock]);
+   expect(await inbox.getInbox(tenant,actor('manager','Manager'))).toHaveLength(2);
+   await Promise.all([alerts.stock(tenant,[stock]),alerts.stock(tenant,[stock])]);expect(await inbox.getInbox(tenant,actor('manager','Manager'))).toHaveLength(2);
+  }finally{clock.mockRestore();}
+ });
+ it('honors the notification-tab off switch in periodic scans and ingredient saves',async()=>{
+  const rules=await alerts.rules(tenant);await alerts.saveRules(tenant,{...rules,lowStock:{...rules.lowStock,enabled:false}});
+  const stock={id:'low',name:'Low',unit:'g',currentStock:1,minStock:10,costPerUnit:1};await new IngredientRepository().saveAll(tenant,[stock]);await alerts.stock(tenant,[stock]);
+  expect(await inbox.getInbox(tenant,actor('manager','Manager'))).toHaveLength(0);
+ });
+ it('starts the new cooldown from an existing legacy notification to stop deployment-time spam',async()=>{
+  const now=Date.now();await db.saveObject(tenant,'system_notifications',[{id:'old',title:'⚠️ Low Stock Alert',timestamp:new Date(now-60000).toISOString(),recipientIds:['manager'],read:false}]);
+  await new IngredientRepository().saveAll(tenant,[{id:'rice',name:'Rice',unit:'kg',currentStock:1,minStock:5,costPerUnit:1}]);
+  expect(await db.getObject<any[]>(tenant,'system_notifications')).toHaveLength(1);
+ });
 });

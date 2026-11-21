@@ -718,7 +718,7 @@ export class OfflineRepository {
   public async recordPaymentOffline(
     tenantId: string,
     orderId: string,
-    updateData: { status: string; paymentMethod?: string; paidAt?: string }
+    updateData: { status: string; paymentMethod?: string; paidAt?: string;cashReceived?:number }
   ): Promise<OfflineOutboxItem> {
     if (!updateData.paymentMethod && !["Preparing", "Ready"].includes(updateData.status)) {
       throw new Error("Kitchen updates must be Preparing or Ready. Use cashier settlement to complete an order.");
@@ -745,7 +745,7 @@ export class OfflineRepository {
       entityType: updateData.paymentMethod ? "payment" : "order",
       entityId: orderId,
       operationType: "UPDATE",
-      payload: updateData.paymentMethod ? {paymentMethod:updateData.paymentMethod,amount:existing?.total,...((existing as any)?.running?{expectedVersion:(existing as any)?.running?.billVersion ?? existing?.version,discountPercent:0,customDiscount:false,cashReceived:existing?.total}: {})} : {status:updateData.status},
+      payload: updateData.paymentMethod ? {paymentMethod:updateData.paymentMethod,amount:existing?.total,...(updateData.cashReceived===undefined?{}:{cashReceived:updateData.cashReceived}),...((existing as any)?.running?{expectedVersion:(existing as any)?.running?.billVersion ?? existing?.version,discountPercent:0,customDiscount:false,cashReceived:updateData.cashReceived??existing?.total}: {})} : {status:updateData.status},
       endpoint: `/api/orders/${encodeURIComponent(orderId)}${updateData.paymentMethod ? "/pay" : ""}`,
       method: updateData.paymentMethod ? "POST" : "PUT",
       idempotencyKey

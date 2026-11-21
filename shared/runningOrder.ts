@@ -1,11 +1,13 @@
 import type {Order, KotBatch} from '../src/features/shared/types';
 
-export const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+import {money,percentOf,sumMoney,decimalMultiply} from './decimal';
+export {money} from './decimal';
 /** Restaurant menu prices are tax-exclusive. Loyalty remains a post-tax credit. */
 export function runningTotals(subtotal:number, gstRate:number, percent=0, loyalty=0) {
   if (![subtotal,gstRate,percent,loyalty].every(Number.isFinite) || subtotal<0 || gstRate<0 || gstRate>30 || percent<0 || percent>100 || loyalty<0) throw new Error('Invalid bill calculation.');
-  const manualDiscount=money(subtotal*percent/100), taxableAmount=money(subtotal-manualDiscount);
-  const tax=money(taxableAmount*gstRate/100), gross=money(taxableAmount+tax);
+  subtotal=money(subtotal);
+  const manualDiscount=percentOf(subtotal,percent), taxableAmount=sumMoney([subtotal,-manualDiscount]);
+  const tax=percentOf(taxableAmount,gstRate), gross=sumMoney([taxableAmount,tax]);
   const redeemedPoints=money(Math.min(loyalty,gross));
   return {subtotal,manualDiscount,taxableAmount,tax,redeemedPoints,discount:money(manualDiscount+redeemedPoints),total:money(gross-redeemedPoints)};
 }
@@ -31,7 +33,7 @@ export function projectAddon(order:Order, payload:{operationId:string;items:Orde
  if(order.running?.operations[payload.operationId])return order;
  const items=payload.items.map((i,index)=>({...i,lineId:`oi-${payload.operationId}-${index}`,batchId:payload.operationId}));
  const running=order.running || {gstRate:order.subtotal?money(order.tax/order.subtotal*100):5,batches:[],operations:{}};
- const subtotal=money(order.subtotal+items.reduce((sum,i)=>sum+i.menuItem.price*i.quantity,0));
+ const subtotal=sumMoney([order.subtotal,...items.map(i=>decimalMultiply(i.menuItem.price,i.quantity))]);
  const totals=runningTotals(subtotal,running.gstRate);
  return {...order,items:[...order.items,...items],subtotal,tax:totals.tax,total:totals.total,status:'Pending',servedAt:undefined,version:(order.version || 1)+1,running:{...running,billVersion:(running.billVersion ?? order.version ?? 1)+1,batches:[...running.batches,{id:payload.operationId,number:running.batches.length+1,items,status:'Pending',createdAt:payload.createdAt || order.date,createdBy:order.cashierId,version:1}]}};
 }

@@ -1,0 +1,13 @@
+Aatmyam Pos — भविष्य के calculation/policy प्रश्न
+21 नवंबर 2026
+
+तय और लागू: Cancellation में Manager recovered stock चुनता है; बाकी issued stock wastage है। इसे अब pending प्रश्न नहीं माना गया है।
+
+1. Loyalty earning pre-discount subtotal पर रहेगी या वास्तव में paid amount पर? अभी existing policy सुरक्षित है; complimentary zero-paid bill भी subtotal से points देता है।
+2. Loyalty redemption post-tax credit रहेगी या commercial discount? अभी existing post-tax-credit policy बरकरार है।
+3. Actual recipe COGS, wastage और operating expenses से gross/net profit कब लाना है? वर्तमान 35% estimate को actual profit नहीं कहा गया है।
+4. Shared physical drawer में कई cashiers और cash-in/out, petty cash तथा cash-drop ledger का विस्तृत handover workflow कैसा हो? अभी original per-staff shift scope है; refunds/tenders/opening float सुधरे हैं।
+5. पुराने missing issue-cost snapshots या पहले से गलत stock/payment balances की reviewed reconciliation किस cutoff पर होगी? कोई historical balance अनुमान से rewrite नहीं किया गया।
+6. Pack/box या density-based conversions की जरूरत हो तो explicit mapping चाहिए; अभी incompatible units reject हैं।
+7. Subscription allowance की unit combined payable bill रहे या KOT batch? इस release ने existing bill-record allowance नहीं बदला।
+8. Untracked consumption के लिए आगे dedicated physical-count workflow चाहिए? अभी full requirement/shortage सुरक्षित है, Inventory warning दिखती है और physical stock adjustment पर reconciliation दर्ज होती है।

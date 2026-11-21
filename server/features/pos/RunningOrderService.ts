@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import {isCurrency} from '../../../shared/decimal';
+import {recordStockIssues} from '../inventory/InventoryAccounting';
 import {Database,NotFoundError,OptimisticLockConflictError} from '../shared/database';
 import {OrderRepository} from './OrderRepository';
 import {OrderItemRepository} from './OrderItemRepository';
@@ -53,7 +55,8 @@ export class RunningOrderService {
    const updated=await orders.update(tenant,{...order,items:[...order.items,...items],subtotal:totals.subtotal,tax:totals.tax,total:totals.total,status:'Pending',discount:0,earnedPoints:0,redeemedPoints:0,servedAt:undefined},order.version,trx);
    await new OrderItemRepository().saveAll(tenant,[...await new OrderItemRepository().getAll(tenant) || [],...lines],trx);
    if(calc.updatedIngredients.length)await new IngredientRepository().saveAll(tenant,calc.updatedIngredients,trx);
-   const movements=calc.inventoryDeductions.map((d,index)=>({id:`mov-${batchId}-${index}`,ingredientId:d.ingredientId,movementType:'SALE_DEDUCTION' as const,quantityDelta:-d.quantityDeducted,previousStock:d.previousStock,newStock:d.newStock,referenceId:id,reason:`Add-on KOT ${state.batches.length}`,performedBy:actor.staffId,created_at:now,version:1}));
+   await recordStockIssues(tenant,calc.inventoryDeductions.map((d,index)=>({id:`mov-${batchId}-${index}`,orderId:id,ingredientId:d.ingredientId,name:d.ingredientName,unit:d.unit,unitCost:d.unitCost,issued:d.quantityDeducted,required:d.requiredQuantity,shortage:d.shortageQuantity})));
+   const movements=calc.inventoryDeductions.map((d,index)=>({id:`mov-${batchId}-${index}`,ingredientId:d.ingredientId,movementType:'SALE_DEDUCTION' as const,quantityDelta:-d.quantityDeducted,previousStock:d.previousStock,newStock:d.newStock,referenceId:id,reason:`Add-on KOT ${state.batches.length}`,performedBy:actor.staffId,created_at:now,version:1})).filter(m=>m.quantityDelta!==0);
    if(movements.length)await new InventoryMovementRepository().saveAll(tenant,[...await new InventoryMovementRepository().getAll(tenant)||[],...movements],trx);
    const served=await db.getObject<any>(tenant,'order_service_state') || {};delete served[id];await db.saveObject(tenant,'order_service_state',served);
    await saveRunning(tenant,id,state);
@@ -86,12 +89,13 @@ export class RunningOrderService {
    if(!openBill(order))throw fail('ORDER_SEALED','Bill is already paid or cancelled.');
    await assertSettlement(tenant,id);requireVersion(order,body.expectedVersion);
    const percent=Number(body.discountPercent??0),settings:any=await new SettingsRepository().get(tenant) || {};
-   if((await getSubscription(tenant)).frozenKots?.[id] && (percent>0 || body.redeemPoints))throw fail('FROZEN_KOT','Frozen trial bills keep their recorded total. Settle without new discounts or loyalty redemption.');
+   const frozen=(await getSubscription(tenant)).frozenKots?.[id];
+   if(frozen && (percent>0 || body.redeemPoints))throw fail('FROZEN_KOT','Frozen trial bills keep their recorded total. Settle without new discounts or loyalty redemption.');
    if(!Number.isFinite(percent)||percent<0||percent>100)throw fail('INVALID_DISCOUNT','Enter a discount from 0 to 100%.');
-   const state=structuredClone(order.running);
+   const state={...structuredClone(order.running),frozen:Boolean(frozen)};
    const customer=order.customerId?await new CustomerRepository().getById(tenant,order.customerId):null;
    if(body.redeemPoints && !customer)throw fail('CUSTOMER_REQUIRED','Select a loyalty guest before redeeming points.');
-   const totals=runningTotals(order.subtotal,state.gstRate,percent,body.redeemPoints?customer?.loyaltyPoints || 0:0);
+   const totals=state.frozen?{subtotal:order.subtotal,manualDiscount:0,taxableAmount:order.subtotal,tax:order.tax,redeemedPoints:order.redeemedPoints||0,discount:order.discount||0,total:order.total}:runningTotals(order.subtotal,state.gstRate,percent,body.redeemPoints?customer?.loyaltyPoints || 0:0);
    if(Number(settings.maxDiscountPercentage)>0 && percent>settings.maxDiscountPercentage)throw fail('DISCOUNT_EXCEEDS_MAX_PERCENTAGE','Discount exceeds the restaurant hard limit.');
    let approver:any;
    if(percent>0 && (body.customDiscount!==false || percent>Number(settings.standardDiscountPercentage??0))) {
@@ -100,13 +104,13 @@ export class RunningOrderService {
     approver=await findStaffByPinConstantTime((await new StaffRepository().getAll(tenant)||[]).filter(s=>isActiveStaff(s)&&['Owner','Manager'].includes(s.role)),body.managerPin);
     if(!approver)throw new FinancialValidationError('UNAUTHORIZED_PIN','Manager/Owner PIN was not accepted.',403);
    } else if(percent>0 && ![0,5,10,15].includes(percent))throw fail('CUSTOM_DISCOUNT','Custom discounts require Manager approval.');
-   if(!Number.isFinite(Number(body.amount)) || Math.abs(Number(body.amount)-totals.total)>0.005)throw fail('AMOUNT_CHANGED','The final amount changed. Refresh checkout before collecting payment.');
-   if(body.paymentMethod==='Cash' && (!Number.isFinite(Number(body.cashReceived)) || Number(body.cashReceived)<totals.total))throw fail('INSUFFICIENT_CASH','Cash received must cover the final amount.');
+   if(!isCurrency(Number(body.amount)) || Number(body.amount)!==totals.total)throw fail('AMOUNT_CHANGED','The final amount changed. Refresh checkout before collecting payment.');
+   if(body.paymentMethod==='Cash' && (!isCurrency(Number(body.cashReceived)) || Number(body.cashReceived)<totals.total))throw fail('INSUFFICIENT_CASH','Cash received must cover the final amount.');
    state.billVersion=(state.billVersion ?? order.version ?? 1)+1;state.manualDiscount=totals.manualDiscount;state.discountPercent=percent;state.taxableAmount=totals.taxableAmount;state.approvedBy=approver?.id;
    await saveRunning(tenant,id,state);
    const discounted=await orders.update(tenant,{...order,...totals,earnedPoints:Math.floor(order.subtotal/100),discountReason:percent>0?String(body.discountReason || 'Standard discount'):undefined,authorizerName:approver?.name},order.version,trx);
    if(customer && totals.redeemedPoints)await new CustomerRepository().update(tenant,{...customer,loyaltyPoints:customer.loyaltyPoints-totals.redeemedPoints},customer.version,trx);
-   const result=await FinancialTransactionService.getInstance().executeOrderPayment(tenant,id,{amount:totals.total,paymentMethod:body.paymentMethod,transactionReference:typeof body.transactionReference==='string'?body.transactionReference.slice(0,200):undefined,cashierId:actor.staffId,cashierName:actor.staffName});
+   const result=await FinancialTransactionService.getInstance().executeOrderPayment(tenant,id,{amount:totals.total,paymentMethod:body.paymentMethod,cashReceived:body.paymentMethod==='Cash'?Number(body.cashReceived):undefined,transactionReference:typeof body.transactionReference==='string'?body.transactionReference.slice(0,200):undefined,cashierId:actor.staffId,cashierName:actor.staffName});
    await auditLogService.log(tenant,'SETTLEMENT_PRICED',actor.staffName,`Final bill ${order.orderNumber}`,{orderId:id,subtotal:order.subtotal,discount:totals.discount,tax:totals.tax,total:totals.total,approvedBy:approver?.id,version:discounted.version},trx);
    return {...result,order:{...result.order,running:state}};
   });
