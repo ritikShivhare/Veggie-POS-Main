@@ -59,6 +59,8 @@ interface DashboardProps {
 type PeriodType = "yesterday" | "week" | "month" | "custom";
 const formatRupees = (value: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 const isPaidOrder = (order: Order) => order.status === "Completed" && Boolean(order.paidAt);
+const streamDateFormat = new Intl.DateTimeFormat('en-IN', {timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric'});
+const streamTimeFormat = new Intl.DateTimeFormat('en-IN', {timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',hour12:true});
 
 export default function Dashboard({
   dashboardStats,
@@ -72,6 +74,29 @@ export default function Dashboard({
 }: DashboardProps) {
   // Main view toggle
   const [dashboardViewTab, setDashboardViewTab] = useState<"live" | "analytics">("live");
+  const [streamDate, setStreamDate] = useState('today');
+  const [streamTicket, setStreamTicket] = useState('');
+  const [streamSort, setStreamSort] = useState('latest');
+  const today = businessDay(Date.now());
+  const selectedStreamDate = streamDate === 'today' ? today : streamDate;
+  const streamOrders = useMemo(() => {
+    const query = streamTicket.trim().replace(/^#/, '').toLowerCase();
+    return orders.filter(order => {
+      if (selectedStreamDate && businessDay(order.date) !== selectedStreamDate) return false;
+      const ticket = displayOrderNumber(order.orderNumber || order.id);
+      return !query || (/^\d+$/.test(query) && /^\d+$/.test(ticket)
+        ? Number(ticket) === Number(query)
+        : (order.orderNumber || order.id).toLowerCase().includes(query));
+    }).sort((a,b) => {
+      const aTime = new Date(a.date).getTime() || 0, bTime = new Date(b.date).getTime() || 0;
+      if (streamSort === 'latest') return bTime-aTime || b.id.localeCompare(a.id);
+      if (streamSort === 'oldest') return aTime-bTime || a.id.localeCompare(b.id);
+      // Keep dates separate when the daily ticket sequence repeats.
+      const dayOrder = businessDay(b.date).localeCompare(businessDay(a.date));
+      const ticketOrder = displayOrderNumber(a.orderNumber || a.id).localeCompare(displayOrderNumber(b.orderNumber || b.id),undefined,{numeric:true});
+      return dayOrder || (streamSort === 'ticket-asc' ? ticketOrder : -ticketOrder) || bTime-aTime || a.id.localeCompare(b.id);
+    });
+  },[orders,selectedStreamDate,streamTicket,streamSort]);
 
   // Date Range state for analytics view
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>("week");
@@ -486,8 +511,8 @@ export default function Dashboard({
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0">
             {/* Real-time Order Stream */}
-            <div className="min-w-0 lg:col-span-8 bg-white border border-slate-200 rounded-2xl flex flex-col shadow-sm overflow-hidden min-h-[350px]">
-              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white">
+            <div className="min-w-0 lg:col-span-8 bg-white border border-slate-200 rounded-2xl flex flex-col shadow-sm overflow-hidden min-h-[600px] sm:min-h-[420px]">
+              <div className="shrink-0 p-4 border-b border-slate-100 flex flex-wrap gap-2 justify-between items-center bg-white">
                 <div className="flex items-center gap-2">
                   <h3 className="font-bold text-sm text-slate-900 tracking-tight font-display">Real-time Order Stream</h3>
                   <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-600 rounded text-[9px] font-mono font-bold">LIVE SYNC</span>
@@ -495,12 +520,33 @@ export default function Dashboard({
                 <span className="text-[10px] text-slate-600 font-mono">Synced seconds ago</span>
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              <div className="shrink-0 p-4 border-b border-slate-100 bg-slate-50/50 space-y-3">
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">Order date (IST)
+                    <input type="date" aria-label="Order stream date" value={selectedStreamDate} onChange={e=>setStreamDate(e.target.value)} className="min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm min-h-10"/>
+                  </label>
+                  <div className="flex gap-2">
+                    <button type="button" aria-pressed={streamDate==='today'} onClick={()=>setStreamDate('today')} className={`min-h-10 rounded-lg border px-3 py-2 text-xs font-semibold ${streamDate==='today'?'border-blue-300 bg-blue-50 text-blue-700':'border-slate-300 bg-white text-slate-700'}`}>Today</button>
+                    <button type="button" aria-pressed={streamDate===''} onClick={()=>setStreamDate('')} className={`min-h-10 rounded-lg border px-3 py-2 text-xs font-semibold ${streamDate===''?'border-blue-300 bg-blue-50 text-blue-700':'border-slate-300 bg-white text-slate-700'}`}>All dates</button>
+                  </div>
+                  <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-slate-700">Order ticket
+                    <input type="search" aria-label="Search order ticket" placeholder="e.g. 001" value={streamTicket} onChange={e=>setStreamTicket(e.target.value)} className="w-full min-w-[120px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm min-h-10"/>
+                  </label>
+                  <label className="flex min-w-0 flex-col gap-1 text-xs font-semibold text-slate-700">Sort by
+                    <select aria-label="Sort order stream" value={streamSort} onChange={e=>setStreamSort(e.target.value)} className="max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm min-h-10">
+                      <option value="latest">Newest first</option><option value="oldest">Oldest first</option><option value="ticket-asc">Ticket: low to high</option><option value="ticket-desc">Ticket: high to low</option>
+                    </select>
+                  </label>
+                </div>
+                <p role="status" aria-label="Order stream results" className="text-xs text-slate-600">{streamOrders.length} {streamOrders.length===1?'order':'orders'} · {selectedStreamDate?streamDateFormat.format(new Date(selectedStreamDate+'T12:00:00+05:30')):'All dates'} · Based on order date (IST)</p>
+              </div>
+
+              <div className="flex-1 min-h-[240px] max-h-[480px] overflow-y-auto">
                 <div tabIndex={0} role="region" aria-label="Order stream table" className="overflow-x-auto w-full">
                   <table className="w-full text-xs text-left border-collapse">
                     <thead className="bg-slate-50/75 border-b border-slate-100 sticky top-0 text-slate-600 font-bold">
                       <tr>
-                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">ID</th>
+                        <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Order ticket / Date</th>
                         <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Staff Server</th>
                         <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Table Ref</th>
                         <th className="p-3.5 text-[10px] tracking-wider uppercase font-semibold text-slate-600">Items Ordered</th>
@@ -510,21 +556,24 @@ export default function Dashboard({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-600">
-                      {orders.length === 0 ? (
+                      {streamOrders.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="p-12 text-center text-slate-600 italic font-sans">No checkout records received today.</td>
+                          <td colSpan={7} className="p-12 text-center text-slate-600 italic font-sans">No orders match this date and ticket.</td>
                         </tr>
                       ) : (
-                        orders.map((order) => {
+                        streamOrders.map((order) => {
+                          const orderedAt = new Date(order.date);
+                          const hasOrderDate = Number.isFinite(orderedAt.getTime());
                           const itemsSummarized = (order.items || [])
                             .map((i) => `${i?.menuItem?.name || "Unknown Item"} (x${i?.quantity || 1})`)
                             .join(", ");
                           return (
-                            <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="p-3.5 font-mono">
+                            <tr key={order.id} data-order-id={order.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="p-3.5 font-mono whitespace-nowrap">
                                 <span className="bg-blue-50 border border-blue-100/30 text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-md">
-                                  #{displayOrderNumber(order.orderNumber)}
+                                  #{displayOrderNumber(order.orderNumber || order.id)}
                                 </span>
+                                {hasOrderDate?<time dateTime={orderedAt.toISOString()} className="mt-1.5 block text-[10px] leading-relaxed text-slate-600"><span className="block font-semibold">{streamDateFormat.format(orderedAt)}</span><span>{streamTimeFormat.format(orderedAt)} IST</span></time>:<span className="mt-1.5 block text-[10px] text-slate-600">Date unavailable</span>}
                               </td>
                               <td className="p-3.5 font-medium text-slate-700">{order.cashierName}</td>
                               <td className="p-3.5 text-slate-600">{order.tableNo || "Takeaway"}</td>
