@@ -1353,7 +1353,7 @@ export default function POSBilling({
 
       {showPaymentModal && billingOrder?.running && <RunningSettlement
         order={orders.find(o=>o.id===billingOrder.id) || billingOrder} settings={settings} customers={customers}
-        tenantId={activeTenant?.tenantId || ''} tenantVpa={activeTenant?.vpa}
+        tenantId={activeTenant?.tenantId || ''} tenantVpa={activeTenant?.vpa} tenantName={activeTenant?.name}
         onClose={()=>{setShowPaymentModal(false);setBillingOrder(null);}}
         onPaid={paid=>{setReceiptModalOrder(paid);setShowPaymentModal(false);setBillingOrder(null);}}/>}
       {/* PAYMENT SELECTION POPUP MODAL */}

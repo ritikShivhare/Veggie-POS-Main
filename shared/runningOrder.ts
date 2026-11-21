@@ -1,15 +1,26 @@
 import type {Order, KotBatch} from '../src/features/shared/types';
 
-import {money,percentOf,sumMoney,decimalMultiply} from './decimal';
+import {money,percentOf,sumMoney,decimalMultiply,isCurrency} from './decimal';
 export {money} from './decimal';
+export type SettlementDiscount = {type:'percent'|'amount';value:number};
 /** Restaurant menu prices are tax-exclusive. Loyalty remains a post-tax credit. */
 export function runningTotals(subtotal:number, gstRate:number, percent=0, loyalty=0) {
-  if (![subtotal,gstRate,percent,loyalty].every(Number.isFinite) || subtotal<0 || gstRate<0 || gstRate>30 || percent<0 || percent>100 || loyalty<0) throw new Error('Invalid bill calculation.');
+  return settlementTotals(subtotal,gstRate,{type:'percent',value:percent},loyalty);
+}
+export function validSettlementDiscount(subtotal:number,discount:SettlementDiscount) {
+  return Number.isFinite(discount.value) && discount.value>=0 && (discount.type==='percent'?discount.value<=100:discount.type==='amount'&&isCurrency(discount.value)&&discount.value<=money(subtotal));
+}
+/** Apply a rupee discount directly, without converting it to an approximate percentage. */
+export function settlementTotals(subtotal:number,gstRate:number,discount:SettlementDiscount,loyalty=0) {
+  if (![subtotal,gstRate,loyalty].every(Number.isFinite) || subtotal<0 || gstRate<0 || gstRate>30 || loyalty<0 || !validSettlementDiscount(subtotal,discount)) throw new Error('Invalid bill calculation.');
   subtotal=money(subtotal);
-  const manualDiscount=percentOf(subtotal,percent), taxableAmount=sumMoney([subtotal,-manualDiscount]);
+  const manualDiscount=discount.type==='amount'?discount.value:percentOf(subtotal,discount.value), taxableAmount=sumMoney([subtotal,-manualDiscount]);
   const tax=percentOf(taxableAmount,gstRate), gross=sumMoney([taxableAmount,tax]);
   const redeemedPoints=money(Math.min(loyalty,gross));
   return {subtotal,manualDiscount,taxableAmount,tax,redeemedPoints,discount:money(manualDiscount+redeemedPoints),total:money(gross-redeemedPoints)};
+}
+export function discountAboveLimit(subtotal:number,discount:SettlementDiscount,limit:number) {
+  return discount.type==='amount'?discount.value>percentOf(subtotal,limit):discount.value>limit;
 }
 export function openBill(order:Order) {return !order.paidAt && !['Completed','Cancelled'].includes(order.status);}
 export function matchingBills(orders:Order[],type:Order['type'],table:string,customerId:string) {
