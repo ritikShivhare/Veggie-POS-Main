@@ -229,33 +229,33 @@ describe("Optimistic Locking and Versioning Concurrency Engine", () => {
       // Seed initial state
       await syncService.saveFullState(tenantId, {
         ingredients: [
-          { id: "o-sync-1", name: "#10", currentStock: 100, unit: "Pending", version: 1 }
+          { id: "o-sync-1", name: "#10", currentStock: 100, unit: "kg", version: 1 }
         ]
       });
 
       // Update status with correct matching version 1
       const updated = await syncService.saveFullState(tenantId, {
         ingredients: [
-          { id: "o-sync-1", name: "#10", currentStock: 100, unit: "Ready", version: 1 }
+          { id: "o-sync-1", name: "#10 changed", currentStock: 100, unit: "kg", version: 1 }
         ]
       });
 
       expect(updated.ingredients[0].version).toBe(2);
-      expect(updated.ingredients[0].unit).toBe("Ready");
+      expect(updated.ingredients[0].name).toBe("#10 changed");
     });
 
     it("should reject full state sync with 409 when an item has stale version", async () => {
       // Step 1: Initial state (version 1)
       await syncService.saveFullState(tenantId, {
         ingredients: [
-          { id: "o-conflict-1", name: "#20", currentStock: 200, unit: "Pending", version: 1 }
+          { id: "o-conflict-1", name: "#20", currentStock: 200, unit: "kg", version: 1 }
         ]
       });
 
       // Step 2: Update to version 2
       await syncService.saveFullState(tenantId, {
         ingredients: [
-          { id: "o-conflict-1", name: "#20", currentStock: 200, unit: "Preparing", version: 1 }
+          { id: "o-conflict-1", name: "#20 changed", currentStock: 200, unit: "kg", version: 1 }
         ]
       });
 
@@ -263,7 +263,7 @@ describe("Optimistic Locking and Versioning Concurrency Engine", () => {
       await expect(
         syncService.saveFullState(tenantId, {
           ingredients: [
-            { id: "o-conflict-1", name: "#20", currentStock: 200, unit: "Cancelled", version: 1 }
+            { id: "o-conflict-1", name: "#20 stale", currentStock: 200, unit: "kg", version: 1 }
           ]
         })
       ).rejects.toThrow(OptimisticLockConflictError);

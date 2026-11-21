@@ -1,3 +1,4 @@
+import {isCurrency} from '../../../../shared/decimal';
 import { useState, useEffect, useRef } from "react";
 import { StaffMember, Shift } from "../types";
 import { offlineRepository,OutboxProcessor } from "../services/offline";
@@ -244,7 +245,12 @@ export function useAuthSession({
         alert("An active duty shift is already saved on this device.");
         return;
       }
-      const shift:Shift={id:crypto.randomUUID(),staffId:currentStaff.id,staffName:currentStaff.name,role:currentStaff.role,startTime:new Date().toISOString(),status:"Active"};
+      let openingCash=0;
+      if(['Cashier','Owner','Manager'].includes(currentStaff.role)) {
+        const entered=window.prompt('Opening cash float in INR (cash already in your drawer):','0');if(entered===null)return;
+        openingCash=Number(entered);if(!isCurrency(openingCash)||openingCash<0){alert('Enter a non-negative opening cash amount with up to two decimal places.');return;}
+      }
+      const shift:Shift={id:crypto.randomUUID(),staffId:currentStaff.id,staffName:currentStaff.name,role:currentStaff.role,startTime:new Date().toISOString(),status:"Active",openingCash};
       await offlineRepository.recordShiftOffline(activeTenantId,shift);
       setShifts([...shifts,shift]);
       await OutboxProcessor.triggerDrain(activeTenantId);

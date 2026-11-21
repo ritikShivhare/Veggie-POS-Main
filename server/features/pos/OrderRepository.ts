@@ -1,5 +1,6 @@
 import { BaseRepository, DatabaseTransaction } from "../shared/BaseRepository";
 import { Order } from "../../../src/features/shared/types";
+import {runningStates} from './RunningOrderStore';
 
 export class OrderDeletionProhibitedError extends Error {
   public code = "ORDER_DELETION_PROHIBITED";
@@ -14,6 +15,10 @@ export class OrderDeletionProhibitedError extends Error {
 
 export class OrderRepository extends BaseRepository<Order> {
   protected sliceKey = "orders";
+  override async getAll(tenantId:string):Promise<Order[]|null> {
+    const [orders,states,subscription]=await Promise.all([super.getAll(tenantId),runningStates(tenantId),this.db.getObject<any>(tenantId,'subscription_v1')]);
+    return orders?.map(order=>({...order,running:states[order.id]?{...states[order.id],frozen:Boolean(subscription?.frozenKots?.[order.id])}:undefined})) || null;
+  }
 
   /**
    * Guard against accidental hard-deletion:

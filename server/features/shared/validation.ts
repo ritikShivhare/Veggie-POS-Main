@@ -1,4 +1,5 @@
 import { validPin } from './security';
+import {isCurrency,quantity} from '../../../shared/decimal';
 const fail=(message:string):never=>{throw Object.assign(new Error(message),{status:400,code:'INVALID_DATA'});};
 export function finiteAmount(value:any,name:string,min=0,max=1e9):number {
   if(typeof value!=='number' || !Number.isFinite(value) || value<min || value>max) fail(`${name} must be a finite number between ${min} and ${max}.`);
@@ -12,6 +13,9 @@ export function validateEntity(type:string,item:any,creating=false):void {
   for(const field of ['name','nameHindi','supplier','invoiceNumber','phone','email']) if(item[field]!==undefined && (typeof item[field]!=='string' || item[field].length>240)) fail(`Invalid ${field}.`);
   const numeric:Record<string,string[]>={menuItems:['price'],ingredients:['currentStock','minStock','costPerUnit'],purchases:['quantity','cost']};
   for(const field of numeric[type] || []) if(item[field]!==undefined) finiteAmount(item[field],field,field==='quantity'?0.000001:0);
+  if(type==='menuItems' && item.price!==undefined && !isCurrency(item.price)) fail('Menu prices must use at most two decimal places.');
+  if(type==='ingredients')for(const field of ['currentStock','minStock'])if(item[field]!==undefined&&quantity(item[field])!==item[field])fail('Stock quantities support at most nine decimal places.');
+  if(type==='ingredients' && item.unit!==undefined && (typeof item.unit!=='string'||!item.unit.trim()))fail('A storage unit is required.');
   if(type==='staffList') {
     if(item.status!==undefined && !['active','inactive','suspended'].includes(item.status)) fail('Invalid staff status.');
     if(!['Owner','Manager','Cashier','Waiter','Chef','Staff'].includes(item.role)) fail('Invalid staff role.');
@@ -30,6 +34,7 @@ export function validateSettings(settings:any):void {
   if(['managerPin','pin','password','passwordHash'].some(k=>Object.hasOwn(settings,k))) fail('Credentials must use the authenticated credential endpoint.');
   for(const key of ['autoDeductStock','blockOrdersIfInsufficient','managerCanAddPurchases','managerCanEditRecipes','kdsSoundAlerts','quickPinRequired']) if(settings[key]!==undefined && typeof settings[key]!=='boolean') fail(`Invalid ${key}.`);
   if(settings.gstPercentage!==undefined) finiteAmount(settings.gstPercentage,'GST',0,30);
+  if(settings.standardDiscountPercentage!==undefined) finiteAmount(settings.standardDiscountPercentage,'Standard discount',0,100);
   if(settings.maxDiscountPercentage!==undefined) finiteAmount(settings.maxDiscountPercentage,'Maximum discount',0,100);
   if(settings.slackWebhookUrl || settings.sentryDsn || settings.emailAlertAddress) fail('Global integrations must be configured by the SaaS administrator on the server.');
   if(settings.upiVpa && (typeof settings.upiVpa!=='string' || !/^[\w.\-]+@[\w.\-]+$/.test(settings.upiVpa))) fail('Invalid UPI address.');

@@ -132,7 +132,7 @@ describe('Deployment audit: expected secure and consistent behavior', () => {
   });
   it('can cancel a completed kitchen bill that was never paid',async()=>{
     await financialTransactionService.executeOrderPlacement(tid,order('kitchen-completed',{status:'Completed'}) as any,{role:'Owner',staffId:'audit-owner'});
-    const cancelled=await financialTransactionService.executeOrderCancellation(tid,'kitchen-completed',{cancelledBy:'Owner',reason:'Audit'});
+    const cancelled=await financialTransactionService.executeOrderCancellation(tid,'kitchen-completed',{cancelledBy:'Owner',reason:'Audit',stockRecovery:{'audit-ing':1}});
     expect(cancelled.status).toBe('Cancelled');expect((await ingredientRepo.getById(tid,'audit-ing'))?.currentStock).toBe(10);
   });
   it('rejects unknown tenant login instead of seeding default owner account', async () => {

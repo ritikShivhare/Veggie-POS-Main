@@ -1,8 +1,10 @@
+import {decimalMultiply,decimalDivide,money,quantity} from '../../../shared/decimal';
 import React, { useState, useMemo } from "react";
 import { Ingredient, MenuItem, Recipe, RecipeIngredient, Purchase, InventorySettings, StaffMember } from "../shared/types";
 import {
   convertRecipeQuantityToIngredientStock,
   getCompatibleUnits,
+  getUnitDefinition,
   getDefaultRecipeUnit,
   calculatePortionCost
 } from "../shared/utils/unitConversion";
@@ -97,7 +99,7 @@ export default function InventoryManagement({
 
   // Stats
   const totalStockHoldingValue = useMemo(() => {
-    return ingredients.reduce((sum, ing) => sum + ing.currentStock * ing.costPerUnit, 0);
+    return money(ingredients.reduce((sum, ing) => sum + decimalMultiply(ing.currentStock,ing.costPerUnit,10), 0));
   }, [ingredients]);
 
   const lowStockCount = useMemo(() => {
@@ -372,19 +374,6 @@ export default function InventoryManagement({
 
     const purchaseQty = Number(newPur.quantity);
     const purchaseCost = Number(newPur.cost);
-    const currentStockValid = Math.max(0, selectedIng.currentStock);
-    const newStock = Number((selectedIng.currentStock + purchaseQty).toFixed(3));
-
-    // Weighted Average Cost (WAC): (Current Value + Purchase Cost) / (Current Stock + Purchase Qty)
-    let newCostPerUnit = selectedIng.costPerUnit;
-    if (purchaseQty > 0 && purchaseCost > 0) {
-      if (currentStockValid > 0 && selectedIng.costPerUnit > 0) {
-        const currentValue = currentStockValid * selectedIng.costPerUnit;
-        newCostPerUnit = Number(((currentValue + purchaseCost) / (currentStockValid + purchaseQty)).toFixed(2));
-      } else {
-        newCostPerUnit = Number((purchaseCost / purchaseQty).toFixed(2));
-      }
-    }
 
     const purchaseEntry: Purchase = {
       id: `pur-${Date.now()}`,
@@ -398,19 +387,6 @@ export default function InventoryManagement({
     };
 
     onAddPurchase(purchaseEntry);
-
-    // Increase current stock & update costPerUnit with weighted average in inventory
-    const updatedIngredients = ingredients.map((ing) =>
-      ing.id === newPur.ingredientId
-        ? {
-            ...ing,
-            currentStock: newStock,
-            costPerUnit: newCostPerUnit,
-            updated_at: new Date().toISOString()
-          }
-        : ing
-    );
-    onUpdateIngredients(updatedIngredients);
 
     setNewPur({ ingredientId: "", quantity: 0, cost: 0, ratePerUnit: 0, supplier: "", invoiceNumber: "" });
     setShowAddPurchaseModal(false);
@@ -427,7 +403,7 @@ export default function InventoryManagement({
         const ing = ingredients.find((i) => i.id === ri.ingredientId);
         return {
           ...ri,
-          unit: ri.unit || (ing ? getDefaultRecipeUnit(ing.unit) : "g")
+          unit: getUnitDefinition(ri.unit || ing?.unit || "g").canonical
         };
       });
     setRecipeIngredients(validMapped);
@@ -479,6 +455,7 @@ export default function InventoryManagement({
       (ri) => ri.quantity > 0 && validIds.has(ri.ingredientId)
     );
     const updatedRecipe: Recipe = {
+      ...recipes.find(r=>r.menuItemId===selectedRecipeMenuItemId),
       menuItemId: selectedRecipeMenuItemId,
       ingredients: validIngredients
     };
@@ -607,14 +584,15 @@ export default function InventoryManagement({
                       <tr key={ing.id} className="hover:bg-slate-800/20 text-slate-300">
                         <td className="p-4 font-semibold text-white">{ing.name}</td>
                         <td className="p-4 font-mono font-semibold">
-                          {ing.currentStock.toLocaleString()} {ing.unit}
+                          {ing.currentStock.toLocaleString(undefined,{maximumFractionDigits:9})} {ing.unit}
+                          {(ing.untrackedConsumption||0)>0&&<p role="status" className="mt-1 text-amber-300">Untracked consumption: {ing.untrackedConsumption} {ing.unit}. Count and adjust physical stock.</p>}
                         </td>
                         <td className="p-4 font-mono text-slate-400">
                           {ing.minStock.toLocaleString()} {ing.unit}
                         </td>
                         <td className="p-4 font-mono">
                           <div className="flex flex-col">
-                            <span className="text-white font-semibold">INR {ing.costPerUnit.toFixed(2)}</span>
+                            <span className="text-white font-semibold">INR {ing.costPerUnit.toLocaleString("en-IN",{maximumFractionDigits:12})}</span>
 
                           </div>
                         </td>
@@ -867,7 +845,7 @@ export default function InventoryManagement({
                               <p className="text-[10px] font-mono text-slate-500 uppercase">{item.category}</p>
                               {recipe && recipe.ingredients.length > 0 && (
                                 <span className="text-[10px] font-mono font-semibold text-emerald-400">
-                                  • BOM Cost: ₹{cardPortionCost.toFixed(2)}
+                                  • BOM Cost: ₹{money(cardPortionCost).toFixed(2)}
                                 </span>
                               )}
                             </div>
@@ -1080,7 +1058,7 @@ export default function InventoryManagement({
                       <div className="flex justify-between font-medium">
                         <span className="text-white">{ing.name}</span>
                         <span className="text-slate-400 font-mono">
-                          {ing.currentStock.toLocaleString()} / {(ing.minStock * 2).toLocaleString()} {ing.unit} ({percent.toFixed(0)}%)
+                          {ing.currentStock.toLocaleString(undefined,{maximumFractionDigits:9})} / {(ing.minStock * 2).toLocaleString()} {ing.unit} ({percent.toFixed(0)}%)
                         </span>
                       </div>
                       <div className="h-2 w-full bg-slate-950 rounded-full overflow-hidden">
@@ -1127,6 +1105,7 @@ export default function InventoryManagement({
                   <label className="text-slate-400 font-medium">Unit Measurement</label>
                   <select
                     value={newIng.unit}
+                    disabled={Boolean(editingIngId)}
                     onChange={(e) => setNewIng({ ...newIng, unit: e.target.value })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none"
                   >
@@ -1141,7 +1120,7 @@ export default function InventoryManagement({
                   <label className="text-slate-400 font-medium">Cost per Unit (INR)</label>
                   <input
                     type="number"
-                    step="0.01"
+                    step="any"
                     value={newIng.costPerUnit || ""}
                     onChange={(e) => setNewIng({ ...newIng, costPerUnit: Number(e.target.value) })}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
@@ -1194,18 +1173,7 @@ export default function InventoryManagement({
       {/* FORM MODAL: RECEIVE VENDOR PURCHASE */}
       {showAddPurchaseModal && (() => {
         const selectedPurIng = ingredients.find((i) => i.id === newPur.ingredientId);
-        const curStock = selectedPurIng ? Math.max(0, selectedPurIng.currentStock) : 0;
-        const curCost = selectedPurIng ? selectedPurIng.costPerUnit : 0;
-        const curVal = curStock * curCost;
-        const purQty = Number(newPur.quantity) || 0;
-        const purCost = Number(newPur.cost) || 0;
-        const purRate = purQty > 0 ? (purCost / purQty) : (newPur.ratePerUnit || 0);
-        const newCombinedStock = Number((curStock + purQty).toFixed(3));
-        const newCombinedVal = curVal + purCost;
-        const previewWac = newCombinedStock > 0
-          ? (curStock > 0 && curCost > 0 ? Number((newCombinedVal / newCombinedStock).toFixed(2)) : Number(purRate.toFixed(2)))
-          : curCost;
-
+        const newCombinedStock=quantity((selectedPurIng?.currentStock||0)+(Number(newPur.quantity)||0));
         return (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
             <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-4">
@@ -1229,7 +1197,7 @@ export default function InventoryManagement({
                         ...newPur,
                         ingredientId: selId,
                         ratePerUnit: rate,
-                        cost: newPur.quantity > 0 && rate > 0 ? Number((newPur.quantity * rate).toFixed(2)) : newPur.cost
+                        cost: newPur.quantity > 0 && rate > 0 ? decimalMultiply(newPur.quantity,rate) : newPur.cost
                       });
                     }}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none"
@@ -1259,7 +1227,7 @@ export default function InventoryManagement({
                           ...newPur,
                           quantity: qty,
                           ratePerUnit: rate,
-                          cost: qty > 0 && rate > 0 ? Number((qty * rate).toFixed(2)) : newPur.cost
+                          cost: qty > 0 && rate > 0 ? decimalMultiply(qty,rate) : newPur.cost
                         });
                       }}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono text-xs"
@@ -1280,7 +1248,7 @@ export default function InventoryManagement({
                         setNewPur({
                           ...newPur,
                           ratePerUnit: rate,
-                          cost: qty > 0 ? Number((qty * rate).toFixed(2)) : newPur.cost
+                          cost: qty > 0 ? decimalMultiply(qty,rate) : newPur.cost
                         });
                       }}
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500 font-mono text-xs"
@@ -1298,7 +1266,7 @@ export default function InventoryManagement({
                       onChange={(e) => {
                         const cost = Number(e.target.value);
                         const qty = Number(newPur.quantity) || 0;
-                        const derivedRate = qty > 0 ? Number((cost / qty).toFixed(2)) : newPur.ratePerUnit;
+                        const derivedRate = qty > 0 ? decimalDivide(cost,qty,12) : newPur.ratePerUnit;
                         setNewPur({
                           ...newPur,
                           cost,
@@ -1395,7 +1363,7 @@ export default function InventoryManagement({
                   <div className="text-right shrink-0 bg-slate-950/60 border border-slate-800 px-3 py-1.5 rounded-xl">
                     <div className="text-[10px] text-slate-400 uppercase font-mono">BOM Portion Cost</div>
                     <div className="text-sm font-bold font-mono text-emerald-400">
-                      ₹{totalBOMCost.toFixed(2)}
+                      ₹{money(totalBOMCost).toFixed(2)}
                       {profitMargin !== null && (
                         <span className="text-[11px] text-slate-400 font-normal ml-1">({profitMargin}% margin)</span>
                       )}
@@ -1480,7 +1448,7 @@ export default function InventoryManagement({
                               )}
                             </span>
                             <span className="font-mono text-slate-300">
-                              Est. Cost: <span className="text-white font-semibold">₹{rowCost.toFixed(2)}</span>
+                              Est. Cost: <span className="text-white font-semibold">₹{money(rowCost).toFixed(2)}</span>
                             </span>
                           </div>
                         )}

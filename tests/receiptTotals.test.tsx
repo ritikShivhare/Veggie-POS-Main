@@ -5,7 +5,7 @@ import ReceiptTotals from "../src/features/shared/components/ReceiptTotals";
 
 for (const variant of ["dashboard", "thermal"] as const) {
   describe(`${variant} receipt totals`, () => {
-    const render = (order: { subtotal?: number; tax?: number; discount?: number; total: number }) =>
+    const render = (order: { subtotal?: number; tax?: number; discount?: number; total: number;running?:{gstRate:number;taxableAmount?:number} }) =>
       renderToStaticMarkup(<ReceiptTotals order={order} variant={variant} />).replace(/<[^>]+>/g, "");
     const currency = variant === "thermal" ? "INR " : "₹";
 
@@ -17,11 +17,16 @@ for (const variant of ["dashboard", "thermal"] as const) {
       expect(text).toContain(`Grand Total${currency}323.00`);
     });
 
-    it("prints the saved positive tax and its actual rate instead of hardcoding 5%", () => {
+    it("prints saved positive tax without guessing an unknown historical rate", () => {
       const text = render({ subtotal: 100, tax: 12, discount: 5, total: 107 });
-      expect(text).toContain(`GST (12%)${currency}12.00`);
+      expect(text).toContain(`GST${currency}12.00`);
       expect(text).toContain(`Grand Total${currency}107.00`);
       expect(text).not.toContain("GST (5%)");
+    });
+
+    it("uses the saved GST rate after discount instead of inferring an effective rate",()=>{
+      const text=render({subtotal:100,tax:11.4,discount:5,total:106.4,running:{gstRate:12,taxableAmount:95}});
+      expect(text).toContain(`GST (12%)${currency}11.40`);
     });
 
     it("does not invent tax for an older order with missing tax or subtotal", () => {

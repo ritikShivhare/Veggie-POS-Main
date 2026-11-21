@@ -106,6 +106,7 @@ export default function Sidebar({
       return false;
     }
     if (item.role && currentStaff.role !== item.role) return false;
+    if (["billing","kds"].includes(item.id) && currentStaff.permissions.includes("orders")) return true;
     if (item.permission && !currentStaff.permissions.includes(item.permission as any)) return false;
     return true;
   });

@@ -44,6 +44,7 @@ export interface ReportPayload {
   language?: "hindi" | "hinglish" | "english";
   salesData: {
     totalRevenue: number;
+      netSales?:number;
     totalOrders: number;
     cashRevenue: number;
     upiRevenue: number;

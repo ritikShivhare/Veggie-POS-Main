@@ -1,4 +1,6 @@
-import {assertInventoryWritable} from '../billing/SubscriptionLifecycle';
+import {assertInventoryWritable,getSubscription} from '../billing/SubscriptionLifecycle';
+import {getUnitConversionRatio,getUnitDefinition} from '../../../src/features/shared/utils/unitConversion';
+import {stockShortages,inventoryAccounting,INVENTORY_ACCOUNTING} from '../inventory/InventoryAccounting';
 import crypto from "node:crypto";
 import {InventoryMovementRepository} from "../inventory/InventoryMovementRepository";
 import {verifyPin} from "../auth/PinSecurityService";
@@ -18,8 +20,11 @@ export class SyncService {
   private db=Database.getInstance();
   constructor(private menuRepo:MenuRepository,private ingredientRepo:IngredientRepository,private recipeRepo:RecipeRepository,private staffRepo:StaffRepository,private orderRepo:OrderRepository,private customerRepo:CustomerRepository,private purchaseRepo:PurchaseRepository,private shiftRepo:ShiftRepository,private settingsRepo:SettingsRepository) {}
   async getFullState(tenantId:string):Promise<any> {
+    await getSubscription(tenantId);
     const values=await Promise.all([this.menuRepo.getAll(tenantId),this.ingredientRepo.getAll(tenantId),this.recipeRepo.getAll(tenantId),this.staffRepo.getAll(tenantId),this.orderRepo.getAll(tenantId),this.customerRepo.getAll(tenantId),this.purchaseRepo.getAll(tenantId),this.shiftRepo.getAll(tenantId),this.settingsRepo.get(tenantId),this.db.getObject<Record<string,any>>(tenantId,'order_service_state')]);
-    values[4]=(values[4] as any[] || []).map(order=>({...order,...((values[9] as any)?.[order.id] || {})}));
+    values[4]=(values[4] as any[] || []).map(order=>({...order,...(order.running ? {servedAt:order.running.batches.every((b:any)=>['Served','Cancelled'].includes(b.status))?order.running.batches.at(-1)?.servedAt:undefined} : ((values[9] as any)?.[order.id] || {}))}));
+    const shortages=await stockShortages(tenantId);
+    values[1]=(values[1] as any[] || []).map(ingredient=>({...ingredient,untrackedConsumption:shortages.find(s=>s.ingredientId===ingredient.id)?.quantity || 0}));
     return Object.fromEntries(['menuItems','ingredients','recipes','staffList','orders','customers','purchases','shifts','settings'].map((k,i)=>[k,values[i]]));
   }
   /** Sync contains versioned management changes only. Financial mutations are commands. */
@@ -35,9 +40,11 @@ export class SyncService {
         const existing=(await repo.getAll(tenantId)) || [],idKey=key==='recipes'?'menuItemId':'id';
         const merged=new Map<string,any>(existing.map((r:any)=>[r[idKey],r]));
         for(const input of payload[key] || []) {
+          if(key==='ingredients')delete input.untrackedConsumption;
           const previous=merged.get(input[idKey]);
           validateEntity(key,input,!previous);
           const incoming={...previous,...input};
+          if(key==='ingredients' && previous && getUnitDefinition(incoming.unit).canonical!==getUnitDefinition(previous.unit).canonical) throw Object.assign(new Error('An existing ingredient unit is locked. Create a new ingredient for a different storage unit.'),{status:400,code:'INGREDIENT_UNIT_LOCKED'});
           if(key==='staffList' && (!input.pin || (previous?.pin && await verifyPin(input.pin,previous.pin)))) incoming.pin=previous?.pin;
           if(key==='staffList') incoming.passwordHash=previous?.passwordHash;
           if(key==='customers') Object.assign(incoming,customerProfile(input,previous));
@@ -47,10 +54,15 @@ export class SyncService {
           if(key==='ingredients' && previous && input.currentStock!==undefined && input.currentStock!==previous.currentStock) {
             const movementRepo=new InventoryMovementRepository();
             await movementRepo.add(tenantId,{id:crypto.randomUUID(),ingredientId:input.id,movementType:"MANUAL_ADJUSTMENT",quantityDelta:input.currentStock-previous.currentStock,previousStock:previous.currentStock,newStock:input.currentStock,reason:"Manual inventory adjustment",performedBy:staffId},trx);
+            const accounting=await inventoryAccounting(tenantId);for(const issue of Object.values(accounting.issues).filter(i=>i.ingredientId===input.id&&!i.reconciledAt))issue.reconciledAt=new Date().toISOString();await this.db.saveObject(tenantId,INVENTORY_ACCOUNTING,accounting);
           }
           if(key==='recipes') {
             const menu=await this.menuRepo.getById(tenantId,input.menuItemId),ingredients=(await this.ingredientRepo.getAll(tenantId)) || [];
             if(!menu || input.ingredients.some((i:any)=>!ingredients.some(ing=>ing.id===i.ingredientId))) throw Object.assign(new Error('Recipe references a missing or foreign item.'),{status:400,code:'INVALID_RECIPE'});
+            for(const row of input.ingredients) {
+              const ingredient=ingredients.find(i=>i.id===row.ingredientId)!;
+              try {getUnitConversionRatio(row.unit || ingredient.unit,ingredient.unit);} catch {throw Object.assign(new Error('Recipe and stock units are incompatible.'),{status:400,code:'INVALID_RECIPE_UNIT'});}
+            }
           }
           merged.set(input[idKey],{...incoming,version:previous?(previous.version || 1)+1:1,updated_at:new Date().toISOString()});
         }

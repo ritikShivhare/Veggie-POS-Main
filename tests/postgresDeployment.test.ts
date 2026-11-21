@@ -1,3 +1,4 @@
+import {runningOrderService} from '../server/features/pos/RunningOrderService';
 import {describe,it,expect,beforeAll,afterAll,vi} from 'vitest';
 import {PGlite} from '@electric-sql/pglite';
 import {readFile,readdir} from 'node:fs/promises';
@@ -102,4 +103,26 @@ describe('PostgreSQL deployment integration',()=>{
     expect((await staffRepo.getById(tenant,staff.id)).status).toBe('inactive');
     expect((await shiftRepo.getById(tenant,'historical-shift')).staffId).toBe(staff.id);
   });
+  it('round-trips a running bill, delta stock and discounted settlement through real PostgreSQL RPCs',async()=>{
+    const tid='pg-running-order';
+    await Database.getInstance().saveObject(tid,'subscription_v1',{plan:'pro',status:'active',isReadOnly:false,inventoryFrozen:false});
+    await staffRepo.saveAll(tid,[{id:'owner',name:'Owner',role:'Owner',pin:'864210',permissions:['billing','orders','inventory'],status:'active'}]);
+    await menuRepo.saveAll(tid,[{id:'meal',name:'Meal',price:100,category:'Main',isAvailable:true,isVegetarian:true}]);
+    await ingredientRepo.saveAll(tid,[{id:'flour',name:'Flour',unit:'kg',currentStock:20,minStock:1,costPerUnit:10}]);
+    await recipeRepo.saveAll(tid,[{menuItemId:'meal',ingredients:[{ingredientId:'flour',quantity:1,unit:'kg'}]}]);
+    await settingsRepo.save(tid,{autoDeductStock:true,blockOrdersIfInsufficient:true,gstPercentage:5,standardDiscountPercentage:5,managerCanAddPurchases:true,managerCanEditRecipes:true,kdsSoundAlerts:false,quickPinRequired:true});
+    const actor={staffId:'owner',staffName:'Owner',role:'Owner'};
+    const first=(await financialTransactionService.executeOrderPlacement(tid,{id:'running',runningOrderFlow:true,status:'Pending',type:'Dine-In',tableNo:'T-01',items:[{menuItemId:'meal',quantity:1}] as any},actor)).order;
+    const next=await runningOrderService.append(tid,first.id,{operationId:'pg-addon-001',expectedVersion:first.version,items:[{menuItemId:'meal',quantity:2,note:'no salt'}]},actor);
+    expect((await orderRepo.getById(tid,first.id))?.running?.batches).toHaveLength(2);
+    expect((await pg.query<any>('SELECT quantity,unit_price FROM order_items WHERE tenant_id=$1 ORDER BY quantity',[tid])).rows.map(r=>Number(r.quantity))).toEqual([1,2]);
+    expect((await ingredientRepo.getById(tid,'flour'))?.currentStock).toBe(17);
+    const paid=await runningOrderService.settle(tid,first.id,{expectedVersion:next.running?.billVersion ?? next.version,discountPercent:5,customDiscount:false,amount:299.25,paymentMethod:'Cash',cashReceived:500},actor);
+    expect(paid.order).toMatchObject({subtotal:300,tax:14.25,discount:15,total:299.25,status:'Completed'});
+    expect((await orderRepo.getById(tid,first.id))?.running).toMatchObject({gstRate:5,taxableAmount:285});
+    expect((await paymentRepo.getAll(tid))?.filter(p=>p.orderId===first.id)).toHaveLength(1);
+    await pg.exec('SET ROLE anon');
+    try {await expect(pg.query('SELECT * FROM tenant_objects')).rejects.toMatchObject({code:'42501'});}finally{await pg.exec('RESET ROLE');}
+  },15000);
+
 });

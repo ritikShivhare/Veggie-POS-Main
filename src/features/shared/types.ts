@@ -13,6 +13,7 @@ export interface MenuItem {
 }
 
 export interface Ingredient {
+  untrackedConsumption?:number;
   id: string;
   name: string;
   unit: string; // e.g., 'g', 'ml', 'pcs', 'kg'
@@ -69,6 +70,7 @@ export interface StaffMember {
 }
 
 export interface Shift {
+  openingCash?:number;
   id: string;
   staffId: string;
   staffName: string;
@@ -82,6 +84,8 @@ export interface Shift {
 }
 
 export interface CartItem {
+  lineId?: string;
+  batchId?: string;
   menuItem: MenuItem;
   quantity: number;
   note?: string;
@@ -91,7 +95,34 @@ export interface CartItem {
 
 export type OrderStatus = 'Pending' | 'Preparing' | 'Ready' | 'Completed' | 'Cancelled';
 
+export interface KotBatch {
+  id: string;
+  number: number;
+  items: CartItem[];
+  status: 'Pending' | 'Preparing' | 'Ready' | 'Served' | 'Cancelled';
+  createdAt: string;
+  createdBy: string;
+  servedAt?: string;
+  version: number;
+}
+export interface RunningOrderState {
+  frozen?:boolean;
+  billVersion?: number;
+  gstRate: number;
+  batches: KotBatch[];
+  operations: Record<string, string>;
+  manualDiscount?: number;
+  discountPercent?: number;
+  taxableAmount?: number;
+  approvedBy?: string;
+}
+
 export interface Order {
+  runningOrderFlow?: boolean;
+  appendToOrderId?: string;
+  expectedVersion?: number;
+  batchNumber?: number;
+  running?: RunningOrderState;
   id: string;
   orderNumber: string; // e.g., '#1042'
   date: string; // ISO String
@@ -226,6 +257,7 @@ export interface InventorySettings {
   enableAlerts?: boolean;
   gstPercentage?: number;
   maxDiscountPercentage?: number;
+  standardDiscountPercentage?: number;
   gstin?: string;
   fssaiNumber?: string;
   upiVpa?: string;

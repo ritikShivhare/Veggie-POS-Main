@@ -1,4 +1,6 @@
 import {assertInventoryWritable} from '../server/features/billing/SubscriptionLifecycle';
+import {purchaseTotals} from '../shared/inventory';
+import {isCurrency,quantity as stockQuantity} from '../shared/decimal';
 import express from "express";
 import crypto from "node:crypto";
 import {validateEntity} from "../server/features/shared/validation";
@@ -228,7 +230,7 @@ router.post("/purchases", authMiddleware, idempotencyMiddleware, requirePermissi
     const quantity = Number(purchase.quantity);
     const cost = Number(purchase.cost);
 
-    if (!ingredientId || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(cost) || cost<0) {
+    if (!ingredientId || !Number.isFinite(quantity) || quantity <= 0 || stockQuantity(quantity)!==quantity || !Number.isFinite(cost) || cost<0 || !isCurrency(cost)) {
       return res.status(400).json({
         success: false,
         error: "INVALID_PURCHASE",
@@ -264,20 +266,7 @@ router.post("/purchases", authMiddleware, idempotencyMiddleware, requirePermissi
     };
 
     const previousStock = ingredient.currentStock;
-    const currentStockValid = Math.max(0, previousStock);
-    const newStock = Number((previousStock + quantity).toFixed(3));
-
-    // Weighted Average Cost (WAC) formula:
-    // (Existing Stock * Existing Cost + Purchased Quantity * Purchase Cost) / (Existing Stock + Purchased Quantity)
-    let newCostPerUnit = ingredient.costPerUnit;
-    if (quantity > 0 && cost > 0) {
-      if (currentStockValid > 0 && ingredient.costPerUnit > 0) {
-        const currentValue = currentStockValid * ingredient.costPerUnit;
-        newCostPerUnit = Number(((currentValue + cost) / (currentStockValid + quantity)).toFixed(2));
-      } else {
-        newCostPerUnit = Number((cost / quantity).toFixed(2));
-      }
-    }
+    const {currentStock:newStock,costPerUnit:newCostPerUnit}=purchaseTotals(previousStock,ingredient.costPerUnit,quantity,cost);
 
     const updatedIngredient = {
       ...ingredient,
