@@ -113,6 +113,8 @@ export interface RunningOrderState {
   operations: Record<string, string>;
   manualDiscount?: number;
   discountPercent?: number;
+  discountType?: 'percent'|'amount';
+  discountValue?: number;
   taxableAmount?: number;
   approvedBy?: string;
 }

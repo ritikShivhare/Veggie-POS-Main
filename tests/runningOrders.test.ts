@@ -96,11 +96,29 @@ describe('Running order and KOT transactions',()=>{
   expect(paid.order.total).toBe(105);
  });
  it('rejects entry-stage discount or immediate payment on running order creation',async()=>{
-  for(const extra of [{discount:10},{managerPin},{redeemPoints:true},{paymentMethod:'Cash'}])
+  for(const extra of [{discount:10},{managerPin},{redeemPoints:true},{paymentMethod:'Cash'},{discountType:'amount',discountValue:20}])
    await expect(financial.executeOrderPlacement(tenant,{runningOrderFlow:true,items:[line()],...extra} as any,actor)).rejects.toMatchObject({code:'SETTLEMENT_ONLY'});
  });
 });
 describe('Server-authoritative combined checkout',()=>{
+ it('applies preset rupees within the staff limit and demands approval above it or for custom amounts',async()=>{
+  const first=await append(await create());
+  const paid=await pay(first,{discountType:'amount',discountValue:10,amount:199.5});expect(paid.order.total).toBe(199.5);
+  const next=await create();
+  await expect(pay(next,{discountType:'amount',discountValue:20,amount:84})).rejects.toMatchObject({code:'REASON_REQUIRED'});
+  await expect(pay(next,{discountType:'amount',discountValue:1,customDiscount:true,amount:103.95,discountReason:'Custom'})).rejects.toMatchObject({code:'PIN_REQUIRED'});
+  const approved=await pay(next,{discountType:'amount',discountValue:20,amount:84,managerPin,discountReason:'Courtesy'});expect(approved.order.running).toMatchObject({discountType:'amount',discountValue:20,manualDiscount:20,approvedBy:'manager'});
+ });
+ it('enforces the same hard cap, frozen amount, amount validation and atomic rollback for rupee discounts',async()=>{
+  const bill=await create();
+  await expect(pay(bill,{discountType:'amount',discountValue:31,amount:72.45,managerPin,discountReason:'Over cap'})).rejects.toMatchObject({code:'DISCOUNT_EXCEEDS_MAX_PERCENTAGE'});
+  for(const value of [-1,0.335,101,null,'20'])await expect(pay(bill,{discountType:'amount',discountValue:value})).rejects.toMatchObject({code:'INVALID_DISCOUNT'});
+  await expect(pay(bill,{discountType:'invalid',discountValue:10})).rejects.toMatchObject({code:'INVALID_DISCOUNT'});
+  await expect(pay(bill,{discountType:'amount',discountValue:10,amount:94.49,managerPin,discountReason:'Wrong final'})).rejects.toMatchObject({code:'AMOUNT_CHANGED'});
+  expect((await orders.getById(tenant,bill.id))?.total).toBe(105);expect(await db.getSlice(tenant,'payments')).toEqual([]);
+  await db.saveObject(tenant,'subscription_v1',{plan:'pro',status:'active',inventoryFrozen:false,isReadOnly:false,frozenKots:{[bill.id]:{total:105,items:bill.items,settleUntil:new Date(Date.now()+3600000).toISOString()}}});
+  await expect(pay(bill,{discountType:'amount',discountValue:10,amount:94.5,managerPin,discountReason:'Frozen'})).rejects.toMatchObject({code:'FROZEN_KOT'});
+ });
  it('calculates eligible manual discount before GST and collects one final payment',async()=>{
   const order=await append(await create(),1);const totals=runningTotals(200,5,10);
   const result=await pay(order,{amount:totals.total,discountPercent:10,customDiscount:true,managerPin,discountReason:'Test courtesy'});

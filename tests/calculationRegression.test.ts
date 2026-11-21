@@ -101,6 +101,12 @@ describe.each(['memory','postgres'])('Financial regression on %s',mode=>{
   const menu=await ctx.menuRepo.getById(tenant,'meal');await ctx.menuRepo.update(tenant,{...menu!,price:2.3});const bill=await create();expect(bill.tax).toBe(0.12);const paid=await pay(bill);expect(paid.order.total).toBe(bill.total);
   expect((await api('/menu-items',{id:'invalid',name:'Invalid',price:0.335})).status).toBe(400);
  });
+ it.each([[120,20,5,105],[53,5.3,2.39,50.09],[333.33,0.01,16.67,349.99]])('settles exact rupee discount and GST without percentage conversion %#',async(price,discount,tax,total)=>{
+  const menu=await ctx.menuRepo.getById(tenant,'meal');await ctx.menuRepo.update(tenant,{...menu!,price});const bill=await create();
+  const paid=await pay(bill,{discountType:'amount',discountValue:discount,customDiscount:true,managerPin:pin,discountReason:'Approved rupee discount',amount:total,cashReceived:500});
+  expect(paid.order).toMatchObject({subtotal:price,discount,tax,total,status:'Completed'});expect(paid.order.running).toMatchObject({discountType:'amount',discountValue:discount});
+  expect(paid.payment.amount).toBe(total);expect(await ctx.paymentRepo.getAll(tenant)).toHaveLength(1);
+ });
  it('preserves historical frozen trial amounts when monetary rounding rules improve',async()=>{
   const menu=await ctx.menuRepo.getById(tenant,'meal');await ctx.menuRepo.update(tenant,{...menu!,price:2.3});const bill=await create();
   await ctx.orderRepo.update(tenant,{...bill,tax:0.11,total:2.41},bill.version);

@@ -18,7 +18,8 @@ import {operationalAlerts} from '../notifications/OperationalAlerts';
 import {AuditLogService} from '../shared/AuditLogService';
 const auditLogService=AuditLogService.getInstance();
 import {saveRunning} from './RunningOrderStore';
-import {money,runningTotals,batchProgress,openBill} from '../../../shared/runningOrder';
+import {money,runningTotals,settlementTotals,validSettlementDiscount,discountAboveLimit,batchProgress,openBill} from '../../../shared/runningOrder';
+import type {SettlementDiscount} from '../../../shared/runningOrder';
 import type {Order,RunningOrderState} from '../../../src/features/shared/types';
 
 type Actor={staffId:string;staffName:string;role?:string;permissions?:string[]};
@@ -88,30 +89,31 @@ export class RunningOrderService {
    if(!order.running)throw fail('LEGACY_CHECKOUT','Use the existing checkout for this bill.');
    if(!openBill(order))throw fail('ORDER_SEALED','Bill is already paid or cancelled.');
    await assertSettlement(tenant,id);requireVersion(order,body.expectedVersion);
-   const percent=Number(body.discountPercent??0),settings:any=await new SettingsRepository().get(tenant) || {};
+   const settings:any=await new SettingsRepository().get(tenant) || {};
+   const discount:SettlementDiscount=body.discountType===undefined?{type:'percent',value:Number(body.discountPercent??0)}:{type:body.discountType,value:typeof body.discountValue==='number'?body.discountValue:NaN};
+   if(!validSettlementDiscount(order.subtotal,discount))throw fail('INVALID_DISCOUNT','Enter a valid discount: 0–100%, or a rupee amount up to the subtotal with at most two decimal places.');
    const frozen=(await getSubscription(tenant)).frozenKots?.[id];
-   if(frozen && (percent>0 || body.redeemPoints))throw fail('FROZEN_KOT','Frozen trial bills keep their recorded total. Settle without new discounts or loyalty redemption.');
-   if(!Number.isFinite(percent)||percent<0||percent>100)throw fail('INVALID_DISCOUNT','Enter a discount from 0 to 100%.');
+   if(frozen && (discount.value>0 || body.redeemPoints))throw fail('FROZEN_KOT','Frozen trial bills keep their recorded total. Settle without new discounts or loyalty redemption.');
    const state={...structuredClone(order.running),frozen:Boolean(frozen)};
    const customer=order.customerId?await new CustomerRepository().getById(tenant,order.customerId):null;
    if(body.redeemPoints && !customer)throw fail('CUSTOMER_REQUIRED','Select a loyalty guest before redeeming points.');
-   const totals=state.frozen?{subtotal:order.subtotal,manualDiscount:0,taxableAmount:order.subtotal,tax:order.tax,redeemedPoints:order.redeemedPoints||0,discount:order.discount||0,total:order.total}:runningTotals(order.subtotal,state.gstRate,percent,body.redeemPoints?customer?.loyaltyPoints || 0:0);
-   if(Number(settings.maxDiscountPercentage)>0 && percent>settings.maxDiscountPercentage)throw fail('DISCOUNT_EXCEEDS_MAX_PERCENTAGE','Discount exceeds the restaurant hard limit.');
+   const totals=state.frozen?{subtotal:order.subtotal,manualDiscount:0,taxableAmount:order.subtotal,tax:order.tax,redeemedPoints:order.redeemedPoints||0,discount:order.discount||0,total:order.total}:settlementTotals(order.subtotal,state.gstRate,discount,body.redeemPoints?customer?.loyaltyPoints || 0:0);
+   if(Number(settings.maxDiscountPercentage)>0 && discountAboveLimit(order.subtotal,discount,Number(settings.maxDiscountPercentage)))throw fail('DISCOUNT_EXCEEDS_MAX_PERCENTAGE','Discount exceeds the restaurant hard limit.');
    let approver:any;
-   if(percent>0 && (body.customDiscount!==false || percent>Number(settings.standardDiscountPercentage??0))) {
+   if(discount.value>0 && (body.customDiscount!==false || discountAboveLimit(order.subtotal,discount,Number(settings.standardDiscountPercentage??0)))) {
     if(typeof body.discountReason!=='string' || !body.discountReason.trim())throw fail('REASON_REQUIRED','Enter a discount reason.');
     if(typeof body.managerPin!=='string' || !/^\d{4,6}$/.test(body.managerPin))throw fail('PIN_REQUIRED','Enter the approving Manager/Owner PIN.');
     approver=await findStaffByPinConstantTime((await new StaffRepository().getAll(tenant)||[]).filter(s=>isActiveStaff(s)&&['Owner','Manager'].includes(s.role)),body.managerPin);
     if(!approver)throw new FinancialValidationError('UNAUTHORIZED_PIN','Manager/Owner PIN was not accepted.',403);
-   } else if(percent>0 && ![0,5,10,15].includes(percent))throw fail('CUSTOM_DISCOUNT','Custom discounts require Manager approval.');
+   } else if(discount.value>0 && !(discount.type==='amount'?[0,10,20,30]:[0,5,10,15]).includes(discount.value))throw fail('CUSTOM_DISCOUNT','Custom discounts require Manager approval.');
    if(!isCurrency(Number(body.amount)) || Number(body.amount)!==totals.total)throw fail('AMOUNT_CHANGED','The final amount changed. Refresh checkout before collecting payment.');
    if(body.paymentMethod==='Cash' && (!isCurrency(Number(body.cashReceived)) || Number(body.cashReceived)<totals.total))throw fail('INSUFFICIENT_CASH','Cash received must cover the final amount.');
-   state.billVersion=(state.billVersion ?? order.version ?? 1)+1;state.manualDiscount=totals.manualDiscount;state.discountPercent=percent;state.taxableAmount=totals.taxableAmount;state.approvedBy=approver?.id;
+   state.billVersion=(state.billVersion ?? order.version ?? 1)+1;state.manualDiscount=totals.manualDiscount;state.discountType=discount.type;state.discountValue=discount.value;state.discountPercent=discount.type==='percent'?discount.value:undefined;state.taxableAmount=totals.taxableAmount;state.approvedBy=approver?.id;
    await saveRunning(tenant,id,state);
-   const discounted=await orders.update(tenant,{...order,...totals,earnedPoints:Math.floor(order.subtotal/100),discountReason:percent>0?String(body.discountReason || 'Standard discount'):undefined,authorizerName:approver?.name},order.version,trx);
+   const discounted=await orders.update(tenant,{...order,...totals,earnedPoints:Math.floor(order.subtotal/100),discountReason:discount.value>0?String(body.discountReason || 'Standard discount'):undefined,authorizerName:approver?.name},order.version,trx);
    if(customer && totals.redeemedPoints)await new CustomerRepository().update(tenant,{...customer,loyaltyPoints:customer.loyaltyPoints-totals.redeemedPoints},customer.version,trx);
    const result=await FinancialTransactionService.getInstance().executeOrderPayment(tenant,id,{amount:totals.total,paymentMethod:body.paymentMethod,cashReceived:body.paymentMethod==='Cash'?Number(body.cashReceived):undefined,transactionReference:typeof body.transactionReference==='string'?body.transactionReference.slice(0,200):undefined,cashierId:actor.staffId,cashierName:actor.staffName});
-   await auditLogService.log(tenant,'SETTLEMENT_PRICED',actor.staffName,`Final bill ${order.orderNumber}`,{orderId:id,subtotal:order.subtotal,discount:totals.discount,tax:totals.tax,total:totals.total,approvedBy:approver?.id,version:discounted.version},trx);
+   await auditLogService.log(tenant,'SETTLEMENT_PRICED',actor.staffName,`Final bill ${order.orderNumber}`,{orderId:id,subtotal:order.subtotal,discount:totals.discount,discountType:discount.type,discountValue:discount.value,tax:totals.tax,total:totals.total,approvedBy:approver?.id,version:discounted.version},trx);
    return {...result,order:{...result.order,running:state}};
   });
  }

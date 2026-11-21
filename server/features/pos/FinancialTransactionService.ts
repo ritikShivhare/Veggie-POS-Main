@@ -101,7 +101,7 @@ export class FinancialTransactionService {
     return Database.getInstance().runTransaction(tenantId, async (trx) => {
     const existing = rawOrder.id ? await orderRepo.getById(tenantId, rawOrder.id) : null;
     if (existing) return {order:existing,items:await (await this.orderItemRepo.getAll(tenantId) || []).filter(i=>i.orderId===existing.id),payment:(await this.paymentRepo.getAll(tenantId))?.find(p=>p.orderId===existing.id)};
-    if(rawOrder.runningOrderFlow && (rawOrder.paymentMethod || rawOrder.status==='Completed' || rawOrder.discount || rawOrder.appliedDiscount || rawOrder.managerPin || rawOrder.redeemPoints || (rawOrder as any).discountPercentage || (rawOrder as any).discountAmount)) throw new FinancialValidationError('SETTLEMENT_ONLY','Apply discounts and collect payment at settlement.');
+    if(rawOrder.runningOrderFlow && (rawOrder.paymentMethod || rawOrder.status==='Completed' || rawOrder.discount || rawOrder.appliedDiscount || rawOrder.managerPin || rawOrder.redeemPoints || (rawOrder as any).discountPercentage || (rawOrder as any).discountAmount || (rawOrder as any).discountValue)) throw new FinancialValidationError('SETTLEMENT_ONLY','Apply discounts and collect payment at settlement.');
     await assertOrderCreation(tenantId,rawOrder);
     if (rawOrder.paymentMethod && !["Cash","UPI"].includes(rawOrder.paymentMethod)) throw new FinancialValidationError("INVALID_PAYMENT_METHOD","Choose Cash or UPI.");
     if (rawOrder.status && !["Pending","Preparing","Completed"].includes(rawOrder.status)) throw new FinancialValidationError("INVALID_ORDER_STATUS","Invalid initial order status.");

@@ -9,10 +9,11 @@ export interface DialogProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   className?: string;
+  headerContent?: React.ReactNode;
 }
 
 /** Native modal dialog provides focus trapping and Escape behavior in supported browsers. */
-export function Dialog({ open, onOpenChange, title, description, children, footer, className = "" }: DialogProps) {
+export function Dialog({ open, onOpenChange, title, description, children, footer, className = "", headerContent }: DialogProps) {
   const ref = React.useRef<HTMLDialogElement>(null);
   const titleId = React.useId();
   const descriptionId = React.useId();
@@ -60,8 +61,9 @@ export function Dialog({ open, onOpenChange, title, description, children, foote
     ].join(" ")}
   >
     <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-app-border bg-white p-4">
-      <div className="min-w-0">
-        <h2 id={titleId} className="text-lg font-bold">{title}</h2>
+      <div className="min-w-0 flex-1">
+        <h2 id={titleId} className={headerContent ? 'sr-only' : 'text-lg font-bold'}>{title}</h2>
+        {headerContent}
         {description && <p id={descriptionId} className="mt-1 text-sm text-app-muted">{description}</p>}
       </div>
       <button type="button" onClick={() => onOpenChange(false)}
