@@ -1,0 +1,118 @@
+id,page,section,action,source_file
+COPY-001,Home,Hero introduction,retain-selected-before,src/features/marketing/pages/HomePage.tsx
+COPY-002,Home,Demo tabs and recipe step,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-003,Home,Billing sample label,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-004,Home,Kitchen sample labels,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-005,Home,Ingredient sample heading/status,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-006,Home,Owner sample: cash figure,retain-unselected,src/features/marketing/pages/HomePage.tsx
+COPY-007,Home,Owner sample: cancellation approval,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-008,Home,Daily service section,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-009,Home,Ingredient step description,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-010,Home,Owner step labels,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-011,Home,Feature card: order entry and payments,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-012,Home,Feature card: stock heading/body,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-013,Home,Feature card: staff and owner reports,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-014,Home,Feature and format links,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-015,Home,Final demo invitation,apply-selected-after,src/features/marketing/pages/HomePage.tsx
+COPY-016,Product,Hero badge/headline,apply-selected-after,src/features/marketing/pages/ProductPage.tsx
+COPY-017,Product,Hero introduction,apply-selected-after,src/features/marketing/pages/ProductPage.tsx
+COPY-018,Product,Section labels and sample badges,apply-selected-after,src/features/marketing/pages/ProductPage.tsx
+COPY-019,Product,Order Entry & Billing description,apply-selected-after,src/features/marketing/pages/ProductPage.tsx
+COPY-020,Product,Billing feature list,apply-selected-after,src/features/marketing/pages/ProductPage.tsx
+COPY-021,Product,Billing sample text,apply-selected-after,src/features/marketing/pages/ProductPage.tsx
+COPY-022,Product,Kitchen description and status list,apply-selected-after,src/features/marketing/pages/ProductPage.tsx
+COPY-023,Product,Inventory heading and explanation,apply-selected-after,src/features/marketing/pages/ProductPage.tsx
+COPY-024,Product,Inventory example alert,apply-selected-after,src/features/marketing/pages/ProductPage.tsx
+COPY-025,Product,Staff feature list,apply-edited-before,src/features/marketing/pages/ProductPage.tsx
+COPY-026,Product,AI reports description and sample,apply-selected-after,src/features/marketing/pages/ProductPage.tsx
+COPY-027,Product,Order-to-records loop,apply-selected-after,src/features/marketing/pages/ProductPage.tsx
+COPY-028,Product,Devices and printers introduction,apply-selected-after,src/features/marketing/pages/ProductPage.tsx
+COPY-029,Product,Cash drawer requirement,retain-unselected,src/features/marketing/pages/ProductPage.tsx
+COPY-030,Solutions,Hero badge and introduction,apply-selected-after,src/features/marketing/pages/SolutionsPage.tsx
+COPY-031,Solutions,Filters and card labels,apply-selected-after,src/features/marketing/pages/SolutionsPage.tsx
+COPY-032,Solutions,Dine-in explanation,apply-selected-after,src/features/marketing/pages/SolutionsPage.tsx
+COPY-033,Solutions,Payment bullet used for dine-in and counter,apply-selected-after,src/features/marketing/pages/SolutionsPage.tsx
+COPY-034,Solutions,Counter service description,retain-selected-before,src/features/marketing/pages/SolutionsPage.tsx
+COPY-035,Solutions,Café stock bullet,apply-selected-after,src/features/marketing/pages/SolutionsPage.tsx
+COPY-036,Solutions,Cloud-kitchen/delivery description,apply-selected-after,src/features/marketing/pages/SolutionsPage.tsx
+COPY-037,Solutions,Final invitation,apply-selected-after,src/features/marketing/pages/SolutionsPage.tsx
+COPY-038,ROI Calculator,Hero badge and heading,apply-selected-after,src/features/marketing/pages/RoiPage.tsx
+COPY-039,ROI Calculator,Input headings,apply-selected-after,src/features/marketing/pages/RoiPage.tsx
+COPY-040,ROI Calculator,Sales time period,retain-selected-before,src/features/marketing/pages/RoiPage.tsx
+COPY-041,ROI Calculator,Explanation beside the inputs,apply-selected-after,src/features/marketing/pages/RoiPage.tsx
+COPY-042,ROI Calculator,Main result title,apply-selected-after,src/features/marketing/pages/RoiPage.tsx
+COPY-043,ROI Calculator,Breakdown labels,apply-selected-after,src/features/marketing/pages/RoiPage.tsx
+COPY-044,ROI Calculator,Longer-period result,apply-selected-after,src/features/marketing/pages/RoiPage.tsx
+COPY-045,ROI Calculator,Payback label and empty state,apply-selected-after,src/features/marketing/pages/RoiPage.tsx
+COPY-046,ROI Calculator,Service-speed issue label,apply-selected-after,src/features/marketing/pages/RoiPage.tsx
+COPY-047,Pricing,Introduction,apply-selected-after,src/features/marketing/pages/PricingPage.tsx
+COPY-048,Pricing,Free Starter card,retain-unselected,src/features/marketing/pages/PricingPage.tsx
+COPY-049,Pricing,Professional Pro card,apply-selected-after,src/features/marketing/pages/PricingPage.tsx
+COPY-050,Pricing,Enterprise Elite card,apply-selected-after,src/features/marketing/pages/PricingPage.tsx
+COPY-051,Pricing,Paid plan AI allowance,apply-selected-after,src/features/marketing/pages/PricingPage.tsx
+COPY-052,Pricing,Pro recommendation badge,apply-selected-after,src/features/marketing/pages/PricingPage.tsx
+COPY-053,Pricing,Price and trial FAQ,retain-unselected,src/features/marketing/pages/PricingPage.tsx
+COPY-054,Pricing,Order allowance FAQ,apply-selected-after,src/features/marketing/pages/PricingPage.tsx
+COPY-055,Pricing,UPI payment FAQ,apply-selected-after,src/features/marketing/pages/PricingPage.tsx
+COPY-056,Pricing,Plan-change FAQ,apply-selected-after,src/features/marketing/pages/PricingPage.tsx
+COPY-057,Pricing,Internet-disconnection FAQ,apply-selected-after,src/features/marketing/pages/PricingPage.tsx
+COPY-058,About,Hero badge and introduction,apply-selected-after,src/features/marketing/pages/AboutPage.tsx
+COPY-059,About,Point of view,apply-selected-after,src/features/marketing/pages/AboutPage.tsx
+COPY-060,About,Principles section heading,apply-selected-after,src/features/marketing/pages/AboutPage.tsx
+COPY-061,About,Principle 1: busy service,apply-selected-after,src/features/marketing/pages/AboutPage.tsx
+COPY-062,About,Principle 2: stock and profit,apply-selected-after,src/features/marketing/pages/AboutPage.tsx
+COPY-063,About,Principle 3: owner reports,apply-selected-after,src/features/marketing/pages/AboutPage.tsx
+COPY-064,About,Principle 4: device checks,apply-selected-after,src/features/marketing/pages/AboutPage.tsx
+COPY-065,About,Closing invitation and buttons,apply-selected-after,src/features/marketing/pages/AboutPage.tsx
+COPY-066,Resources,Hero badge and heading,apply-selected-after,src/features/marketing/pages/ResourcesPage.tsx
+COPY-067,Resources,Category tabs and read link,apply-selected-after,src/features/marketing/pages/ResourcesPage.tsx
+COPY-068,Resources,Food-cost guide card summary,apply-selected-after,shared/marketing-guides.ts
+COPY-069,Resources,Counter guide card takeaway,apply-selected-after,shared/marketing-guides.ts
+COPY-070,Resources,Staff guide card summary,apply-selected-after,shared/marketing-guides.ts
+COPY-071,Resources,Buying-guide card summary,apply-selected-after,shared/marketing-guides.ts
+COPY-072,Resources,Setup guide card and takeaway,apply-selected-after,shared/marketing-guides.ts
+COPY-073,Resources,Worksheet explanation and download button,apply-selected-after,src/features/marketing/pages/ResourcesPage.tsx
+COPY-074,Terms of Service,1. Acceptance of Terms,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-075,Terms of Service,2. Account Security heading and paragraph,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-076,Terms of Service,3. Responsibilities: prohibited actions,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-077,Terms of Service,4. Location of data tools,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-078,Terms of Service,4. Downloading your records,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-079,Terms of Service,4. Clear this device,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-080,Terms of Service,5. Limitation of Liability,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-081,Privacy Policy,1. Scope,retain-selected-before,src/features/shared/components/LegalPage.tsx
+COPY-082,Privacy Policy,2. Business and payment information,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-083,Privacy Policy,"2. Ingredients, staff and guests",apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-084,Privacy Policy,3. Data sharing heading and paragraph,retain-selected-before,src/features/shared/components/LegalPage.tsx
+COPY-085,Privacy Policy,4. Downloading records,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-086,Privacy Policy,4. Deletion requests,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-087,Privacy Policy,5. Security safeguards,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-088,Refund Policy,1. Subscription period heading and paragraph,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-089,Refund Policy,2. Refund eligibility introduction,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-090,Refund Policy,2. Request deadline and explanation,apply-edited-before,src/features/shared/components/LegalPage.tsx
+COPY-091,Refund Policy,2. Approved refund processing,retain-selected-before,src/features/shared/components/LegalPage.tsx
+COPY-092,Refund Policy,3. Renewal and cancellation,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-093,Refund Policy,"3. Payment, access and export bullets",apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-094,Refund Policy,4. Exceptional circumstances,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-095,Shared navigation/footer,Early-access description,apply-selected-after,src/features/marketing/components/MarketingFooter.tsx
+COPY-096,Shared navigation/footer,Brand description,apply-selected-after,src/features/marketing/components/MarketingFooter.tsx
+COPY-097,Shared navigation/footer,Feature badges,retain-selected-before,src/features/marketing/components/MarketingFooter.tsx
+COPY-098,Shared navigation/footer,Feature links,apply-selected-after,src/features/marketing/components/MarketingFooter.tsx
+COPY-099,Shared navigation/footer,Section headings and company links,apply-selected-after,src/features/marketing/components/MarketingFooter.tsx
+COPY-100,Shared navigation/footer,Public version label,apply-selected-after,src/features/marketing/components/MarketingFooter.tsx
+COPY-101,Shared navigation/footer,Legal document subtitle and return button,apply-selected-after,src/features/shared/components/LegalPage.tsx
+COPY-102,Resources guide: Recipe costing,Ingredient-cost explanation,apply-selected-after,shared/marketing-guides.ts
+COPY-103,Resources guide: Recipe costing,Compare actual ingredient use,apply-selected-after,shared/marketing-guides.ts
+COPY-104,Resources guide: Order and payment,Order types,apply-edited-before,shared/marketing-guides.ts
+COPY-105,Resources guide: Order and payment,Check an order before entering it again,apply-selected-after,shared/marketing-guides.ts
+COPY-106,Resources guide: Order and payment,Restaurant QR payments,apply-selected-after,shared/marketing-guides.ts
+COPY-107,Resources guide: Order and payment,Separate software subscription payment,apply-selected-after,shared/marketing-guides.ts
+COPY-108,Resources guide: Staff access,Staff sign-in explanation,apply-selected-after,shared/marketing-guides.ts
+COPY-109,Resources guide: Staff access,Protect sign-in details,apply-selected-after,shared/marketing-guides.ts
+COPY-110,Resources guide: Staff access,Investigate a difference,apply-selected-after,shared/marketing-guides.ts
+COPY-111,Resources guide: POS cost,Plan catalog explanation,apply-selected-after,shared/marketing-guides.ts
+COPY-112,Resources guide: POS cost,Order allowance example,remove-example,shared/marketing-guides.ts
+COPY-113,Resources guide: POS cost,Comparison heading,apply-selected-after,shared/marketing-guides.ts
+COPY-114,Resources guide: Outlet setup,Internet interruption rehearsal,apply-selected-after,shared/marketing-guides.ts
+COPY-115,Resources guide: Outlet setup,What to do if work is missing,apply-selected-after,shared/marketing-guides.ts
+COPY-116,Resources guide: Kitchen tickets,Kitchen screen scope,apply-selected-after,shared/marketing-guides.ts
+COPY-117,Resources guide: Kitchen tickets,Single-outlet scope,apply-selected-after,shared/marketing-guides.ts

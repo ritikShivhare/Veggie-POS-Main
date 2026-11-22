@@ -23,25 +23,25 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
       number: "01",
       title: "Respect the Rush",
       description:
-        "Aatmyam Pos is being developed around restaurant order entry, kitchen status, inventory, and staff workflows. We build for the floor, not the boardroom."
+        "Restaurant service comes first: clear orders, kitchen progress, stock records and staff access that your team can understand."
     },
     {
       number: "02",
-      title: "Every Gram Accounts for Profit",
+      title: "Know what goes into each dish",
       description:
-        "Measured recipes and consistent ingredient records help an owner understand stock use. Aatmyam supports recipe-linked inventory on eligible plans; reports depend on the quantities and records entered by the restaurant."
+        "On eligible plans, enter measured recipes, purchases and stock counts to understand ingredient use. Your reports depend on the quantities and records you enter."
     },
     {
       number: "03",
       title: "Owner Freedom Through Clear Data",
       description:
-        "Individual staff access and role-based permissions help separate restaurant responsibilities. Owners can review available sales reports and recorded activity without treating a report as automatic bank reconciliation."
+        "Give each staff member their own PIN and the screens they need. Review sales and staff activity, then compare recorded payments with the cash and UPI money actually received."
     },
     {
       number: "04",
       title: "Check the Whole Setup",
       description:
-        "Aatmyam runs in a web browser. Device and printer suitability should be checked for the outlet, including operating system, paper format and connection. We explain current requirements during an early-access walkthrough."
+        "Try Aatmyam Pos on the phone, tablet or computer you plan to use, and print a receipt with your chosen printer and paper size. We can review your setup during an early-access demo."
     }
   ];
 
@@ -53,15 +53,14 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF2E4] border border-[#D5E3C8] text-xs font-mono font-bold text-[#567234]">
             <Heart className="w-3.5 h-3.5 text-[#6E8F45]" />
-            <span>THE Aatmyam Pos MANIFESTO</span>
+            <span>About Aatmyam Pos</span>
           </div>
           <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl tracking-tight text-[#181A18] leading-[1.12]">
             Restoring calm to the <br />
             <span className="text-[#6E8F45] italic">hardest working room</span> in hospitality.
           </h1>
           <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-            Aatmyam Pos is early-access software for independent restaurants and cafés in India, with one outlet per restaurant account.
-            Its focus is keeping order entry, kitchen preparation status, ingredient records and staff access in a shared workspace.
+            Aatmyam Pos is early-access software for independent restaurants and cafés in India. It brings orders, kitchen progress, bills, ingredients and staff access into one place, with one outlet for each restaurant account.
           </p>
         </div>
       </section>
@@ -85,7 +84,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
                 An independent outlet needs a clear way to pass orders from the counter to the kitchen and review the resulting records. The people working each stage should understand which actions are theirs.
               </p>
               <p>
-                We develop around order entry, preparation status, recipe-linked inventory and individual staff access. Current features and plan allowances are described on the product and pricing pages.
+                Our focus is the work your team does every day: taking orders, keeping the kitchen informed, checking stock and giving staff the right access. See Product and Pricing for the features and allowances currently available.
               </p>
               <p>
                 A walkthrough is an opportunity to check your menu, order volume and devices against the current product. Early access means confirming the setup and limitations before relying on it during service.
@@ -105,7 +104,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
               Guiding Principles
             </span>
             <h2 className="font-serif text-3xl sm:text-4xl text-[#181A18] tracking-tight">
-              The four commitments behind every line of code.
+              Four priorities for your restaurant’s daily work.
             </h2>
           </div>
 
@@ -141,20 +140,20 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             See the calm difference on your own floor.
           </h2>
           <p className="text-sm text-[#5A6056] leading-relaxed">
-            Experience how Aatmyam Pos simplifies table service, kitchen lines, and inventory accounting. Schedule a personalized walkthrough with our hospitality team.
+            See how your team can take orders, follow kitchen progress, prepare bills and check stock. Book a demo with the Aatmyam Pos team.
           </p>
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <SiteLink
               href="/contact" onNavigate={() => onNavigate("/contact")}
               className="inline-flex items-center justify-center px-7 py-3.5 text-sm font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition duration-200 shadow-md cursor-pointer border border-[#2E332D]"
             >
-              Book an Operational Walkthrough
+              Book a restaurant demo
             </SiteLink>
             <SiteLink
               href="/solutions" onNavigate={() => onNavigate("/solutions")}
               className="inline-flex items-center justify-center px-6 py-3.5 text-sm font-bold text-[#181A18] bg-[#F4F0E8] hover:bg-[#EAE5DA] rounded-xl border border-[#EAE5DA] transition cursor-pointer"
             >
-              Explore Format Solutions
+              Find your restaurant type
             </SiteLink>
           </div>
         </div>

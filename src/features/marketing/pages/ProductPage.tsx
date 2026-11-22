@@ -35,25 +35,25 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
       title: "Order Entry & Billing",
       tagline: "Record menu orders and payment methods.",
       description:
-        "Staff can enter orders and record cash or checked UPI payments. Configuring the outlet UPI ID enables an amount-specific QR; customer payment confirmation remains a staff step.",
+        "Take the order, add any later items to the same open bill, then collect payment when the guest is ready. For UPI, show a QR for the final bill amount and check that the money has arrived before marking the bill paid.",
       features: [
         "Table-based order entry",
         "Menu item and quantity selection",
-        "Cash and manual UPI payment recording",
-        "Amount-specific QR with a configured outlet UPI ID",
+        "Record Cash or UPI payments after checking receipt",
+        "Show a QR for the bill amount using your restaurant’s UPI ID",
         "Order status available to staff"
       ],
       icon: Terminal,
       codePreview: {
-        header: "ORDER EXAMPLE // ONE OUTLET",
+        header: "Example order for one outlet",
         metric: "Illustrative sample data",
         lines: [
           "TABLE: T-12 [Dine-In, 4 Pax]",
           "+ 2x Butter Chicken (Special)",
           "+ 4x Garlic Naan (Crispy)",
           "NOTE: 'Mild spice on gravy'",
-          "QR AMOUNT: Rs. 1,480.00 [Configured UPI ID]",
-          "PAYMENT: Staff checks receipt before recording"
+          "Bill amount: ₹1,480.00 · Pay to your restaurant’s UPI ID",
+          "Mark paid after checking that the money has arrived"
         ]
       }
     },
@@ -62,10 +62,10 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
       title: "Kitchen Order Status",
       tagline: "View and update order preparation status.",
       description:
-        "Kitchen staff can view incoming orders and mark them as preparing or completed.",
+        "Kitchen staff see new orders and mark each ticket as Preparing, Ready to Serve and Served. The bill stays unpaid until payment is collected.",
       features: [
         "Incoming kitchen order list",
-        "Preparing and completed statuses",
+        "Follow preparation through to serving",
         "Order status visible to staff"
       ],
       icon: ChefHat,
@@ -83,13 +83,13 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
     },
     {
       id: "inventory",
-      title: "Recipe-Linked BOM Inventory",
-      tagline: "Connect recipes to ingredient inventory.",
+      title: "Ingredients, recipes and stock",
+      tagline: "Add the ingredients and quantities used for each dish.",
       description:
         "Link menu items to recipes and track ingredient stock changes as orders are recorded.",
       features: [
-        "Bill of Materials (BOM) linking raw ingredients to menu recipes",
-        "Low-stock threshold alerts",
+        "See ingredient use against the recipes you enter",
+        "Get an alert when an ingredient reaches your chosen low-stock level",
         "Purchase and stock records",
         "Inventory reports"
       ],
@@ -102,7 +102,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
           "- Deduct Cottage Cheese: 200g",
           "- Deduct Butter: 40g",
           "- Deduct Tomato Puree: 120ml",
-          "STOCK_ALERT: Butter below threshold (2.1 kg rem.)",
+          "Butter is running low: 2.1 kg left.",
           "ACTION: Review stock and purchase records"
         ]
       }
@@ -115,7 +115,6 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
         "Owners can manage staff access for restaurant operations and review recorded sales activity.",
       features: [
         "Role-Based Access Control (Owner, Manager, Cashier, Kitchen)",
-        "Role-based access control",
         "Staff PIN and permission settings",
         "Sales reports"
       ],
@@ -138,7 +137,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
       title: "Owner Reports & AI Copilot",
       tagline: "Review restaurant activity from the owner view.",
       description:
-        "Review available sales reports. AI Copilot access depends on the selected plan and provider setup.",
+        "Review sales and the day’s activity. AI features are available on eligible plans once they are ready for your account.",
       features: [
         "Basic sales reports",
         "AI Copilot access on supported plans",
@@ -152,7 +151,6 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
           "TODAY GROSS: Sample amount",
           "PEAK HOUR: 20:00 - 21:30 (Avg. ticket: Rs. 920)",
           "MENU INSIGHT: Sample margin view",
-          "AI ACCESS: Plan and provider setup required",
           "SCOPE: One restaurant outlet"
         ]
       }
@@ -168,14 +166,14 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
           <div className="max-w-3xl space-y-5">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#242823] border border-[#2E332D] text-xs font-mono text-[#84A955]">
               <Cpu className="w-3.5 h-3.5" />
-              <span>THE CONNECTED RESTAURANT ENGINE</span>
+              <span>One place for your restaurant’s daily work</span>
             </div>
             <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl tracking-tight text-[#FBF9F5] leading-[1.12]">
-              Every station in sync. <br />
-              <span className="text-[#6E8F45] italic">Every gram</span> accounted for.
+              Keep the counter and kitchen informed. <br />
+              <span className="text-[#6E8F45] italic">Keep an eye on ingredient use.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#A6AEA0] leading-relaxed">
-              Explore the current Aatmyam Pos workflows for order entry, kitchen order status, inventory, and staff access.
+              See how your team can take orders, follow kitchen progress, check stock and use the right screens for each job.
             </p>
             <div className="pt-2 flex flex-wrap items-center gap-3">
               <SiteLink
@@ -246,7 +244,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
             <div className="lg:col-span-7 space-y-6">
               <div className="space-y-2">
                 <span className="text-xs font-mono uppercase text-[#84A955] font-semibold">
-                  MODULE 0{moduleIndex + 1} // CURRENT WORKFLOW
+                  {["Taking an order", "Kitchen", "Ingredients and stock", "Staff access", "Owner reports"][moduleIndex]}
                 </span>
                 <h2 className="font-serif text-3xl sm:text-4xl font-bold text-[#FBF9F5]">
                   {module.title}
@@ -262,7 +260,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
 
               <div className="space-y-3 pt-2">
                 <p className="text-xs font-mono uppercase text-[#FBF9F5] font-bold tracking-wider">
-                  Key Capabilities:
+                  What your team can do
                 </p>
                 <ul className="space-y-2">
                   {module.features.map((feat, fIdx) => (
@@ -278,7 +276,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
             {/* Right Terminal Logic Simulator */}
             <div className="lg:col-span-5">
                 <div className="bg-[#181A18] rounded-2xl p-5 border border-[#2E332D] font-mono text-xs shadow-inner">
-                <p className="mb-3 text-[10px] font-sans text-[#A6AEA0]">Illustrative interface only; figures shown are sample data, not restaurant results.</p>
+                <p className="mb-3 text-[10px] font-sans text-[#A6AEA0]">Example screen and figures only. These are not a restaurant’s actual results.</p>
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#2E332D]">
                   <span className="text-[11px] text-[#6E8F45] font-bold">
                     {module.codePreview.header}
@@ -322,7 +320,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
 
           <div className="max-w-2xl space-y-3">
             <span className="text-xs font-mono uppercase tracking-widest text-[#84A955] font-bold">
-              The Full Service Loop
+              From order to paid bill
             </span>
             <h2 className="font-serif text-3xl sm:text-4xl text-[#FBF9F5] tracking-tight">
               From order entry to restaurant records.
@@ -343,7 +341,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               </div>
               <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Order Captured</h3>
               <p className="text-xs text-[#A6AEA0] leading-relaxed">
-                Staff records a table order. The order appears in the restaurant workflow.
+                Enter the guest’s items, table and preparation notes, then send the order to the kitchen.
               </p>
             </div>
 
@@ -356,7 +354,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               </div>
               <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Kitchen Status Updated</h3>
               <p className="text-xs text-[#A6AEA0] leading-relaxed">
-                Kitchen staff review incoming order details and update the supported preparation status.
+                Kitchen staff check the ticket and update its progress.
               </p>
             </div>
 
@@ -369,7 +367,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               </div>
               <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Payment Recorded</h3>
               <p className="text-xs text-[#A6AEA0] leading-relaxed">
-                Staff records the selected payment method for the order.
+                Open the same bill, collect payment, then mark it paid. Check UPI receipt before confirming.
               </p>
             </div>
 
@@ -382,7 +380,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               </div>
               <h3 className="font-serif text-lg font-bold text-[#FBF9F5]">Review Stock & Reports</h3>
               <p className="text-xs text-[#A6AEA0] leading-relaxed">
-                Review recipe-linked stock changes and the available sales records for the outlet.
+                Check ingredient use and the restaurant’s sales records.
               </p>
             </div>
 
@@ -403,7 +401,7 @@ export default function ProductPage({ onNavigate }: ProductPageProps) {
               Review the devices you want to use.
             </h2>
             <p className="text-sm text-[#A6AEA0]">
-              Aatmyam is a browser-based POS. Compatibility depends on the device, browser, connection and required peripherals. Check your exact setup before relying on it during service.
+              Open Aatmyam Pos in a web browser on the device you plan to use. Try taking an order and printing a receipt with your own device and printer before your first service.
             </p>
           </div>
 

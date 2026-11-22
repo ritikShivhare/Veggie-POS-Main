@@ -56,15 +56,15 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       title: "Recipe-Linked Inventory",
       metric: "Recipe stock tracking",
       description:
-        "Link menu items to ingredient recipes and track stock changes as orders are recorded.",
+        "Add the ingredients and quantities for each dish so you can follow stock use as orders are taken.",
       statusColor: "bg-[#6E8F45]",
-      badge: "BOM Recipe Mapping"
+      badge: "Ingredients for each recipe"
     },
     {
       id: "04",
-      station: "Owner Command",
+      station: "Owner desk",
       title: "Staff Permissions",
-      metric: "Role-based access",
+      metric: "Choose staff access",
       description:
         "Owners can manage staff roles and permissions for restaurant operations.",
       statusColor: "bg-[#D97706]",
@@ -166,7 +166,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                         : "text-[#A6AEA0] hover:text-[#FBF9F5]"
                     }`}
                   >
-                    KDS
+                    Kitchen
                   </button>
                   <button
                     onClick={() => setInteractiveTab("stock")}
@@ -176,7 +176,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                         : "text-[#A6AEA0] hover:text-[#FBF9F5]"
                     }`}
                   >
-                    BOM
+                    Ingredients
                   </button>
                   <button
                     onClick={() => setInteractiveTab("owner")}
@@ -221,7 +221,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                     <div className="pt-2 flex items-center justify-between border-t border-[#2E332D]">
                       <span className="text-[11px] text-[#A6AEA0] flex items-center gap-1">
                         <QrCode className="w-3.5 h-3.5 text-[#6E8F45]" />
-                        Configured UPI QR
+                        UPI QR for this bill
                       </span>
                       <span className="px-2 py-1 bg-[#6E8F45] text-[#FBF9F5] rounded font-bold text-[10px]">
                         Cashier: Demo account
@@ -234,9 +234,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                   <div className="space-y-3 bg-[#242823] p-4 rounded-2xl border border-[#2E332D] text-xs animate-in fade-in duration-200">
                     <div className="flex justify-between items-center pb-2 border-b border-[#2E332D]">
                       <span className="px-2 py-0.5 bg-[#D97706]/20 text-[#FBBF24] rounded font-mono font-bold">
-                        KOT #1042 — Fired 2m ago
+                        Kitchen ticket #1042 · Sent 2 minutes ago
                       </span>
-                      <span className="text-[10px] text-[#A6AEA0] font-mono">Kitchen order queue</span>
+                      <span className="text-[10px] text-[#A6AEA0] font-mono">Orders in the kitchen</span>
                     </div>
                     <ul className="space-y-2 text-[11px]">
                       <li className="flex items-center justify-between bg-[#181A18] p-2 rounded-lg border border-[#2E332D]">
@@ -245,7 +245,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                       </li>
                       <li className="flex items-center justify-between bg-[#181A18] p-2 rounded-lg border border-[#2E332D]">
                         <span className="text-[#FBF9F5] font-semibold">3× Butter Roti (Crispy)</span>
-                        <span className="text-[#FBBF24] text-[10px] uppercase font-mono">Queued</span>
+                        <span className="text-[#FBBF24] text-[10px] uppercase font-mono">Waiting to cook</span>
                       </li>
                     </ul>
                     <p className="text-[10px] text-[#A6AEA0] italic">Cooking Note: "Diner requested mild spice on dal"</p>
@@ -255,8 +255,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 {interactiveTab === "stock" && (
                   <div className="space-y-3 bg-[#242823] p-4 rounded-2xl border border-[#2E332D] text-xs animate-in fade-in duration-200">
                     <div className="flex justify-between items-center pb-2 border-b border-[#2E332D]">
-                      <span className="text-xs font-bold text-[#FBF9F5]">Live Recipe BOM Deduction</span>
-                      <span className="text-[10px] text-[#84A955] font-mono">Synced Real-Time</span>
+                      <span className="text-xs font-bold text-[#FBF9F5]">Ingredients used for this order</span>
+                      <span className="text-[10px] text-[#84A955] font-mono">Stock updated</span>
                     </div>
                     <div className="space-y-2 font-mono text-[11px]">
                       <div className="p-2 bg-[#181A18] rounded border border-[#2E332D] flex justify-between">
@@ -280,7 +280,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                     <div className="flex justify-between items-center pb-2 border-b border-[#2E332D]">
                       <span className="text-xs font-bold text-[#FBF9F5]">Owner Overview</span>
                       <span className="px-2 py-0.5 bg-[#D97706]/20 text-[#FBBF24] rounded font-mono text-[10px]">
-                        Role-based access
+                        Choose staff access
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
@@ -293,7 +293,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                         <p className="text-sm font-bold text-[#84A955]">₹14,200 (Exact)</p>
                       </div>
                     </div>
-                    <p className="text-[10px] text-[#A6AEA0]">All bill cancellations locked behind Owner 4-digit PIN.</p>
+                    <p className="text-[10px] text-[#A6AEA0]">Cancelling a bill requires an authorised Manager or Owner’s 4–6 digit PIN.</p>
                   </div>
                 )}
 
@@ -304,7 +304,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                     href="/product" onNavigate={() => onNavigate("/product")}
                     className="inline-flex items-center justify-center text-[#84A955] hover:underline font-bold cursor-pointer"
                   >
-                    Explore Product Specs →
+                    Check devices and printers →
                   </SiteLink>
                 </div>
               </div>
@@ -320,13 +320,13 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
           <div className="text-center max-w-2xl mx-auto mb-14 space-y-3">
             <span className="text-xs font-mono uppercase tracking-widest text-[#567234] font-bold">
-              The Connected Restaurant Loop
+              From taking the order to checking the day’s work
             </span>
             <h2 className="font-serif text-3xl sm:text-4xl text-[#181A18] tracking-tight">
               One order. A clear handoff for each team.
             </h2>
             <p className="text-sm text-[#5A6056]">
-              Record an order, review kitchen preparation status, track recipe-linked stock and manage staff access in the same restaurant workspace.
+              Take the order, follow its progress in the kitchen, check ingredient use and choose what each staff member can do.
             </p>
           </div>
 
@@ -410,7 +410,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               href="/product" onNavigate={() => onNavigate("/product")}
               className="inline-flex items-center gap-2 text-xs font-bold text-[#181A18] hover:text-[#6E8F45] transition cursor-pointer"
             >
-              <span>Explore all platform modules</span>
+              <span>See all features</span>
               <ArrowRight className="w-4 h-4" />
             </SiteLink>
           </div>
@@ -426,7 +426,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 Order Entry & Payment Records
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
-                Enter menu orders and record cash or checked UPI payments. An outlet with a configured UPI ID can generate an amount-specific QR; staff still check receipt of the customer payment.
+                Enter the items ordered and record payment by Cash or UPI. Add your restaurant’s UPI ID to show a QR for the bill amount. Staff must check that the money has arrived before marking a UPI bill paid.
               </p>
               <ul className="space-y-2 text-xs text-[#1C1E1B] pt-2 border-t border-[#EAE5DA]">
                 <li className="flex items-center gap-2">
@@ -446,10 +446,10 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 <Boxes className="w-6 h-6" />
               </div>
               <h3 className="font-serif text-xl font-bold text-[#181A18]">
-                Recipe-Linked BOM Inventory
+                Ingredients, recipes and stock
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
-                Link menu items to measured recipes and ingredient records. Review stock changes, purchases and low-stock thresholds on plans with advanced inventory.
+                On plans with inventory features, enter each dish’s recipe, record purchases and see when ingredients are running low.
               </p>
               <ul className="space-y-2 text-xs text-[#1C1E1B] pt-2 border-t border-[#EAE5DA]">
                 <li className="flex items-center gap-2">
@@ -458,7 +458,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-[#6E8F45]" />
-                  <span>Low stock & purchase order logging</span>
+                  <span>Purchase records and low-stock alerts</span>
                 </li>
               </ul>
             </div>
@@ -472,7 +472,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 Staff Access & Owner Reports
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
-                Assign staff roles and permissions for the tasks at your outlet. Owners can review recorded sales activity and manage access to restaurant operations.
+                Give each staff member access to the screens they need. The Owner can review sales and manage staff access.
               </p>
               <ul className="space-y-2 text-xs text-[#1C1E1B] pt-2 border-t border-[#EAE5DA]">
                 <li className="flex items-center gap-2">
@@ -513,13 +513,13 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 href="/solutions" onNavigate={() => onNavigate("/solutions")}
                 className="inline-flex items-center justify-center w-full sm:w-auto px-6 py-3.5 text-xs font-bold text-[#181A18] bg-[#FBF9F5] hover:bg-[#6E8F45] hover:text-[#FBF9F5] rounded-xl transition duration-150 cursor-pointer"
               >
-                View Format Solutions
+                Find your restaurant type
               </SiteLink>
               <SiteLink
                 href="/roi" onNavigate={() => onNavigate("/roi")}
                 className="inline-flex items-center justify-center w-full sm:w-auto px-6 py-3.5 text-xs font-bold text-[#D97706] bg-[#242823] hover:bg-[#2E332D] rounded-xl border border-[#D97706]/40 transition duration-150 cursor-pointer"
               >
-                Calculate Your Outlet ROI
+                Try the savings calculator
               </SiteLink>
             </div>
           </div>
@@ -534,7 +534,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             Ready to bring calm and control to your kitchen floor?
           </h2>
           <p className="text-sm text-[#5A6056] leading-relaxed">
-            Bring your menu, recipes and device requirements to a 15-minute walkthrough. Review the available workflows and current early-access setup process for one outlet.
+            Bring your menu, recipes and the devices you plan to use to a 15-minute demo. See how orders, kitchen tickets, bills and stock work for one outlet during early access.
           </p>
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <SiteLink
