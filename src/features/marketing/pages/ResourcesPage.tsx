@@ -38,11 +38,11 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
           <div className="max-w-3xl space-y-5">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF2E4] border border-[#D5E3C8] text-xs font-mono font-bold text-[#567234]">
               <BookOpen className="w-3.5 h-3.5" />
-              <span>RESTAURANT OPERATOR PLAYBOOKS</span>
+              <span>Practical restaurant guides</span>
             </div>
             <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl tracking-tight text-[#181A18] leading-[1.12]">
-              Operator playbooks, <br />
-              <span className="text-[#6E8F45] italic">calculators</span> & field notes.
+              Guides, checklists <br />
+              <span className="text-[#6E8F45] italic">and simple cost examples.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
               Practical guides, worked examples and setup checklists for independent restaurant and café owners. Examples are illustrative; use your own operating records.
@@ -58,11 +58,11 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
           {/* Category Tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
             {[
-              { label: "All Playbooks", key: "all" },
+              { label: "All guides", key: "all" },
               { label: "Inventory & Costing", key: "inventory" },
-              { label: "Service Speed & Ops", key: "operations" },
-              { label: "Hardware & Tech", key: "technology" },
-              { label: "Single Outlet Operations", key: "single-outlet" }
+              { label: "Daily service", key: "operations" },
+              { label: "Devices and printing", key: "technology" },
+              { label: "Running one outlet", key: "single-outlet" }
             ].map((tab) => (
               <button
                 key={tab.key}
@@ -119,7 +119,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
                     onNavigate={() => onNavigate(article.path)}
                     className="w-full py-2.5 text-xs font-bold text-[#181A18] hover:text-[#6E8F45] bg-[#FBF9F5] hover:bg-[#EAE5DA] rounded-xl transition border border-[#EAE5DA] flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <span>Read Operator Guide</span>
+                    <span>Read the guide</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </SiteLink>
                 </div>
@@ -144,7 +144,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
                 Download the recipe-costing worksheet.
               </h2>
               <p className="text-sm text-[#A6AEA0] leading-relaxed">
-                An editable CSV with illustrative ingredient prices, unit conversions and serving-cost formulas. Replace the sample inputs with your records in a compatible spreadsheet app.
+                Download a recipe-costing sheet with sample ingredient prices and cost formulas. Open it in a spreadsheet app and replace the examples with your own prices and quantities.
               </p>
             </div>
 
@@ -152,7 +152,7 @@ export default function ResourcesPage({ onNavigate }: ResourcesPageProps) {
               <a href="/restaurant-recipe-cost-template.csv" download
                 className="inline-flex px-6 py-3.5 text-xs font-bold text-[#181A18] bg-[#FBF9F5] hover:bg-[#6E8F45] hover:text-[#FBF9F5] rounded-xl transition duration-150 flex items-center gap-2 cursor-pointer shadow-md"
               >
-                <span>Download Recipe Cost CSV</span>
+                <span>Download recipe-costing sheet</span>
                 <Download className="w-4 h-4" />
               </a>
             </div>

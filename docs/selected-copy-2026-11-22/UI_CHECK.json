@@ -1,0 +1,995 @@
+{
+  "base_url": "http://127.0.0.1:4181",
+  "checks": [
+    {
+      "route": "/",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/product",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/product",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/product",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/solutions",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/solutions",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/solutions",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/roi",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/roi",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/roi",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/pricing",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/pricing",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/pricing",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/about",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/about",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/about",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/terms",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/terms",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/terms",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/privacy",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/privacy",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/privacy",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/refund-policy",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/refund-policy",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/refund-policy",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/restaurant-food-cost-calculation",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/restaurant-food-cost-calculation",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/restaurant-food-cost-calculation",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/restaurant-order-payment-workflow",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/restaurant-order-payment-workflow",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/restaurant-order-payment-workflow",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/restaurant-staff-access-checklist",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/restaurant-staff-access-checklist",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/restaurant-staff-access-checklist",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/restaurant-pos-cost-guide",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/restaurant-pos-cost-guide",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/restaurant-pos-cost-guide",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/single-outlet-setup-checklist",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/single-outlet-setup-checklist",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/single-outlet-setup-checklist",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/kot-vs-kds",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/kot-vs-kds",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/resources/kot-vs-kds",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/contact",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/contact",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/contact",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/solutions/cafes",
+      "width": 1440,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/solutions/cafes",
+      "width": 768,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    },
+    {
+      "route": "/solutions/cafes",
+      "width": 390,
+      "status": 200,
+      "h1": 1,
+      "overflow": false,
+      "page_errors": []
+    }
+  ],
+  "selected_copy_checks": [
+    {
+      "id": "COPY-001",
+      "selection": "before",
+      "missing": []
+    },
+    {
+      "id": "COPY-002",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-003",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-004",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-005",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-007",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-008",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-009",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-010",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-011",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-012",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-013",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-014",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-015",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-016",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-017",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-018",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-019",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-020",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-021",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-022",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-023",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-024",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-025",
+      "selection": "before",
+      "missing": []
+    },
+    {
+      "id": "COPY-026",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-027",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-028",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-030",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-031",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-032",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-033",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-034",
+      "selection": "before",
+      "missing": []
+    },
+    {
+      "id": "COPY-035",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-036",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-037",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-038",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-039",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-040",
+      "selection": "before",
+      "missing": []
+    },
+    {
+      "id": "COPY-041",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-042",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-043",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-044",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-045",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-046",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-047",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-051",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-052",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-054",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-055",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-056",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-057",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-058",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-059",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-060",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-061",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-062",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-063",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-064",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-065",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-066",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-067",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-068",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-069",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-070",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-071",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-072",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-073",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-074",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-075",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-076",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-077",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-078",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-079",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-080",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-081",
+      "selection": "before",
+      "missing": []
+    },
+    {
+      "id": "COPY-082",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-083",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-084",
+      "selection": "before",
+      "missing": []
+    },
+    {
+      "id": "COPY-085",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-086",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-087",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-088",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-089",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-090",
+      "selection": "before",
+      "missing": []
+    },
+    {
+      "id": "COPY-091",
+      "selection": "before",
+      "missing": []
+    },
+    {
+      "id": "COPY-092",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-093",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-094",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-095",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-096",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-097",
+      "selection": "before",
+      "missing": []
+    },
+    {
+      "id": "COPY-098",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-099",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-101",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-102",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-103",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-104",
+      "selection": "before",
+      "missing": []
+    },
+    {
+      "id": "COPY-105",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-106",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-107",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-108",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-109",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-110",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-111",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-113",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-114",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-115",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-116",
+      "selection": "after",
+      "missing": []
+    },
+    {
+      "id": "COPY-117",
+      "selection": "after",
+      "missing": []
+    }
+  ],
+  "special": {
+    "no_review_markers": true,
+    "no_internal_version": true,
+    "refund_3_days": true,
+    "refund_heading_consistent": true,
+    "removed_cost_guide_example": true,
+    "unselected_owner_example_retained": true,
+    "unselected_cash_drawer_retained": true,
+    "unselected_trial_retained": true
+  },
+  "failures": []
+}

@@ -1,0 +1,1382 @@
+{
+  "source_document": "COPY_REVIEW.docx",
+  "source_main_commit": "42788f65a2e2da6595d6127cbd45db23089adeb3",
+  "review_rows": 117,
+  "selections": {
+    "after": 102,
+    "before": 10,
+    "unselected": 4,
+    "remove_example": 1
+  },
+  "rows": [
+    {
+      "id": "COPY-001",
+      "page": "Home",
+      "section": "Hero introduction",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "retain-selected-before",
+      "approved_copy": [
+        "Manage billing, kitchen tickets, recipe-linked inventory and staff permissions in one browser-based workspace. Aatmyam Pos currently supports one outlet per restaurant and is available in early access."
+      ]
+    },
+    {
+      "id": "COPY-002",
+      "page": "Home",
+      "section": "Demo tabs and recipe step",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Kitchen",
+        "Ingredients",
+        "Ingredients for each recipe"
+      ]
+    },
+    {
+      "id": "COPY-003",
+      "page": "Home",
+      "section": "Billing sample label",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "UPI QR for this bill"
+      ]
+    },
+    {
+      "id": "COPY-004",
+      "page": "Home",
+      "section": "Kitchen sample labels",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Kitchen ticket #1042 · Sent 2 minutes ago",
+        "Orders in the kitchen",
+        "Waiting to cook"
+      ]
+    },
+    {
+      "id": "COPY-005",
+      "page": "Home",
+      "section": "Ingredient sample heading/status",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Ingredients used for this order",
+        "Stock updated"
+      ]
+    },
+    {
+      "id": "COPY-006",
+      "page": "Home",
+      "section": "Owner sample: cash figure",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "retain-unselected",
+      "approved_copy": []
+    },
+    {
+      "id": "COPY-007",
+      "page": "Home",
+      "section": "Owner sample: cancellation approval",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Cancelling a bill requires an authorised Manager or Owner’s 4–6 digit PIN."
+      ]
+    },
+    {
+      "id": "COPY-008",
+      "page": "Home",
+      "section": "Daily service section",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "From taking the order to checking the day’s work",
+        "Take the order, follow its progress in the kitchen, check ingredient use and choose what each staff member can do."
+      ]
+    },
+    {
+      "id": "COPY-009",
+      "page": "Home",
+      "section": "Ingredient step description",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Add the ingredients and quantities for each dish so you can follow stock use as orders are taken."
+      ]
+    },
+    {
+      "id": "COPY-010",
+      "page": "Home",
+      "section": "Owner step labels",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Owner desk",
+        "Choose staff access"
+      ]
+    },
+    {
+      "id": "COPY-011",
+      "page": "Home",
+      "section": "Feature card: order entry and payments",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Enter the items ordered and record payment by Cash or UPI. Add your restaurant’s UPI ID to show a QR for the bill amount. Staff must check that the money has arrived before marking a UPI bill paid."
+      ]
+    },
+    {
+      "id": "COPY-012",
+      "page": "Home",
+      "section": "Feature card: stock heading/body",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Ingredients, recipes and stock",
+        "On plans with inventory features, enter each dish’s recipe, record purchases and see when ingredients are running low.",
+        "Purchase records and low-stock alerts"
+      ]
+    },
+    {
+      "id": "COPY-013",
+      "page": "Home",
+      "section": "Feature card: staff and owner reports",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Give each staff member access to the screens they need. The Owner can review sales and manage staff access."
+      ]
+    },
+    {
+      "id": "COPY-014",
+      "page": "Home",
+      "section": "Feature and format links",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Check devices and printers →",
+        "See all features",
+        "Find your restaurant type",
+        "Try the savings calculator"
+      ]
+    },
+    {
+      "id": "COPY-015",
+      "page": "Home",
+      "section": "Final demo invitation",
+      "route": "/",
+      "source_file": "src/features/marketing/pages/HomePage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Bring your menu, recipes and the devices you plan to use to a 15-minute demo. See how orders, kitchen tickets, bills and stock work for one outlet during early access."
+      ]
+    },
+    {
+      "id": "COPY-016",
+      "page": "Product",
+      "section": "Hero badge/headline",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "One place for your restaurant’s daily work",
+        "Keep the counter and kitchen informed.",
+        "Keep an eye on ingredient use."
+      ]
+    },
+    {
+      "id": "COPY-017",
+      "page": "Product",
+      "section": "Hero introduction",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "See how your team can take orders, follow kitchen progress, check stock and use the right screens for each job."
+      ]
+    },
+    {
+      "id": "COPY-018",
+      "page": "Product",
+      "section": "Section labels and sample badges",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Taking an order",
+        "What your team can do",
+        "Example order for one outlet",
+        "Example screen and figures only. These are not a restaurant’s actual results."
+      ]
+    },
+    {
+      "id": "COPY-019",
+      "page": "Product",
+      "section": "Order Entry & Billing description",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Take the order, add any later items to the same open bill, then collect payment when the guest is ready. For UPI, show a QR for the final bill amount and check that the money has arrived before marking the bill paid."
+      ]
+    },
+    {
+      "id": "COPY-020",
+      "page": "Product",
+      "section": "Billing feature list",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Record Cash or UPI payments after checking receipt",
+        "Show a QR for the bill amount using your restaurant’s UPI ID"
+      ]
+    },
+    {
+      "id": "COPY-021",
+      "page": "Product",
+      "section": "Billing sample text",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Bill amount: ₹1,480.00 · Pay to your restaurant’s UPI ID",
+        "Mark paid after checking that the money has arrived"
+      ]
+    },
+    {
+      "id": "COPY-022",
+      "page": "Product",
+      "section": "Kitchen description and status list",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Kitchen staff see new orders and mark each ticket as Preparing, Ready to Serve and Served. The bill stays unpaid until payment is collected.",
+        "Follow preparation through to serving"
+      ]
+    },
+    {
+      "id": "COPY-023",
+      "page": "Product",
+      "section": "Inventory heading and explanation",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Ingredients, recipes and stock",
+        "Add the ingredients and quantities used for each dish.",
+        "See ingredient use against the recipes you enter",
+        "Get an alert when an ingredient reaches your chosen low-stock level"
+      ]
+    },
+    {
+      "id": "COPY-024",
+      "page": "Product",
+      "section": "Inventory example alert",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Butter is running low: 2.1 kg left."
+      ]
+    },
+    {
+      "id": "COPY-025",
+      "page": "Product",
+      "section": "Staff feature list",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-edited-before",
+      "approved_copy": [
+        "Role-Based Access Control (Owner, Manager, Cashier, Kitchen)",
+        "Staff PIN and permission settings"
+      ]
+    },
+    {
+      "id": "COPY-026",
+      "page": "Product",
+      "section": "AI reports description and sample",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Review sales and the day’s activity. AI features are available on eligible plans once they are ready for your account."
+      ]
+    },
+    {
+      "id": "COPY-027",
+      "page": "Product",
+      "section": "Order-to-records loop",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "From order to paid bill",
+        "Enter the guest’s items, table and preparation notes, then send the order to the kitchen.",
+        "Kitchen staff check the ticket and update its progress.",
+        "Open the same bill, collect payment, then mark it paid. Check UPI receipt before confirming.",
+        "Check ingredient use and the restaurant’s sales records."
+      ]
+    },
+    {
+      "id": "COPY-028",
+      "page": "Product",
+      "section": "Devices and printers introduction",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Open Aatmyam Pos in a web browser on the device you plan to use. Try taking an order and printing a receipt with your own device and printer before your first service."
+      ]
+    },
+    {
+      "id": "COPY-029",
+      "page": "Product",
+      "section": "Cash drawer requirement",
+      "route": "/product",
+      "source_file": "src/features/marketing/pages/ProductPage.tsx",
+      "action": "retain-unselected",
+      "approved_copy": []
+    },
+    {
+      "id": "COPY-030",
+      "page": "Solutions",
+      "section": "Hero badge and introduction",
+      "route": "/solutions",
+      "source_file": "src/features/marketing/pages/SolutionsPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "For the way your restaurant serves",
+        "Whether you serve at tables, a counter or a café, see how your team can take orders, keep the kitchen informed and prepare the bill for outlet."
+      ]
+    },
+    {
+      "id": "COPY-031",
+      "page": "Solutions",
+      "section": "Filters and card labels",
+      "route": "/solutions",
+      "source_file": "src/features/marketing/pages/SolutionsPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Restaurant type:",
+        "All restaurant types",
+        "A busy-service challenge",
+        "How Aatmyam Pos helps",
+        "What your team can do",
+        "Daily tasks covered"
+      ]
+    },
+    {
+      "id": "COPY-032",
+      "page": "Solutions",
+      "section": "Dine-in explanation",
+      "route": "/solutions",
+      "source_file": "src/features/marketing/pages/SolutionsPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Take the table’s order, follow kitchen progress, add later items to the same open bill (if any have) and collect payment when the guests are ready."
+      ]
+    },
+    {
+      "id": "COPY-033",
+      "page": "Solutions",
+      "section": "Payment bullet used for dine-in and counter",
+      "route": "/solutions",
+      "source_file": "src/features/marketing/pages/SolutionsPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Record Cash or UPI after checking that payment has arrived."
+      ]
+    },
+    {
+      "id": "COPY-034",
+      "page": "Solutions",
+      "section": "Counter service description",
+      "route": "/solutions",
+      "source_file": "src/features/marketing/pages/SolutionsPage.tsx",
+      "action": "retain-selected-before",
+      "approved_copy": [
+        "Aatmyam Pos provides a browser-based screen for recording menu orders and payment methods."
+      ]
+    },
+    {
+      "id": "COPY-035",
+      "page": "Solutions",
+      "section": "Café stock bullet",
+      "route": "/solutions",
+      "source_file": "src/features/marketing/pages/SolutionsPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Track ingredient use from the recipes you enter",
+        "Low-stock alerts at the level you choose"
+      ]
+    },
+    {
+      "id": "COPY-036",
+      "page": "Solutions",
+      "section": "Cloud-kitchen/delivery description",
+      "route": "/solutions",
+      "source_file": "src/features/marketing/pages/SolutionsPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Takeaway orders for one kitchen",
+        "Enter the items on the Takeaway screen and send them to the kitchen. Staff can follow preparation and prepare the bill."
+      ]
+    },
+    {
+      "id": "COPY-037",
+      "page": "Solutions",
+      "section": "Final invitation",
+      "route": "/solutions",
+      "source_file": "src/features/marketing/pages/SolutionsPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Not sure what fits your restaurant?",
+        "Bring your menu and the devices you plan to use to a 15-minute demo. See how orders, kitchen tickets and billing work for one outlet.",
+        "Book a restaurant demo"
+      ]
+    },
+    {
+      "id": "COPY-038",
+      "page": "ROI Calculator",
+      "section": "Hero badge and heading",
+      "route": "/roi",
+      "source_file": "src/features/marketing/pages/RoiPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Explore your restaurant’s costs",
+        "See where money may be getting lost.",
+        "Try your own figures."
+      ]
+    },
+    {
+      "id": "COPY-039",
+      "page": "ROI Calculator",
+      "section": "Input headings",
+      "route": "/roi",
+      "source_file": "src/features/marketing/pages/RoiPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Your restaurant’s figures",
+        "Estimated cash loss (% of sales)",
+        "Estimated ingredient waste and extra portions (% of sales)"
+      ]
+    },
+    {
+      "id": "COPY-040",
+      "page": "ROI Calculator",
+      "section": "Sales time period",
+      "route": "/roi",
+      "source_file": "src/features/marketing/pages/RoiPage.tsx",
+      "action": "retain-selected-before",
+      "approved_copy": [
+        "Average Monthly Sales (Per Outlet):"
+      ]
+    },
+    {
+      "id": "COPY-041",
+      "page": "ROI Calculator",
+      "section": "Explanation beside the inputs",
+      "route": "/roi",
+      "source_file": "src/features/marketing/pages/RoiPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "This is a planning example using your figures. It assumes the full cash loss and ingredient waste you enter could be recovered, then subtracts the Pro plan price. Actual savings may be lower. This is (hypothetical calculations from the values you enter.) not your restaurant’s profit or a promise of savings."
+      ]
+    },
+    {
+      "id": "COPY-042",
+      "page": "ROI Calculator",
+      "section": "Main result title",
+      "route": "/roi",
+      "source_file": "src/features/marketing/pages/RoiPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Estimate after the Pro plan price"
+      ]
+    },
+    {
+      "id": "COPY-043",
+      "page": "ROI Calculator",
+      "section": "Breakdown labels",
+      "route": "/roi",
+      "source_file": "src/features/marketing/pages/RoiPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "1. Cash loss you entered",
+        "2. Ingredient waste you entered",
+        "3. Pro plan price: ₹999 for 30 days"
+      ]
+    },
+    {
+      "id": "COPY-044",
+      "page": "ROI Calculator",
+      "section": "Longer-period result",
+      "route": "/roi",
+      "source_file": "src/features/marketing/pages/RoiPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Estimate for 12 periods of 30 days"
+      ]
+    },
+    {
+      "id": "COPY-045",
+      "page": "ROI Calculator",
+      "section": "Payback label and empty state",
+      "route": "/roi",
+      "source_file": "src/features/marketing/pages/RoiPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Time to cover the Pro plan price in this example",
+        "Not calculated with the current figures"
+      ]
+    },
+    {
+      "id": "COPY-046",
+      "page": "ROI Calculator",
+      "section": "Service-speed issue label",
+      "route": "/roi",
+      "source_file": "src/features/marketing/pages/RoiPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "3. Delays between ordering and payment"
+      ]
+    },
+    {
+      "id": "COPY-047",
+      "page": "Pricing",
+      "section": "Introduction",
+      "route": "/pricing",
+      "source_file": "src/features/marketing/pages/PricingPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Aatmyam Pos is in early access. Choose a plan for your restaurant outlet and review the staff and order allowances below. Each subscription period is 30 days."
+      ]
+    },
+    {
+      "id": "COPY-048",
+      "page": "Pricing",
+      "section": "Free Starter card",
+      "route": "/pricing",
+      "source_file": "src/features/marketing/pages/PricingPage.tsx",
+      "action": "retain-unselected",
+      "approved_copy": []
+    },
+    {
+      "id": "COPY-049",
+      "page": "Pricing",
+      "section": "Professional Pro card",
+      "route": "/pricing",
+      "source_file": "src/features/marketing/pages/PricingPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Professional Pro: ₹999 for 30 days, all-inclusive",
+        "Owner + 10 active staff accounts",
+        "Up to 500 orders in 30 days",
+        "Billing, basic sales reports, ingredients, recipes and stock tracking",
+        "AI reports as described below"
+      ]
+    },
+    {
+      "id": "COPY-050",
+      "page": "Pricing",
+      "section": "Enterprise Elite card",
+      "route": "/pricing",
+      "source_file": "src/features/marketing/pages/PricingPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Enterprise Elite: ₹1,999 for 30 days, all-inclusive",
+        "Owner + 25 active staff accounts",
+        "Unlimited orders, subject to fair use",
+        "Billing, basic sales reports, ingredients, recipes and stock tracking",
+        "AI reports as described below, plus dedicated support"
+      ]
+    },
+    {
+      "id": "COPY-051",
+      "page": "Pricing",
+      "section": "Paid plan AI allowance",
+      "route": "/pricing",
+      "source_file": "src/features/marketing/pages/PricingPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Up to 5 completed AI reports a day once AI reports are available on your account. The daily allowance resets at midnight, India time."
+      ]
+    },
+    {
+      "id": "COPY-052",
+      "page": "Pricing",
+      "section": "Pro recommendation badge",
+      "route": "/pricing",
+      "source_file": "src/features/marketing/pages/PricingPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "For more staff and orders"
+      ]
+    },
+    {
+      "id": "COPY-053",
+      "page": "Pricing",
+      "section": "Price and trial FAQ",
+      "route": "/pricing",
+      "source_file": "src/features/marketing/pages/PricingPage.tsx",
+      "action": "retain-unselected",
+      "approved_copy": []
+    },
+    {
+      "id": "COPY-054",
+      "page": "Pricing",
+      "section": "Order allowance FAQ",
+      "route": "/pricing",
+      "source_file": "src/features/marketing/pages/PricingPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Every new order you create counts towards your 30-day allowance, even if it has not been paid. Pro includes 500 orders. At 20 new orders a day, you would create 600 in 30 days, which exceeds that allowance. Check Billing for your usage and period dates before a busy service. New orders can be blocked once the allowance is reached."
+      ]
+    },
+    {
+      "id": "COPY-055",
+      "page": "Pricing",
+      "section": "UPI payment FAQ",
+      "route": "/pricing",
+      "source_file": "src/features/marketing/pages/PricingPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Add your restaurant’s UPI ID to show a QR for the bill amount. After the guest pays, check your restaurant’s bank or payment app, then mark the bill paid. Scanning the QR alone does not confirm payment. Paying for an Aatmyam Pos subscription is separate from collecting a guest’s bill."
+      ]
+    },
+    {
+      "id": "COPY-056",
+      "page": "Pricing",
+      "section": "Plan-change FAQ",
+      "route": "/pricing",
+      "source_file": "src/features/marketing/pages/PricingPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Choose your plan in Billing and complete payment. Your plan changes after payment is confirmed. An upgrade to Elite during your current period starts a new 30-day period. The upgrade price is not reduced for unused days on your current plan."
+      ]
+    },
+    {
+      "id": "COPY-057",
+      "page": "Pricing",
+      "section": "Internet-disconnection FAQ",
+      "route": "/pricing",
+      "source_file": "src/features/marketing/pages/PricingPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "If the device is already set up and you are signed in, some order-taking tasks can continue during a short internet outage. You need internet to sign in, manage your account or activate a paid plan. When the connection returns, check that your recent orders and payments have been saved. Practise this on your own device before using it during service."
+      ]
+    },
+    {
+      "id": "COPY-058",
+      "page": "About",
+      "section": "Hero badge and introduction",
+      "route": "/about",
+      "source_file": "src/features/marketing/pages/AboutPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "About Aatmyam Pos",
+        "Aatmyam Pos is early-access software for independent restaurants and cafés in India. It brings orders, kitchen progress, bills, ingredients and staff access into one place, with one outlet for each restaurant account."
+      ]
+    },
+    {
+      "id": "COPY-059",
+      "page": "About",
+      "section": "Point of view",
+      "route": "/about",
+      "source_file": "src/features/marketing/pages/AboutPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Our focus is the work your team does every day: taking orders, keeping the kitchen informed, checking stock and giving staff the right access. See Product and Pricing for the features and allowances currently available."
+      ]
+    },
+    {
+      "id": "COPY-060",
+      "page": "About",
+      "section": "Principles section heading",
+      "route": "/about",
+      "source_file": "src/features/marketing/pages/AboutPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Four priorities for your restaurant’s daily work."
+      ]
+    },
+    {
+      "id": "COPY-061",
+      "page": "About",
+      "section": "Principle 1: busy service",
+      "route": "/about",
+      "source_file": "src/features/marketing/pages/AboutPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Restaurant service comes first: clear orders, kitchen progress, stock records and staff access that your team can understand."
+      ]
+    },
+    {
+      "id": "COPY-062",
+      "page": "About",
+      "section": "Principle 2: stock and profit",
+      "route": "/about",
+      "source_file": "src/features/marketing/pages/AboutPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Know what goes into each dish",
+        "On eligible plans, enter measured recipes, purchases and stock counts to understand ingredient use. Your reports depend on the quantities and records you enter."
+      ]
+    },
+    {
+      "id": "COPY-063",
+      "page": "About",
+      "section": "Principle 3: owner reports",
+      "route": "/about",
+      "source_file": "src/features/marketing/pages/AboutPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Give each staff member their own PIN and the screens they need. Review sales and staff activity, then compare recorded payments with the cash and UPI money actually received."
+      ]
+    },
+    {
+      "id": "COPY-064",
+      "page": "About",
+      "section": "Principle 4: device checks",
+      "route": "/about",
+      "source_file": "src/features/marketing/pages/AboutPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Try Aatmyam Pos on the phone, tablet or computer you plan to use, and print a receipt with your chosen printer and paper size. We can review your setup during an early-access demo."
+      ]
+    },
+    {
+      "id": "COPY-065",
+      "page": "About",
+      "section": "Closing invitation and buttons",
+      "route": "/about",
+      "source_file": "src/features/marketing/pages/AboutPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "See how your team can take orders, follow kitchen progress, prepare bills and check stock. Book a demo with the Aatmyam Pos team.",
+        "Book a restaurant demo",
+        "Find your restaurant type"
+      ]
+    },
+    {
+      "id": "COPY-066",
+      "page": "Resources",
+      "section": "Hero badge and heading",
+      "route": "/resources",
+      "source_file": "src/features/marketing/pages/ResourcesPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Practical restaurant guides",
+        "Guides, checklists",
+        "and simple cost examples."
+      ]
+    },
+    {
+      "id": "COPY-067",
+      "page": "Resources",
+      "section": "Category tabs and read link",
+      "route": "/resources",
+      "source_file": "src/features/marketing/pages/ResourcesPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "All guides",
+        "Daily service",
+        "Devices and printing",
+        "Running one outlet",
+        "Read the guide"
+      ]
+    },
+    {
+      "id": "COPY-068",
+      "page": "Resources",
+      "section": "Food-cost guide card summary",
+      "route": "/resources",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Work out the ingredient cost of one dish, use the same measurements throughout and compare expected ingredient use with the stock you count."
+      ]
+    },
+    {
+      "id": "COPY-069",
+      "page": "Resources",
+      "section": "Counter guide card takeaway",
+      "route": "/resources",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Show the QR, check that the money has arrived, then mark the bill paid. Each step matters."
+      ]
+    },
+    {
+      "id": "COPY-070",
+      "page": "Resources",
+      "section": "Staff guide card summary",
+      "route": "/resources",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Give staff the access they need, check who can approve changes and compare the day’s recorded payments with cash and UPI receipts."
+      ]
+    },
+    {
+      "id": "COPY-071",
+      "page": "Resources",
+      "section": "Buying-guide card summary",
+      "route": "/resources",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Check that the plan covers your staff and orders. Ask for prices for the devices, printing, training and other costs your restaurant will need."
+      ]
+    },
+    {
+      "id": "COPY-072",
+      "page": "Resources",
+      "section": "Setup guide card and takeaway",
+      "route": "/resources",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Prepare your menu, recipes, staff access and devices, then practise an order from start to payment. Also check what to do if the internet drops or an order does not appear.",
+        "Practise both a normal order and what to do when something goes wrong."
+      ]
+    },
+    {
+      "id": "COPY-073",
+      "page": "Resources",
+      "section": "Worksheet explanation and download button",
+      "route": "/resources",
+      "source_file": "src/features/marketing/pages/ResourcesPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Download a recipe-costing sheet with sample ingredient prices and cost formulas. Open it in a spreadsheet app and replace the examples with your own prices and quantities.",
+        "Download recipe-costing sheet"
+      ]
+    },
+    {
+      "id": "COPY-074",
+      "page": "Terms of Service",
+      "section": "1. Acceptance of Terms",
+      "route": "/terms",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Aatmyam Pos is online software for restaurant billing, stock records and staff shifts. By registering for or using Aatmyam Pos, you agree to these Terms of Service. If you do not agree, do not use the service."
+      ]
+    },
+    {
+      "id": "COPY-075",
+      "page": "Terms of Service",
+      "section": "2. Account Security heading and paragraph",
+      "route": "/terms",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "2. Your restaurant account and sign-in details",
+        "Each restaurant has its own account and records, kept separate from other restaurant accounts. You alone are responsible for keeping the Owner login and individual staff PINs private."
+      ]
+    },
+    {
+      "id": "COPY-076",
+      "page": "Terms of Service",
+      "section": "3. Responsibilities: prohibited actions",
+      "route": "/terms",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Do not enter false sales, stock or staff-hour records.",
+        "Do not try to access another restaurant’s information without permission.",
+        "Do not use Aatmyam Pos for dishonest billing or fraud."
+      ]
+    },
+    {
+      "id": "COPY-077",
+      "page": "Terms of Service",
+      "section": "4. Location of data tools",
+      "route": "/terms",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Find your restaurant’s data tools in Settings → Advanced → Your Data."
+      ]
+    },
+    {
+      "id": "COPY-078",
+      "page": "Terms of Service",
+      "section": "4. Downloading your records",
+      "route": "/terms",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Download your records",
+        "The Owner can use Download data at any time to download a copy of the restaurant’s menu, orders, staff and ingredient records in one file."
+      ]
+    },
+    {
+      "id": "COPY-079",
+      "page": "Terms of Service",
+      "section": "4. Clear this device",
+      "route": "/terms",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Clear this device removes saved information from this device. It does not delete your restaurant account or the records held by Aatmyam Pos. Contact us to request account deletion. Before clearing the device, reconnect to the internet and check that all recent work has been saved."
+      ]
+    },
+    {
+      "id": "COPY-080",
+      "page": "Terms of Service",
+      "section": "5. Limitation of Liability",
+      "route": "/terms",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Aatmyam Pos is provided “as is” and “as available”. We do not promise uninterrupted service, and short maintenance periods may occur. Aatmyam Pos is not liable for indirect, incidental or consequential losses arising from restaurant downtime or ingredient stock discrepancies."
+      ]
+    },
+    {
+      "id": "COPY-081",
+      "page": "Privacy Policy",
+      "section": "1. Scope",
+      "route": "/privacy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "retain-selected-before",
+      "approved_copy": [
+        "This Privacy Policy details how Aatmyam Pos collects, utilizes, and secures data related to your restaurant operations. Your privacy is paramount, and we deploy multi-tenant segmentation to ensure that other business establishments cannot view or query your operational data."
+      ]
+    },
+    {
+      "id": "COPY-082",
+      "page": "Privacy Policy",
+      "section": "2. Business and payment information",
+      "route": "/privacy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Restaurant details: restaurant name, email address, area and registered Owner’s name.",
+        "Orders and payments: bills, amounts, table numbers, cashier names and the recorded payment method, Cash or UPI."
+      ]
+    },
+    {
+      "id": "COPY-083",
+      "page": "Privacy Policy",
+      "section": "2. Ingredients, staff and guests",
+      "route": "/privacy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Stock and recipes: ingredients, stock counts, chosen low-stock levels, purchase costs and recipe quantities.",
+        "Staff details: active staff lists, protected sign-in details and recorded working hours.",
+        "Guest details: phone numbers and loyalty points entered by your restaurant during billing."
+      ]
+    },
+    {
+      "id": "COPY-084",
+      "page": "Privacy Policy",
+      "section": "3. Data sharing heading and paragraph",
+      "route": "/privacy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "retain-selected-before",
+      "approved_copy": [
+        "3. How Your Data is Isolated & Shared",
+        "Restaurant access is checked by the application server. Hosting and database providers process stored records; configured email services send verification messages. If enabled, AI providers process submitted chat or report data. Contact the service operator for information about the providers enabled for your account."
+      ]
+    },
+    {
+      "id": "COPY-085",
+      "page": "Privacy Policy",
+      "section": "4. Downloading records",
+      "route": "/privacy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Download your restaurant records",
+        "The Owner can use Download data in Settings → Advanced → Your Data to download the restaurant’s order, staff, guest and ingredient records in one file."
+      ]
+    },
+    {
+      "id": "COPY-086",
+      "page": "Privacy Policy",
+      "section": "4. Deletion requests",
+      "route": "/privacy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Contact us to request deletion of your restaurant’s records. Clear this device only removes information saved on that device. Some financial records may need to be retained."
+      ]
+    },
+    {
+      "id": "COPY-087",
+      "page": "Privacy Policy",
+      "section": "5. Security safeguards",
+      "route": "/privacy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "We protect restaurant accounts with sign-in checks, staff permissions and separate access for each restaurant. These safeguards are intended to prevent unauthorised access or information being shown to the wrong restaurant."
+      ]
+    },
+    {
+      "id": "COPY-088",
+      "page": "Refund Policy",
+      "section": "1. Subscription period heading and paragraph",
+      "route": "/refund-policy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "1. Your 30-day subscription",
+        "Each paid plan covers one outlet for 30 days. Paid access starts after your payment is confirmed. In Billing, you can check your plan, order allowance, subscription dates and expiry."
+      ]
+    },
+    {
+      "id": "COPY-089",
+      "page": "Refund Policy",
+      "section": "2. Refund eligibility introduction",
+      "route": "/refund-policy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "If Aatmyam Pos does not suit your restaurant’s billing needs, or a problem with the app affects its use, you may request a refund under the conditions below."
+      ]
+    },
+    {
+      "id": "COPY-090",
+      "page": "Refund Policy",
+      "section": "2. Request deadline and explanation",
+      "route": "/refund-policy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-edited-before",
+      "approved_copy": [
+        "Guarantee Window: Refund requests must be raised with the service operator within 3 calendar days of your initial paid activation.",
+        "Proof of Operational Incompatibility: A brief explanation of the incompatibility helps us continuously refine our features."
+      ]
+    },
+    {
+      "id": "COPY-091",
+      "page": "Refund Policy",
+      "section": "2. Approved refund processing",
+      "route": "/refund-policy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "retain-selected-before",
+      "approved_copy": [
+        "Processing: Approved refunds will be processed back to the original UPI, card, or banking payment source within 5 to 7 business days."
+      ]
+    },
+    {
+      "id": "COPY-092",
+      "page": "Refund Policy",
+      "section": "3. Renewal and cancellation",
+      "route": "/refund-policy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Aatmyam Pos does not automatically charge you for another paid period. To stop renewing, do not buy another 30-day period. Check Billing for the expiry of your current paid access."
+      ]
+    },
+    {
+      "id": "COPY-093",
+      "page": "Refund Policy",
+      "section": "3. Payment, access and export bullets",
+      "route": "/refund-policy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Another paid period starts only after a new payment is confirmed.",
+        "Your current plan remains available until its shown expiry, subject to the plan’s limits.",
+        "Before stopping renewal, use Download data in Settings → Advanced → Your Data to keep a copy of your restaurant records."
+      ]
+    },
+    {
+      "id": "COPY-094",
+      "page": "Refund Policy",
+      "section": "4. Exceptional circumstances",
+      "route": "/refund-policy",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Refunds are not granted for subscription periods that have already been fully used, or where misuse, such as trying to bypass account access restrictions, is identified."
+      ]
+    },
+    {
+      "id": "COPY-095",
+      "page": "Shared navigation/footer",
+      "section": "Early-access description",
+      "route": "/",
+      "source_file": "src/features/marketing/components/MarketingFooter.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "See how orders, bills, kitchen tickets and stock work during daily service."
+      ]
+    },
+    {
+      "id": "COPY-096",
+      "page": "Shared navigation/footer",
+      "section": "Brand description",
+      "route": "/",
+      "source_file": "src/features/marketing/components/MarketingFooter.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Early-access software for independent restaurants. Book a demo to see how your team can take orders, prepare bills, follow kitchen progress and check stock."
+      ]
+    },
+    {
+      "id": "COPY-097",
+      "page": "Shared navigation/footer",
+      "section": "Feature badges",
+      "route": "/",
+      "source_file": "src/features/marketing/components/MarketingFooter.tsx",
+      "action": "retain-selected-before",
+      "approved_copy": [
+        "Role-based access",
+        "Browser-based POS"
+      ]
+    },
+    {
+      "id": "COPY-098",
+      "page": "Shared navigation/footer",
+      "section": "Feature links",
+      "route": "/",
+      "source_file": "src/features/marketing/components/MarketingFooter.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Billing and staff sign-in",
+        "Kitchen screen",
+        "Recipes and stock",
+        "Plans and prices"
+      ]
+    },
+    {
+      "id": "COPY-099",
+      "page": "Shared navigation/footer",
+      "section": "Section headings and company links",
+      "route": "/",
+      "source_file": "src/features/marketing/components/MarketingFooter.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Product",
+        "Restaurant types",
+        "About and guides",
+        "About Aatmyam Pos",
+        "Restaurant guides",
+        "Savings calculator."
+      ]
+    },
+    {
+      "id": "COPY-100",
+      "page": "Shared navigation/footer",
+      "section": "Public version label",
+      "route": "/",
+      "source_file": "src/features/marketing/components/MarketingFooter.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": []
+    },
+    {
+      "id": "COPY-101",
+      "page": "Shared navigation/footer",
+      "section": "Legal document subtitle and return button",
+      "route": "/terms",
+      "source_file": "src/features/shared/components/LegalPage.tsx",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Restaurant account information",
+        "Back to Aatmyam Pos"
+      ],
+      "applies_to_routes": [
+        "/terms",
+        "/privacy",
+        "/refund-policy"
+      ]
+    },
+    {
+      "id": "COPY-102",
+      "page": "Resources guide: Recipe costing",
+      "section": "Ingredient-cost explanation",
+      "route": "/resources/restaurant-food-cost-calculation",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Be consistent about whether GST is included when comparing ingredient costs and selling prices."
+      ]
+    },
+    {
+      "id": "COPY-103",
+      "page": "Resources guide: Recipe costing",
+      "section": "Compare actual ingredient use",
+      "route": "/resources/restaurant-food-cost-calculation",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "On plans with inventory features, use your recipes, purchase entries and counted stock to compare expected ingredient use with actual use. Check measurements and recipe changes, and keep the original purchase records. The comparison depends on the information you enter."
+      ]
+    },
+    {
+      "id": "COPY-104",
+      "page": "Resources guide: Order and payment",
+      "section": "Order types",
+      "route": "/resources/restaurant-order-payment-workflow",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-edited-before",
+      "approved_copy": [
+        "Agree where staff should enter dine-in, takeaway orders."
+      ]
+    },
+    {
+      "id": "COPY-105",
+      "page": "Resources guide: Order and payment",
+      "section": "Check an order before entering it again",
+      "route": "/resources/restaurant-order-payment-workflow",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "After sending an order, check that the kitchen can see its ticket. If the screen shows an error or the order is missing, ask the Owner to check it before entering it again. This helps avoid duplicate orders."
+      ]
+    },
+    {
+      "id": "COPY-106",
+      "page": "Resources guide: Order and payment",
+      "section": "Restaurant QR payments",
+      "route": "/resources/restaurant-order-payment-workflow",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Add the restaurant’s UPI ID to show a QR with the bill amount. The guest pays using their UPI app. Before marking the bill paid, check that the payment reached the restaurant; showing or scanning the QR alone is not enough."
+      ]
+    },
+    {
+      "id": "COPY-107",
+      "page": "Resources guide: Order and payment",
+      "section": "Separate software subscription payment",
+      "route": "/resources/restaurant-order-payment-workflow",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Paying for an Aatmyam Pos plan is separate from collecting a guest’s bill. Your plan changes after the subscription payment is confirmed. Staff still need to check each guest’s UPI payment before marking that bill paid."
+      ]
+    },
+    {
+      "id": "COPY-108",
+      "page": "Resources guide: Staff access",
+      "section": "Staff sign-in explanation",
+      "route": "/resources/restaurant-staff-access-checklist",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Give each staff member their own PIN and check which screens and actions they can use. During setup, make sure each person can do the work assigned to them."
+      ]
+    },
+    {
+      "id": "COPY-109",
+      "page": "Resources guide: Staff access",
+      "section": "Protect sign-in details",
+      "route": "/resources/restaurant-staff-access-checklist",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Keep staff PINs out of screenshots, training notes and shared messages. If a PIN or sign-in detail is shared by mistake, change it and check that the right person can sign in again."
+      ]
+    },
+    {
+      "id": "COPY-110",
+      "page": "Resources guide: Staff access",
+      "section": "Investigate a difference",
+      "route": "/resources/restaurant-staff-access-checklist",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "A difference may come from a late payment, a mistaken entry, work that has not finished saving or a missed step. Keep the order number and check what happened. Compare recorded payments with the money actually received before drawing a conclusion."
+      ]
+    },
+    {
+      "id": "COPY-111",
+      "page": "Resources guide: POS cost",
+      "section": "Plan catalog explanation",
+      "route": "/resources/restaurant-pos-cost-guide",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Each Aatmyam Pos plan covers one outlet for 30 days. The prices below are for that 30-day period. Ask for separate quotes for any devices, setup or other costs your restaurant needs."
+      ]
+    },
+    {
+      "id": "COPY-112",
+      "page": "Resources guide: POS cost",
+      "section": "Order allowance example",
+      "route": "/resources/restaurant-pos-cost-guide",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "remove-example",
+      "approved_copy": [],
+      "comment": "Not shows that type of examples: remove the numerical daily-order illustration from the POS cost guide."
+    },
+    {
+      "id": "COPY-113",
+      "page": "Resources guide: POS cost",
+      "section": "Comparison heading",
+      "route": "/resources/restaurant-pos-cost-guide",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Compare costs over the same period"
+      ]
+    },
+    {
+      "id": "COPY-114",
+      "page": "Resources guide: Outlet setup",
+      "section": "Internet interruption rehearsal",
+      "route": "/resources/single-outlet-setup-checklist",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "On a device already set up and signed in, some order-taking tasks can continue during a short internet outage. Signing in, managing your account and activating a paid plan need internet. Before your first service, practise a brief connection loss, reconnect and check that the latest orders and payments have been saved."
+      ]
+    },
+    {
+      "id": "COPY-115",
+      "page": "Resources guide: Outlet setup",
+      "section": "What to do if work is missing",
+      "route": "/resources/single-outlet-setup-checklist",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Agree who checks a missing order, what the team will write down if the internet drops and when to call the Owner. Do not clear saved information, reset the device or enter an uncertain order again until the latest work has been checked."
+      ]
+    },
+    {
+      "id": "COPY-116",
+      "page": "Resources guide: Kitchen tickets",
+      "section": "Kitchen screen scope",
+      "route": "/resources/kot-vs-kds",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "Try the kitchen screen with your own menu and check how staff mark orders as preparing, ready and served. Orders from delivery apps do not arrive automatically in Aatmyam Pos. If you use several kitchen stations, ask us to show exactly how the team will pass tickets between them."
+      ]
+    },
+    {
+      "id": "COPY-117",
+      "page": "Resources guide: Kitchen tickets",
+      "section": "Single-outlet scope",
+      "route": "/resources/kot-vs-kds",
+      "source_file": "shared/marketing-guides.ts",
+      "action": "apply-selected-after",
+      "approved_copy": [
+        "If you have several kitchen stations, check how orders will reach each team before service. Each Aatmyam Pos restaurant account covers one outlet; it does not manage kitchens across several locations."
+      ]
+    }
+  ]
+}

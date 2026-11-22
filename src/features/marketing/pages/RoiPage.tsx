@@ -57,11 +57,11 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
           <div className="max-w-3xl space-y-5">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FEF3C7] border border-[#FDE68A] text-xs font-mono font-bold text-[#D97706]">
               <DollarSign className="w-3.5 h-3.5" />
-              <span>THE BUSINESS CASE & LEAKAGE CALCULATOR</span>
+              <span>Explore your restaurant’s costs</span>
             </div>
             <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl tracking-tight text-[#181A18] leading-[1.12]">
-              See what’s moving. <br />
-              <span className="text-[#D97706] italic">Fix what’s leaking.</span>
+              See where money may be getting lost. <br />
+              <span className="text-[#D97706] italic">Try your own figures.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
               In food service, profit isn’t just made on the menu price—it’s protected in the kitchen and at the register.
@@ -82,7 +82,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
 
               <div className="flex items-center justify-between pb-4 border-b border-[#EAE5DA]">
                 <h2 className="font-serif text-xl font-bold text-[#181A18]">
-                  Your Operational Assumptions
+                  Your restaurant’s figures
                 </h2>
                 <button
                   onClick={handleResetDefaults}
@@ -123,7 +123,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
               <div className="space-y-2">
                 <div className="flex justify-between items-center text-xs font-mono">
                   <span className="font-bold text-[#181A18]">
-                    Your estimated cash leakage rate:
+                    Estimated cash loss (% of sales)
                   </span>
                   <span className="text-sm font-bold text-[#D97706] bg-[#FEF3C7] px-2.5 py-1 rounded-lg border border-[#FDE68A]">
                     {leakageRate}%
@@ -147,7 +147,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
               <div className="space-y-2">
                 <div className="flex justify-between items-center text-xs font-mono">
                   <span className="font-bold text-[#181A18]">
-                    Over-Portioning & Spoilage Rate:
+                    Estimated ingredient waste and extra portions (% of sales)
                   </span>
                   <span className="text-sm font-bold text-[#567234] bg-[#EBF2E4] px-2.5 py-1 rounded-lg border border-[#D5E3C8]">
                     {spoilageRate}%
@@ -171,7 +171,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
               <div className="p-3 bg-[#FBF9F5] rounded-xl border border-[#EAE5DA] flex items-start gap-2 text-[11px] text-[#787F74]">
                 <Info className="w-4 h-4 text-[#6E8F45] shrink-0 mt-0.5" />
                 <span>
-                  Results are hypothetical calculations from the values you enter. Aatmyam Pos has not validated these estimates against restaurant customer results.
+                  This is a planning example using your figures. It assumes the full cash loss and ingredient waste you enter could be recovered, then subtracts the Pro plan price. Actual savings may be lower. This is (hypothetical calculations from the values you enter.) not your restaurant’s profit or a promise of savings.
                 </span>
               </div>
 
@@ -186,7 +186,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                     YOUR SCENARIO ESTIMATE
                   </span>
                   <h3 className="font-serif text-2xl font-bold text-[#FBF9F5]">
-                    Monthly Net Scenario
+                    Estimate after the Pro plan price
                   </h3>
                 </div>
                 <div className="text-right">
@@ -203,7 +203,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                 <div className="flex items-center justify-between p-3 bg-[#242823] rounded-xl border border-[#2E332D]">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-[#D97706]" />
-                    <span>1. Estimated cash leakage amount</span>
+                    <span>1. Cash loss you entered</span>
                   </div>
                   <span className="font-bold text-[#D97706]">
                     +{formatCurrency(pilferageSaved)}
@@ -213,7 +213,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                 <div className="flex items-center justify-between p-3 bg-[#242823] rounded-xl border border-[#2E332D]">
                   <div className="flex items-center gap-2">
                     <Boxes className="w-4 h-4 text-[#6E8F45]" />
-                    <span>2. Estimated inventory amount</span>
+                    <span>2. Ingredient waste you entered</span>
                   </div>
                   <span className="font-bold text-[#6E8F45]">
                     +{formatCurrency(spoilageSaved)}
@@ -222,7 +222,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
 
                 <div className="flex items-center justify-between p-3 bg-[#181A18] rounded-xl border border-[#2E332D] text-[#A6AEA0]">
                   <div className="flex items-center gap-2">
-                    <span>4. Aatmyam Pos SaaS Subscription</span>
+                    <span>3. Pro plan price: ₹999 for 30 days</span>
                   </div>
                   <span className="font-bold text-[#E57373]">
                     -{formatCurrency(estimatedSaaSMonthlyCost)}
@@ -235,7 +235,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
               <div className="p-4 bg-[#242823] rounded-2xl border border-[#6E8F45]/40 grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-[10px] font-mono text-[#A6AEA0] uppercase">
-                    12-Month Scenario Estimate
+                    Estimate for 12 periods of 30 days
                   </p>
                   <p className="font-serif text-xl sm:text-2xl font-bold text-[#FBF9F5]">
                     {formatCurrency(annualBenefit)}
@@ -243,10 +243,10 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
                 </div>
                 <div>
                   <p className="text-[10px] font-mono text-[#A6AEA0] uppercase">
-                    Estimated Payback
+                    Time to cover the Pro plan price in this example
                   </p>
                   <p className="font-serif text-xl sm:text-2xl font-bold text-[#6E8F45]">
-                    {estimatedPaybackDays === null ? "Not estimated" : `${estimatedPaybackDays} days`}
+                    {estimatedPaybackDays === null ? "Not calculated with the current figures" : `${estimatedPaybackDays} days`}
                   </p>
                 </div>
               </div>
@@ -302,7 +302,7 @@ export default function RoiPage({ onNavigate }: RoiPageProps) {
 
             <div className="bg-[#F4F0E8] p-6 rounded-2xl border border-[#EAE5DA] space-y-3">
               <h3 className="font-serif text-lg font-bold text-[#181A18]">
-                3. Laggy Table Turnarounds
+                3. Delays between ordering and payment
               </h3>
               <p className="text-xs text-[#5A6056] leading-relaxed">
                 Order and payment steps can affect service flow. Review them with staff to identify where a clearer workflow may help.

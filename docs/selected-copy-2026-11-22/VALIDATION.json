@@ -1,0 +1,26 @@
+{
+  "typecheck": "passed",
+  "production_build": "passed",
+  "full_suite": {
+    "files": 87,
+    "tests": 726,
+    "result": "passed"
+  },
+  "final_copy_marketing_checks": {
+    "files": 4,
+    "tests": 17,
+    "result": "passed"
+  },
+  "public_browser": {
+    "pages": 18,
+    "widths": [
+      390,
+      768,
+      1440
+    ],
+    "page_viewport_checks": 54,
+    "selected_text_groups_checked": 109,
+    "failures": 0
+  },
+  "source_scope": "10 public copy files plus review documentation; no private POS behavior or data changes"
+}

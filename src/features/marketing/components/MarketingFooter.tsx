@@ -41,7 +41,7 @@ export default function MarketingFooter({
                 Aatmyam Pos • Early access
               </p>
               <p className="text-[11px] text-[#A6AEA0]">
-                Explore ordering, billing, kitchen tickets, and inventory workflows
+                See how orders, bills, kitchen tickets and stock work during daily service.
               </p>
             </div>
           </div>
@@ -67,8 +67,7 @@ export default function MarketingFooter({
           <div className="col-span-2 space-y-4">
             <BrandLogo dark />
             <p className="text-xs text-[#A6AEA0] leading-relaxed max-w-sm">
-              Software for independent restaurants, currently in early access.
-              Explore order, billing, kitchen, and inventory workflows in a walkthrough.
+              Early-access software for independent restaurants. Book a demo to see how your team can take orders, prepare bills, follow kitchen progress and check stock.
             </p>
             <div className="pt-2 flex items-center gap-4 text-xs font-mono text-[#787F74]">
               <span className="flex items-center gap-1">
@@ -82,10 +81,10 @@ export default function MarketingFooter({
             </div>
           </div>
 
-          {/* Platform Links */}
+          {/* Product Links */}
           <div className="space-y-3">
             <p className="text-xs font-mono uppercase tracking-wider text-[#A6AEA0] font-semibold">
-              Platform
+              Product
             </p>
             <ul className="space-y-2 text-xs">
               <li>
@@ -101,7 +100,7 @@ export default function MarketingFooter({
                   onNavigate={() => handleNav("/product")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
-                  Touch Terminal & PIN
+                  Billing and staff sign-in
                 </SiteLink>
               </li>
               <li>
@@ -109,7 +108,7 @@ export default function MarketingFooter({
                   onNavigate={() => handleNav("/product")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
-                  Live Kitchen KDS
+                  Kitchen screen
                 </SiteLink>
               </li>
               <li>
@@ -117,7 +116,7 @@ export default function MarketingFooter({
                   onNavigate={() => handleNav("/product")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
-                  Recipe BOM Stock
+                  Recipes and stock
                 </SiteLink>
               </li>
               <li>
@@ -125,7 +124,7 @@ export default function MarketingFooter({
                   onNavigate={() => handleNav("/pricing")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
-                  Pricing & Tiers
+                  Plans and prices
                 </SiteLink>
               </li>
             </ul>
@@ -134,7 +133,7 @@ export default function MarketingFooter({
           {/* Solutions Links */}
           <div className="space-y-3">
             <p className="text-xs font-mono uppercase tracking-wider text-[#A6AEA0] font-semibold">
-              Formats
+              Restaurant types
             </p>
             <ul className="space-y-2 text-xs">
               <li>
@@ -174,7 +173,7 @@ export default function MarketingFooter({
                   onNavigate={() => handleNav("/roi")}
                   className="text-[#D97706] hover:text-[#FBBF24] transition font-semibold cursor-pointer"
                 >
-                  ROI & Savings Model
+                  Savings calculator.
                 </SiteLink>
               </li>
             </ul>
@@ -183,7 +182,7 @@ export default function MarketingFooter({
           {/* Company & Resources */}
           <div className="space-y-3">
             <p className="text-xs font-mono uppercase tracking-wider text-[#A6AEA0] font-semibold">
-              Company & Docs
+              About and guides
             </p>
             <ul className="space-y-2 text-xs">
               <li>
@@ -191,7 +190,7 @@ export default function MarketingFooter({
                   onNavigate={() => handleNav("/about")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
-                  Operating Manifesto
+                  About Aatmyam Pos
                 </SiteLink>
               </li>
               <li>
@@ -199,7 +198,7 @@ export default function MarketingFooter({
                   onNavigate={() => handleNav("/resources")}
                   className="text-[#E0E5DC] hover:text-[#6E8F45] transition cursor-pointer"
                 >
-                  Kitchen Field Notes
+                  Restaurant guides
                 </SiteLink>
               </li>
               <li>
@@ -242,7 +241,6 @@ export default function MarketingFooter({
         <div className="pt-8 border-t border-[#2E332D] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#787F74]">
           <p>© {new Date().getFullYear()} Aatmyam Pos. Designed for hospitality craft & operational calm.</p>
           <div className="flex items-center gap-6">
-            <span className="font-mono text-[11px] text-[#A6AEA0]">Version 4.8.2-Enterprise</span>
             <SiteLink href="/login"
               onNavigate={onOpenLogin}
               className="text-[#6E8F45] hover:underline font-semibold cursor-pointer"

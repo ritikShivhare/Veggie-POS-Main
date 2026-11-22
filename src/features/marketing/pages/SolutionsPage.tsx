@@ -33,11 +33,11 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
       friction:
         "Staff may need to coordinate table orders, kitchen preparation, and billing during busy service.",
       solution:
-        "Aatmyam Pos keeps table orders, kitchen preparation status, and billing in one restaurant workflow.",
+        "Take the table’s order, follow kitchen progress, add later items to the same open bill (if any have) and collect payment when the guests are ready.",
       highlights: [
         "Table-based order entry",
         "Kitchen order status",
-        "Cash and manual UPI payment recording",
+        "Record Cash or UPI after checking that payment has arrived.",
         "Staff roles and permissions"
       ],
       impactMetric: "Table and kitchen workflow",
@@ -55,7 +55,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
         "Aatmyam Pos provides a browser-based screen for recording menu orders and payment methods.",
       highlights: [
         "Menu-based order entry",
-        "Cash and manual UPI payment recording",
+        "Record Cash or UPI after checking that payment has arrived.",
         "Kitchen order status",
         "Basic sales reports"
       ],
@@ -74,8 +74,8 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
         "Recipe-linked inventory can help staff record ingredient use alongside menu sales.",
       highlights: [
         "Menu and ingredient records",
-        "Recipe-linked inventory",
-        "Stock threshold alerts",
+        "Track ingredient use from the recipes you enter",
+        "Low-stock alerts at the level you choose",
         "Sales reporting"
       ],
       impactMetric: "Menu and inventory workflow",
@@ -83,14 +83,14 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
     },
     {
       id: "cloud-kitchen",
-      title: "Single-Kitchen Delivery Operations",
+      title: "Takeaway orders for one kitchen",
       category: "Delivery",
       tagline: "Order recording and kitchen preparation status.",
       icon: Layers,
       friction:
         "Delivery-focused teams need to pass order details to the kitchen and track preparation status.",
       solution:
-        "Aatmyam Pos records delivery orders and makes their kitchen status visible to staff.",
+        "Enter the items on the Takeaway screen and send them to the kitchen. Staff can follow preparation and prepare the bill.",
       highlights: [
         "Order entry",
         "Kitchen order status",
@@ -120,14 +120,14 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
           <div className="max-w-3xl space-y-5">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#EBF2E4] border border-[#D5E3C8] text-xs font-mono font-bold text-[#567234]">
               <Store className="w-3.5 h-3.5" />
-              <span>FORMAT-SPECIFIC HOSPITALITY OS</span>
+              <span>For the way your restaurant serves</span>
             </div>
             <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl tracking-tight text-[#181A18] leading-[1.12]">
               Built for your format. <br />
               <span className="text-[#6E8F45] italic">Tuned</span> for your floor.
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              Every hospitality concept faces different bottlenecks. Discover how Aatmyam Pos adapts to table turn dynamics, counter queues, recipe batches, and restaurant operations.
+              Whether you serve at tables, a counter or a café, see how your team can take orders, keep the kitchen informed and prepare the bill for outlet.
             </p>
           </div>
         </div>
@@ -140,10 +140,10 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
           {/* Filter Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
             <span className="text-xs font-mono font-bold text-[#787F74] uppercase mr-2 shrink-0">
-              Filter Concept:
+              Restaurant type:
             </span>
             {[
-              { label: "All Concepts", key: "all" },
+              { label: "All restaurant types", key: "all" },
               { label: "Dine-In & Casual", key: "dine-in" },
               { label: "QSR & Counter", key: "counter" },
               { label: "Café & Bakery", key: "café" },
@@ -198,7 +198,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
                         <div className="p-4 bg-[#FBF9F5] rounded-2xl border border-[#EAE5DA] space-y-1.5">
                           <p className="text-xs font-mono font-bold text-[#D97706] flex items-center gap-1.5">
                             <AlertTriangle className="w-3.5 h-3.5" />
-                            THE OPERATIONAL BOTTLENECK:
+                            A busy-service challenge
                           </p>
                           <p className="text-xs text-[#5A6056] leading-relaxed">
                             {item.friction}
@@ -208,7 +208,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
                         <div className="p-4 bg-[#EBF2E4] rounded-2xl border border-[#D5E3C8] space-y-1.5">
                           <p className="text-xs font-mono font-bold text-[#567234] flex items-center gap-1.5">
                             <CheckCircle2 className="w-3.5 h-3.5" />
-                            THE Aatmyam Pos RESOLUTION:
+                            How Aatmyam Pos helps
                           </p>
                           <p className="text-xs text-[#2E4A1C] leading-relaxed">
                             {item.solution}
@@ -221,7 +221,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
                     <div className="lg:col-span-5 bg-[#FBF9F5] p-6 rounded-2xl border border-[#EAE5DA] space-y-6">
                       <div className="space-y-3">
                         <p className="text-xs font-mono uppercase font-bold text-[#181A18]">
-                          Specialized Capabilities:
+                          What your team can do
                         </p>
                         <ul className="space-y-2">
                           {item.highlights.map((high, hIdx) => (
@@ -236,7 +236,7 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
                       <div className="pt-4 border-t border-[#EAE5DA] flex items-center justify-between">
                         <div>
                           <p className="text-[10px] font-mono uppercase text-[#787F74]">
-                            Workflow Covered
+                            Daily tasks covered
                           </p>
                           <p className="font-serif text-lg font-bold text-[#181A18]">
                             {item.impactMetric}
@@ -264,17 +264,17 @@ export default function SolutionsPage({ onNavigate }: SolutionsPageProps) {
       <section className="py-20 text-center">
         <div className="max-w-3xl mx-auto px-4 space-y-6">
           <h2 className="font-serif text-3xl sm:text-4xl text-[#181A18] tracking-tight">
-            Not sure which configuration fits your concept?
+            Not sure what fits your restaurant?
           </h2>
           <p className="text-sm text-[#5A6056] leading-relaxed">
-            Bring your menu, kitchen process and device requirements to a 15-minute walkthrough. Review the current workflows and single-outlet setup before deciding whether Aatmyam fits.
+            Bring your menu and the devices you plan to use to a 15-minute demo. See how orders, kitchen tickets and billing work for one outlet.
           </p>
           <div className="pt-2">
             <SiteLink
               href="/contact" onNavigate={() => onNavigate("/contact")}
               className="inline-flex items-center justify-center px-7 py-3.5 text-sm font-bold text-[#FBF9F5] bg-[#181A18] hover:bg-[#6E8F45] rounded-xl transition duration-200 shadow-md cursor-pointer border border-[#2E332D]"
             >
-              Book a Format Consultation
+              Book a restaurant demo
             </SiteLink>
           </div>
         </div>

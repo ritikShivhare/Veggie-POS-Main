@@ -23,15 +23,17 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     { id: "enterprise", tagline: "Higher usage limits for one outlet.", popular: false, ctaText: "Contact us about this plan" }
   ].map((display) => {
     const plan = PLAN_LIMITS[display.id as keyof typeof PLAN_LIMITS];
-    const features = [
+    const features = display.id === "free" ? [
       `Owner + ${plan.staffCount} active staff`,
-      `${plan.monthlyOrders < 0 ? "Unlimited (fair use)" : plan.monthlyOrders} orders per 30-day cycle`,
-      ...(plan.features.posTerminal ? ["POS terminal"] : []),
-      ...(plan.features.basicReports ? ["Basic sales reports"] : []),
-      ...(plan.features.advancedInventory ? ["Advanced inventory"] : []),
-      ...(plan.features.aiCopilot ? ["AI reports: 5 successful reports/day (IST; provider setup required)"] : []),
-      ...(plan.features.dedicatedSupport ? ["Dedicated support"] : []),
+      `${plan.monthlyOrders} orders per 30-day cycle`,
+      "POS terminal",
+      "Basic sales reports",
       "One outlet per restaurant"
+    ] : [
+      `Owner + ${plan.staffCount} active staff accounts`,
+      plan.monthlyOrders < 0 ? "Unlimited orders, subject to fair use" : `Up to ${plan.monthlyOrders} orders in 30 days`,
+      "Billing, basic sales reports, ingredients, recipes and stock tracking",
+      plan.features.dedicatedSupport ? "AI reports as described below, plus dedicated support" : "AI reports as described below"
     ];
     return { ...display, name: plan.label, monthlyPrice: plan.price, features };
   });
@@ -43,11 +45,11 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     },
     {
       q: "What counts toward the order allowance?",
-      a: `The allowance applies to order records in the 30-day subscription cycle, not only paid bills. Pro includes ${PLAN_LIMITS.pro.monthlyOrders} orders per cycle. Twenty orders every day for 30 days totals 600. Check your usage and cycle dates in Billing; reaching an allowance can block new order creation.`
+      a: `Every new order you create counts towards your 30-day allowance, even if it has not been paid. Pro includes ${PLAN_LIMITS.pro.monthlyOrders} orders. At 20 new orders a day, you would create 600 in 30 days, which exceeds that allowance. Check Billing for your usage and period dates before a busy service. New orders can be blocked once the allowance is reached.`
     },
     {
       q: "Does a UPI QR automatically verify a customer payment?",
-      a: "An outlet with a configured UPI ID can generate a QR containing the bill amount. Staff check receipt in the restaurant's bank or payment app, then record the payment in the POS. Cashfree verification of software-subscription payments is a separate workflow."
+      a: "Add your restaurant’s UPI ID to show a QR for the bill amount. After the guest pays, check your restaurant’s bank or payment app, then mark the bill paid. Scanning the QR alone does not confirm payment. Paying for an Aatmyam Pos subscription is separate from collecting a guest’s bill."
     },
     {
       q: "Do I need to buy expensive proprietary hardware from you?",
@@ -59,11 +61,11 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     },
     {
       q: "How can I change plans?",
-      a: "Choose a plan in Billing and pay through Cashfree. Access updates after backend payment verification. Mid-cycle Elite upgrades start a fresh 30-day cycle without proration."
+      a: "Choose your plan in Billing and complete payment. Your plan changes after payment is confirmed. An upgrade to Elite during your current period starts a new 30-day period. The upgrade price is not reduced for unused days on your current plan."
     },
     {
       q: "What happens if our restaurant internet disconnects during service?",
-      a: "Previously configured devices can retain cached records and queued changes for supported workflows. First sign-in, account operations and payment-provider verification require a connection. Reconnect and check the final saved state; test your intended device and workflow before service."
+      a: "If the device is already set up and you are signed in, some order-taking tasks can continue during a short internet outage. You need internet to sign in, manage your account or activate a paid plan. When the connection returns, check that your recent orders and payments have been saved. Practise this on your own device before using it during service."
     }
   ];
 
@@ -83,7 +85,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
               <span className="text-[#6E8F45] italic">One outlet per plan.</span>
             </h1>
             <p className="text-base sm:text-lg text-[#5A6056] leading-relaxed">
-              Aatmyam Pos is in early access. These 30-day plans use the same prices and limits as the app.
+              Aatmyam Pos is in early access. Choose a plan for your restaurant outlet and review the staff and order allowances below. Each subscription period is 30 days.
             </p>
 
             <div className="pt-4 text-xs font-mono text-[#787F74]">
@@ -112,7 +114,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                 >
                   {plan.popular && (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-[#6E8F45] text-[#FBF9F5] px-4 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase shadow-sm">
-                      MOST POPULAR FOR DINE-IN
+                      For more staff and orders
                     </div>
                   )}
 
@@ -132,7 +134,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                     <div className="pt-2 pb-4 border-b border-current/15">
                       <div className="flex items-baseline gap-1">
                         <span className="font-serif text-4xl sm:text-5xl font-bold">
-                          ₹{activePrice}
+                          ₹{activePrice.toLocaleString("en-IN")}
                         </span>
                         <span
                           className={`text-xs font-mono ${
@@ -191,6 +193,9 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
               );
             })}
           </div>
+          <p className="mt-8 text-sm text-[#5A6056] leading-relaxed">
+            Up to 5 completed AI reports a day once AI reports are available on your account. The daily allowance resets at midnight, India time.
+          </p>
 
         </div>
       </section>

@@ -1,0 +1,10 @@
+Document में बिना चयन वाले sections — इस बदलाव में पुरानी copy सुरक्षित रखी गई है।
+
+COPY-006 — Home / Owner sample: cash figure: ₹14,200 (Exact) या ₹14,200 (example)?
+COPY-029 — Product / Cash drawer requirement: पुराने integration वाक्य को रखें या प्रस्तावित explanation चुनें?
+COPY-048 — Pricing / Free Starter: नई explanatory card copy लागू करनी है या पुरानी रखनी है?
+COPY-053 — Pricing / Price and trial FAQ: प्रस्तावित सरल explanation लागू करनी है या पुरानी रखनी है?
+
+COPY-112 के दोनों columns पर example न दिखाने का comment है। POS cost guide से संबंधित numerical example हटाया गया है। COPY-054 की चुनी हुई Pricing FAQ में मौजूद उदाहरण सुरक्षित है।
+
+COPY-090 में चुनी हुई Before copy को 3 calendar days लिखा गया है; इसी के अनुसार refund request window तथा heading दोनों 3 days हैं। Approved refunds की processing 5–7 business days बनी है।

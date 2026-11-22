@@ -65,7 +65,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
         <div className="p-8 sm:p-12 prose prose-slate max-w-none text-slate-650 leading-relaxed text-sm space-y-8">
           <div className="text-xs text-slate-400 font-mono flex items-center justify-between pb-4 border-b border-slate-100">
             <span>Updated: November 12, 2026</span>
-            <span>Product data practices</span>
+            <span>Restaurant account information</span>
           </div>
 
           {page === "terms" && (
@@ -73,50 +73,42 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">1. Acceptance of Terms</h3>
                 <p>
-                  Welcome to Aatmyam Pos (the "Service"), a multi-tenant software-as-a-service application designed for billing, inventory, and staff shift scheduling. By registering for or using any portion of Aatmyam Pos, you ("User", "Tenant", or "Owner") agree to be bound by these Terms of Service. If you do not agree, please do not access or use the Service.
+                  Aatmyam Pos is online software for restaurant billing, stock records and staff shifts. By registering for or using Aatmyam Pos, you agree to these Terms of Service. If you do not agree, do not use the service.
                 </p>
               </section>
 
               <section className="space-y-2">
-                <h3 className="text-base font-bold text-slate-900 tracking-tight">2. Multi-Tenant Service & Account Security</h3>
-                <p>
-                  Aatmyam Pos isolates data utilizing advanced multi-tenant technology. Each restaurant is assigned a unique <code className="bg-slate-100 text-pink-600 px-1 py-0.5 rounded text-xs font-mono">Tenant ID</code>. You are solely responsible for maintaining the confidentiality of your administrative credentials, including owner credentials and individual staff PINs.
-                </p>
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">2. Your restaurant account and sign-in details</h3>
+                <p>Each restaurant has its own account and records, kept separate from other restaurant accounts. You alone are responsible for keeping the Owner login and individual staff PINs private.</p>
               </section>
 
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">3. User Responsibilities & Operational Use</h3>
                 <p>
-                  You agree to use Aatmyam Pos only for lawful commercial restaurant operations. You will not:
+                  You agree to use Aatmyam Pos only for lawful commercial restaurant operations.
                 </p>
                 <ul className="list-disc pl-5 space-y-1 text-slate-600">
-                  <li>Incorporate false transaction histories, fake inventory records, or fake staff hours;</li>
-                  <li>Circumvent multi-tenant boundaries to attempt to gain unauthorized access to other tenants' data matrices;</li>
-                  <li>Utilize the Service for fraudulent checkout operations or billing deceptions.</li>
+                  <li>Do not enter false sales, stock or staff-hour records.</li>
+                  <li>Do not try to access another restaurant’s information without permission.</li>
+                  <li>Do not use Aatmyam Pos for dishonest billing or fraud.</li>
                 </ul>
               </section>
 
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">4. Data export and device storage</h3>
-                <p>
-                  Aatmyam Pos provides data tools inside the <b>Rules Settings Panel</b>:
-                </p>
+                <p>Find your restaurant’s data tools in Settings → Advanced → Your Data.</p>
                 <div className="bg-slate-50 border border-slate-150 p-4 rounded-xl flex items-start gap-3">
                   <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-bold text-slate-800 text-xs">Self-Service Portability:</h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      You can use the <b>"Export My Data"</b> button at any time to instantly download a comprehensive JSON file containing all your menu items, transaction logs, active staff registers, and raw inventory matrices.
-                    </p>
+                    <h4 className="font-bold text-slate-800 text-xs">Download your records</h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">The Owner can use Download data at any time to download a copy of the restaurant’s menu, orders, staff and ingredient records in one file.</p>
                   </div>
                 </div>
                 <div className="bg-slate-50 border border-slate-150 p-4 rounded-xl flex items-start gap-3">
                   <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
                   <div>
                     <h4 className="font-bold text-slate-800 text-xs">Clear this device:</h4>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      The <b>"Clear this device"</b> button clears synced browser data. Cloud records remain stored; contact the service owner to request account deletion. Resolve pending offline commands before clearing data.
-                    </p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Clear this device removes saved information from this device. It does not delete your restaurant account or the records held by Aatmyam Pos. Contact us to request account deletion. Before clearing the device, reconnect to the internet and check that all recent work has been saved.</p>
                   </div>
                 </div>
               </section>
@@ -124,7 +116,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">5. Limitation of Liability</h3>
                 <p>
-                  Aatmyam Pos is provided on an "as-is" and "as-available" basis. We do not warrant that the Service will be completely uninterrupted or free of brief maintenance updates. Under no circumstances shall Aatmyam Pos be liable for indirect, incidental, or consequential damages resulting from restaurant down-times or ingredient stock discrepancies.
+                  Aatmyam Pos is provided “as is” and “as available”. We do not promise uninterrupted service, and short maintenance periods may occur. Aatmyam Pos is not liable for indirect, incidental or consequential losses arising from restaurant downtime or ingredient stock discrepancies.
                 </p>
               </section>
             </div>
@@ -145,11 +137,11 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
                   To deliver real-time operational benefits, we collect and store:
                 </p>
                 <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
-                  <li><b>Business Context:</b> Restaurant store name, email address, physical region, and registered owner name.</li>
-                  <li><b>Transactional POS Records:</b> Order checkouts, total price tallies, table numbers, cashier names, and selected payment methods (UPI/Cash).</li>
-                  <li><b>Raw Supply Records:</b> Ingredient ledger items, stock counts, minimum thresholds, purchase costs, and recipe mapping formulas.</li>
-                  <li><b>Workforce Clock Records:</b> Active staff lists, hashed PIN credentials, and working hour logs to track coverage.</li>
-                  <li><b>CRM Information:</b> Customer telephone numbers and loyalty point records explicitly entered during POS billing checkouts.</li>
+                  <li><b>Restaurant details:</b> restaurant name, email address, area and registered Owner’s name.</li>
+                  <li><b>Orders and payments:</b> bills, amounts, table numbers, cashier names and the recorded payment method, Cash or UPI.</li>
+                  <li><b>Stock and recipes:</b> ingredients, stock counts, chosen low-stock levels, purchase costs and recipe quantities.</li>
+                  <li><b>Staff details:</b> active staff lists, protected sign-in details and recorded working hours.</li>
+                  <li><b>Guest details:</b> phone numbers and loyalty points entered by your restaurant during billing.</li>
                 </ul>
               </section>
 
@@ -167,15 +159,15 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-slate-50 border border-slate-150 p-4 rounded-xl">
-                    <h4 className="font-bold text-slate-800 text-xs">Right of Access (Portability)</h4>
+                    <h4 className="font-bold text-slate-800 text-xs">Download your restaurant records</h4>
                     <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                      Download a structured machine-readable JSON package containing all transactional, staff roster, customer database, and raw material ledgers under your Tenant ID.
+                      The Owner can use Download data in Settings → Advanced → Your Data to download the restaurant’s order, staff, guest and ingredient records in one file.
                     </p>
                   </div>
                   <div className="bg-slate-50 border border-slate-150 p-4 rounded-xl">
                     <h4 className="font-bold text-slate-800 text-xs">Deletion requests</h4>
                     <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-                      Contact the service owner to request deletion of cloud records. Clearing this device affects only browser data. Financial record retention may apply.
+                      Contact us to request deletion of your restaurant’s records. Clear this device only removes information saved on that device. Some financial records may need to be retained.
                     </p>
                   </div>
                 </div>
@@ -184,7 +176,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">5. Security Standards</h3>
                 <p>
-                  We maintain strict security safeguards, including isolated browser state contexts, secured sessions, and server permissions and tenant checks, protecting your terminal systems from external intrusions or accidental cross-establishment leaks.
+                  We protect restaurant accounts with sign-in checks, staff permissions and separate access for each restaurant. These safeguards are intended to prevent unauthorised access or information being shown to the wrong restaurant.
                 </p>
               </section>
             </div>
@@ -193,19 +185,19 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
           {page === "refund-policy" && (
             <div className="space-y-6">
               <section className="space-y-2">
-                <h3 className="text-base font-bold text-slate-900 tracking-tight">1. SaaS Subscription Cycle</h3>
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">1. Your 30-day subscription</h3>
                 <p>
-                  Paid Aatmyam Pos plans use 30-day subscription cycles for one outlet. Paid access starts after backend payment verification. Review Billing for the current plan, order allowance, cycle dates and paid-access expiry.
+                  Each paid plan covers one outlet for 30 days. Paid access starts after your payment is confirmed. In Billing, you can check your plan, order allowance, subscription dates and expiry.
                 </p>
               </section>
 
               <section className="space-y-2">
-                <h3 className="text-base font-bold text-slate-900 tracking-tight">2. Refund Terms & 7-Day Guarantee</h3>
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">2. Refund Terms & 3-Day Guarantee</h3>
                 <p>
-                  We strive for exceptional quality. If you find Aatmyam Pos does not meet your restaurant's billing workflows or you experience technical issues, you may request a refund under the following conditions:
+                  If Aatmyam Pos does not suit your restaurant’s billing needs, or a problem with the app affects its use, you may request a refund under the conditions below.
                 </p>
                 <ul className="list-disc pl-5 space-y-1.5 text-slate-600">
-                  <li><b>Guarantee Window:</b> Refund requests must be raised with the service operator within <b>7 calendar days</b> of your initial paid activation.</li>
+                  <li><b>Guarantee Window:</b> Refund requests must be raised with the service operator within <b>3 calendar days</b> of your initial paid activation.</li>
                   <li><b>Proof of Operational Incompatibility:</b> A brief explanation of the incompatibility helps us continuously refine our features.</li>
                   <li><b>Processing:</b> Approved refunds will be processed back to the original UPI, card, or banking payment source within 5 to 7 business days.</li>
                 </ul>
@@ -214,19 +206,19 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">3. Subscription Cancellation</h3>
                 <p>
-                  Paid cycles are purchased through checkout; this product does not automatically charge for the next paid cycle. To stop renewing, do not purchase another cycle. Review your current paid-access expiry in Billing:
+                  Aatmyam Pos does not automatically charge you for another paid period. To stop renewing, do not buy another 30-day period. Check Billing for the expiry of your current paid access.
                 </p>
                 <ul className="list-disc pl-5 space-y-1 text-slate-600">
-                  <li>A new paid cycle requires another verified payment;</li>
-                  <li>Paid-plan access follows the current paid period and subscription limits;</li>
-                  <li>Before cancellation, we recommend downloading your complete operational records using our <b>"Export My Data"</b> tool to maintain historic reports.</li>
+                  <li>Another paid period starts only after a new payment is confirmed.</li>
+                  <li>Your current plan remains available until its shown expiry, subject to the plan’s limits.</li>
+                  <li>Before stopping renewal, use Download data in Settings → Advanced → Your Data to keep a copy of your restaurant records.</li>
                 </ul>
               </section>
 
               <section className="space-y-2">
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">4. Exceptional Circumstances</h3>
                 <p>
-                  Refunds are not granted for months already fully used or in cases where active operational abuse (e.g., attempt to bypass tenant safeguards) is identified.
+                  Refunds are not granted for subscription periods that have already been fully used, or where misuse, such as trying to bypass account access restrictions, is identified.
                 </p>
               </section>
             </div>
@@ -240,7 +232,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
             onClick={onBack}
             className="text-pink-600 hover:text-pink-700 font-bold hover:underline transition cursor-pointer"
           >
-            Back to Application Home
+            Back to Aatmyam Pos
           </button>
         </div>
       </div>

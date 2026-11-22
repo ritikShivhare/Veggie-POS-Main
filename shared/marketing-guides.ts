@@ -32,14 +32,14 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
   {
     path: "/resources/restaurant-food-cost-calculation",
     title: "Restaurant food cost: a recipe calculation you can check",
-    summary: "Calculate a dish's ingredient cost, convert purchase units into recipe units, and compare theoretical consumption with a physical stock count.",
+    summary: "Work out the ingredient cost of one dish, use the same measurements throughout and compare expected ingredient use with the stock you count.",
     category: "inventory", label: "Recipe costing guide", updatedAt: "2026-11-12",
     takeaway: "Use consistent units and real purchase prices; a recipe cost is an estimate until you compare it with actual stock use.",
     sections: [
       {
         title: "What does recipe food cost measure?",
         paragraphs: [
-          "Recipe food cost is the cost of the ingredient quantities used for one serving. Divide that cost by the selling price, then multiply by 100 to express it as a percentage. Keep the selling-price and ingredient-cost tax basis consistent.",
+          "Recipe food cost is the cost of the ingredient quantities used for one serving. Divide that cost by the selling price, then multiply by 100 to express it as a percentage. Be consistent about whether GST is included when comparing ingredient costs and selling prices.",
           "This is different from a restaurant's total monthly food cost. A recipe estimate does not include every stock adjustment, unsold portion or complimentary meal. It also does not establish net profit: rent, wages, utilities, packaging and payment charges may need separate treatment.",
         ],
       },
@@ -76,7 +76,7 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
         title: "Compare recipes with actual restaurant records",
         paragraphs: [
           "For a stock item, opening quantity plus purchases minus closing quantity gives a starting estimate of consumption. Then account for transfers, waste and other adjustments. Compare that result with servings sold multiplied by the recipe quantity. A difference is a reason to investigate, not proof that a staff member caused a loss.",
-          "Aatmyam supports recipe-linked ingredient records and stock workflows on plans with advanced inventory. The quality of the report depends on your recipes, purchase entries and stock counts. Review units and recipe changes before relying on a comparison, and keep the original purchase records available.",
+          "On plans with inventory features, use your recipes, purchase entries and counted stock to compare expected ingredient use with actual use. Check measurements and recipe changes, and keep the original purchase records. The comparison depends on the information you enter.",
         ],
       },
     ],
@@ -87,13 +87,13 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
     title: "A clear order-to-payment workflow for one restaurant",
     summary: "Separate order entry, kitchen progress, checking the customer's payment and saving the payment record so staff know what each screen confirms.",
     category: "operations", label: "Counter workflow", updatedAt: "2026-11-12",
-    takeaway: "A generated UPI QR, a customer's bank transfer and a saved POS payment record are three different events.",
+    takeaway: "Show the QR, check that the money has arrived, then mark the bill paid. Each step matters.",
     sections: [
       {
         title: "Start with an order the kitchen can understand",
         paragraphs: [
-          "Agree where staff should enter dine-in, takeaway and delivery orders. Select the correct menu items and quantities, review the total, and include relevant preparation notes. A customer name or table reference can help staff find the right order later.",
-          "After submitting, check that the order was accepted. An editable basket is not a saved kitchen ticket. If the device reports a save error or an unconfirmed operation, resolve that state before entering the same order again. Repeating an uncertain action without checking can create duplicate work.",
+          "Agree where staff should enter dine-in, takeaway orders. Select the correct menu items and quantities, review the total, and include relevant preparation notes. A customer name or table reference can help staff find the right order later.",
+          "After sending an order, check that the kitchen can see its ticket. If the screen shows an error or the order is missing, ask the Owner to check it before entering it again. This helps avoid duplicate orders.",
         ],
       },
       {
@@ -112,7 +112,7 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
       {
         title: "Understand what the UPI QR does",
         paragraphs: [
-          "With a configured restaurant UPI ID, Aatmyam can generate a QR containing the payee and current bill amount. The customer's UPI app handles the transfer. Displaying or scanning that QR is not an automatic confirmation that the restaurant received the payment.",
+          "Add the restaurant’s UPI ID to show a QR with the bill amount. The guest pays using their UPI app. Before marking the bill paid, check that the payment reached the restaurant; showing or scanning the QR alone is not enough.",
           "Staff should check the restaurant's accepted bank or payment-app record, then record the payment in the POS. For cash, check the amount received and change due. Keep a clear process for a pending, failed or disputed transfer rather than marking it paid from a screenshot alone.",
         ],
       },
@@ -120,7 +120,7 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
         title: "Close the loop with a confirmed record",
         paragraphs: [
           "After recording a payment, check the application's confirmation and receipt details. Keep the order reference available if a customer later asks about a correction. Reconcile the POS totals against the cash and external payment records according to your outlet's process.",
-          "Aatmyam software-subscription payments are separate: configured Cashfree checkout is reconciled by the backend before plan access changes. That subscription verification does not turn customer UPI QR payments into an automatic bank-reconciliation service.",
+          "Paying for an Aatmyam Pos plan is separate from collecting a guest’s bill. Your plan changes after the subscription payment is confirmed. Staff still need to check each guest’s UPI payment before marking that bill paid.",
         ],
       },
     ],
@@ -129,7 +129,7 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
   {
     path: "/resources/restaurant-staff-access-checklist",
     title: "Staff access and end-of-day checks for a small restaurant",
-    summary: "Assign individual staff access, review sensitive permissions and reconcile recorded activity with actual cash and payment records.",
+    summary: "Give staff the access they need, check who can approve changes and compare the day’s recorded payments with cash and UPI receipts.",
     category: "operations", label: "Staff access checklist", updatedAt: "2026-11-12",
     takeaway: "Give each staff member appropriate access and investigate discrepancies using records rather than treating an alert as proof of wrongdoing.",
     sections: [
@@ -137,7 +137,7 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
         title: "Make access individual and understandable",
         paragraphs: [
           "Shared sign-ins make it harder to understand who performed an action. Give staff their own access, explain their responsibilities and protect owner credentials. An employee should know which screen to use for an order, a kitchen update or a request for help.",
-          "Aatmyam provides role-based access and staff PIN settings. Confirm the actual permissions for each role during setup. A label such as cashier or manager is not a substitute for checking which operations that account can perform.",
+          "Give each staff member their own PIN and check which screens and actions they can use. During setup, make sure each person can do the work assigned to them.",
         ],
         steps: [
           "Create individual access for the people who need the system.",
@@ -150,14 +150,14 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
         title: "Practise sensitive actions before service",
         paragraphs: [
           "Use clearly marked test data to practise a normal sale, a correction and a rejected action. Check that staff can complete the tasks they need and cannot perform the tasks reserved for an owner. Review the outcome on the other relevant device rather than assuming a click was saved.",
-          "Do not record real staff PINs in screenshots, training documents or shared messages. If a credential is exposed, use the supported credential-change process and verify that the affected person can sign in again.",
+          "Keep staff PINs out of screenshots, training notes and shared messages. If a PIN or sign-in detail is shared by mistake, change it and check that the right person can sign in again.",
         ],
       },
       {
         title: "Compare the day's records with money actually received",
         paragraphs: [
           "Choose a consistent cutoff time. Compare recorded cash payments with the counted cash, allowing for the opening float and documented movements. Compare UPI entries with the restaurant's own bank or payment-app records. Keep unsettled or disputed items identifiable rather than forcing them into a balanced total.",
-          "A discrepancy can come from a timing difference, an entry mistake, an incomplete sync or a process problem. Preserve the order reference and investigate before drawing a conclusion. A sales report is useful evidence, but it is not a guarantee that every external payment has been reconciled.",
+          "A difference may come from a late payment, a mistaken entry, work that has not finished saving or a missed step. Keep the order number and check what happened. Compare recorded payments with the money actually received before drawing a conclusion.",
         ],
       },
       {
@@ -173,7 +173,7 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
   {
     path: "/resources/restaurant-pos-cost-guide",
     title: "Restaurant POS cost and hardware checklist for India",
-    summary: "Compare the published software allowance with your order volume, then budget for devices, printing, setup and any external charges using actual quotes.",
+    summary: "Check that the plan covers your staff and orders. Ask for prices for the devices, printing, training and other costs your restaurant will need.",
     category: "technology", label: "POS buying guide", updatedAt: "2026-11-12",
     takeaway: "Compare the whole setup and its limits; a software price alone does not establish total cost or hardware compatibility.",
     sections: [
@@ -181,13 +181,12 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
         title: "Start with one outlet's requirements",
         paragraphs: [
           "Count expected order records across a complete billing cycle and list the staff who need active access. Include busy weekends and seasonal peaks. Decide whether you need recipe-linked inventory, a kitchen screen or only basic billing and sales records.",
-          "Aatmyam currently offers single-outlet plans on a 30-day cycle. The plan comparison below comes from the same catalog used by the app. It is not an annual subscription quote, and additional setup or third-party costs should be confirmed for your specific arrangement.",
+          "Each Aatmyam Pos plan covers one outlet for 30 days. The prices below are for that 30-day period. Ask for separate quotes for any devices, setup or other costs your restaurant needs.",
         ],
       },
       {
         title: "Check the order allowance before comparing prices",
         paragraphs: [
-          `Pro's ${PLAN_LIMITS.pro.monthlyOrders} orders per 30-day cycle average about ${(PLAN_LIMITS.pro.monthlyOrders / 30).toFixed(1)} orders per day, but there is no daily quota implied by that average. Twenty orders every day for 30 days total 600. Compare that example with the plan's cycle allowance. The application's usage counts order records in the subscription period; do not assume the limit means only paid receipts.`,
           "Check Billing for current usage, staff allowance and cycle dates. At an order limit, new order creation can be blocked. Plan for the allowance your outlet needs before a busy service rather than treating an upgrade as something to discover at the counter.",
         ],
       },
@@ -210,7 +209,7 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
         },
       },
       {
-        title: "Keep the comparison fair and reproducible",
+        title: "Compare costs over the same period",
         paragraphs: [
           "A simple comparison is setup costs plus software cycles plus maintenance and other recurring charges over the same period. State the dates and assumptions, including tax treatment. Twelve 30-day software cycles cover 360 days; do not silently present that as a calendar-year contract.",
           "Before paying, review current trial eligibility, refund terms, data export and plan-change behavior. Aatmyam is in early access, so use a walkthrough to check the current product against your own menu and device setup. This guide does not claim that one POS type always costs less than another.",
@@ -222,9 +221,9 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
   {
     path: "/resources/single-outlet-setup-checklist",
     title: "A practical setup checklist for one restaurant outlet",
-    summary: "Prepare menu, recipes, staff, payments and devices, then rehearse a complete order and recovery workflow before moving a service onto a new POS.",
+    summary: "Prepare your menu, recipes, staff access and devices, then practise an order from start to payment. Also check what to do if the internet drops or an order does not appear.",
     category: "single-outlet", label: "Outlet setup checklist", updatedAt: "2026-11-12",
-    takeaway: "A successful setup includes a rehearsed recovery process as well as a successful normal order.",
+    takeaway: "Practise both a normal order and what to do when something goes wrong.",
     sections: [
       {
         title: "Prepare the records you will actually use",
@@ -250,13 +249,13 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
         title: "Rehearse the complete service loop",
         paragraphs: [
           "Take an order, check that it appears in the kitchen, update its preparation status, record a checked payment and review the resulting records. Repeat a correction and an action that the current staff member is not permitted to perform. Review the same order reference from the relevant devices.",
-          "Aatmyam has browser caching and queued synchronization workflows, but availability depends on the action, device and prior setup. First sign-in, account operations and payment-provider verification need connectivity. Test a brief network interruption in a controlled rehearsal, then reconnect and verify the final saved state.",
+          "On a device already set up and signed in, some order-taking tasks can continue during a short internet outage. Signing in, managing your account and activating a paid plan need internet. Before your first service, practise a brief connection loss, reconnect and check that the latest orders and payments have been saved.",
         ],
       },
       {
         title: "Agree how the team will recover",
         paragraphs: [
-          "Identify who checks an unconfirmed save, which records should be kept during an outage and when the owner is contacted. Do not clear browser data, reset a terminal or repeatedly re-enter uncertain orders without checking pending work.",
+          "Agree who checks a missing order, what the team will write down if the internet drops and when to call the Owner. Do not clear saved information, reset the device or enter an uncertain order again until the latest work has been checked.",
           "Before the first live shift, agree the end-of-day review and export procedure. Early-access onboarding should establish what is available now, what still needs configuration and what the outlet should not rely on yet. A walkthrough is a chance to check those boundaries rather than assume a guaranteed setup time.",
         ],
       },
@@ -281,7 +280,7 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
         title: "Choose a workflow the team can practise",
         paragraphs: [
           "Write down how an order enters the kitchen, who checks its details, which preparation states are used and who marks it ready. Decide how an item change or cancellation is communicated before asking staff to change their routine.",
-          "Aatmyam's kitchen view lets staff review incoming orders and update preparation status. Demonstrate that current workflow with your own menu. Do not assume it includes every form of automatic station routing, aggregator integration or production scheduling simply because a sample screen resembles one.",
+          "Try the kitchen screen with your own menu and check how staff mark orders as preparing, ready and served. Orders from delivery apps do not arrive automatically in Aatmyam Pos. If you use several kitchen stations, ask us to show exactly how the team will pass tickets between them.",
         ],
         steps: [
           "Enter a clearly labeled practice order and find the same reference in the kitchen.",
@@ -294,7 +293,7 @@ export const MARKETING_GUIDES: readonly MarketingGuide[] = [
         title: "Evaluate paper and screen requirements separately",
         paragraphs: [
           "For paper tickets, check the physical printer, connection, paper width and reprint procedure. For a display, check screen readability, placement, power and how staff will operate it during service. A device that works at an office desk may not suit a hot or crowded preparation area.",
-          "If the outlet needs multiple kitchen stations, confirm the exact supported behavior with the product and configuration in front of you. Aatmyam's current marketing scope is a single restaurant outlet; it is not a promise of multi-location kitchen coordination.",
+          "If you have several kitchen stations, check how orders will reach each team before service. Each Aatmyam Pos restaurant account covers one outlet; it does not manage kitchens across several locations.",
         ],
       },
       {
