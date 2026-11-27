@@ -5,6 +5,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import {validateStartup} from "./server-startup-validation";
 import {mountStaticClient} from "./server/static-client";
+import { ANALYTICS_CONNECT_SOURCES, GOOGLE_TAG_ORIGIN } from "./shared/websiteAnalyticsConfig";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -36,7 +37,7 @@ const PORT = Number(process.env.PORT) || 3000;
 // Enable Helmet middleware with iframe-friendly parameters
 app.use(
   helmet({
-    contentSecurityPolicy: process.env.NODE_ENV === "production" ? {directives:{defaultSrc:["'self'"],scriptSrc:["'self'","https://accounts.google.com"],styleSrc:["'self'","'unsafe-inline'","https://fonts.googleapis.com"],imgSrc:["'self'","data:","blob:","https:"],fontSrc:["'self'","data:","https://fonts.gstatic.com"],connectSrc:["'self'","wss:",...supabaseAuthOrigin],frameSrc:["'self'","https://accounts.google.com"],frameAncestors:["'self'","https://*.ai.studio"]}} : false,
+    contentSecurityPolicy: process.env.NODE_ENV === "production" ? {directives:{defaultSrc:["'self'"],scriptSrc:["'self'","https://accounts.google.com",GOOGLE_TAG_ORIGIN],styleSrc:["'self'","'unsafe-inline'","https://fonts.googleapis.com"],imgSrc:["'self'","data:","blob:","https:"],fontSrc:["'self'","data:","https://fonts.gstatic.com"],connectSrc:["'self'","wss:",...supabaseAuthOrigin,...ANALYTICS_CONNECT_SOURCES],frameSrc:["'self'","https://accounts.google.com"],frameAncestors:["'self'","https://*.ai.studio"]}} : false,
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: false,
     frameguard: false,

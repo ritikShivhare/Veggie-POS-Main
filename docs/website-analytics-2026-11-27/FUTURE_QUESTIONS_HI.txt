@@ -1,0 +1,5 @@
+Blocking: Google Analytics Web stream में Page changes based on browser history events Off करके Save करने की owner confirmation और real SDK verification बाकी है। यह action किसी व्यक्ति को report access नहीं देता।
+
+बाद की report access: Measurement ID report पढ़ने की permission नहीं है। Owner अपनी Google Analytics property में Realtime/Traffic acquisition देख सकता है। इस implementation में किसी को अतिरिक्त report access नहीं दी गई है।
+
+पुराने outreach links के exact clicks historical tracking के बिना backfill नहीं हो सकते। नए email/WhatsApp campaigns के लिए SETUP_HI.md में sample links हैं।
