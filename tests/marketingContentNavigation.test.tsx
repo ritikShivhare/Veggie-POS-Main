@@ -59,7 +59,7 @@ it("opens a guide through its native link and restores the resource list on brow
   await act(async () => guide.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
   expect(location.pathname).toBe("/resources/restaurant-pos-cost-guide");
   expect(host.querySelector("main article")).not.toBeNull();
-  expect(document.querySelector('link[rel="canonical"]')?.getAttribute("href")).toBe("https://aatmyam-marketing-preview.onrender.com/resources/restaurant-pos-cost-guide");
+  expect(document.querySelector('link[rel="canonical"]')?.getAttribute("href")).toBe("https://www.aatmyampos.in/resources/restaurant-pos-cost-guide");
   await act(async () => {
     history.back();
     await new Promise(resolve => window.addEventListener("popstate", resolve, { once: true }));
