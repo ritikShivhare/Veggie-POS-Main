@@ -26,6 +26,7 @@ describe("Website visit statistics", () => {
     expect(script()).toBeNull();
     analytics.setScopeAllowed(true);
     expect(script()?.src).toBe(`https://www.googletagmanager.com/gtag/js?id=${WEBSITE_MEASUREMENT_ID}`);
+    expect(commands()).toContainEqual(["set", "send_page_view", false]);
     expect(views()).toHaveLength(0);
   });
   it("respects refusal and allows changing it later", () => {
@@ -72,7 +73,8 @@ describe("Website visit statistics", () => {
     analytics = createWebsiteAnalytics(window); analytics.setScopeAllowed(true);
     history.pushState({}, "", "/product"); analytics.choose("granted"); script()!.dispatchEvent(new Event("load"));
     const config = commands().find((x: unknown[]) => x[0] === "config");
-    expect(config[2]).toMatchObject({ campaign_source: "whatsapp", campaign_medium: "social", campaign_name: "restaurant_outreach", page_location: "https://www.aatmyampos.in/product" });
+    expect(config[2]).toMatchObject({ campaign_source: "whatsapp", campaign_medium: "social", campaign_name: "restaurant_outreach", page_location: "https://www.aatmyampos.in/product?utm_source=whatsapp&utm_medium=social&utm_campaign=restaurant_outreach" });
+    analytics.syncPage(); expect(views()).toHaveLength(1);
     expect(JSON.stringify(commands())).not.toMatch(/user_id|user_properties|phone|email_address|pin/);
   });
   it("honours browser privacy opt-out", () => {

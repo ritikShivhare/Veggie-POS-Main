@@ -12,11 +12,11 @@ Measurement ID: `G-WPERCLQYVR` (public identifier, not a password).
 - यह code Analytics reports को public नहीं बनाता और किसी account/person को नई report permissions नहीं देता। Reports उन्हीं accounts को मिलती हैं जिनको Google Analytics property में access है। Measurement ID से report access नहीं मिलता। इस release में property access/data-sharing settings नहीं बदली गई हैं।
 - Reports consenting visitors की page views हैं, सभी taps या हर व्यक्ति की सटीक पहचान नहीं। Browser blockers, consent और processing delay counts पर असर डाल सकते हैं। Health pings/API calls visitors नहीं हैं। Tracking से पहले के clicks बाद में नहीं बनाए जा सकते।
 
-## Deployment से पहले जरूरी Google setting
+## Google setting की पुष्टि
 
 Google Analytics → Admin → Data streams → इस Web stream → Enhanced measurement ⚙️ → Page views → Show advanced settings → **Page changes based on browser history events = Off** → Save.
 
-कारण: app public SPA views को खुद भेजता है। Google की browser-history automatic pageviews साथ में चलने पर duplicates मिलते हैं। `send_page_view: false` अकेले इस setting को बंद नहीं करता। Real Google SDK browser test में duplicate पहचाना गया था। यह setting बदले और duplicate-free browser check पास हुए बिना deploy/merge नहीं करना है। मौजूदा connector से Google की यह setting बदली नहीं जा सकती; owner अपने Analytics account में बदलेगा। इस action से report access permissions नहीं बदलतीं।
+कारण: app public SPA views को खुद भेजता है। Google की browser-history automatic pageviews साथ में चलने पर duplicates मिलते हैं। `send_page_view: false` अकेले इस setting को बंद नहीं करता। Real Google SDK browser test में duplicate पहचाना गया था। Owner ने 28 नवंबर 2026 को Off करके Save करने की पुष्टि दी। इसके बाद real Google SDK browser check में homepage और Product के लिए कुल 2 pageviews मिले, duplicate नहीं। इस action से report access permissions नहीं बदलीं।
 
 ## Realtime जाँच
 
@@ -37,7 +37,7 @@ Campaign labels में किसी व्यक्ति का नाम, p
 
 ## Verification
 
-25 focused tests और पूरी 751-test suite / 89 files, typecheck तथा production build पास हैं। Browser का real Google SDK check automatic-history setting Off होने के बाद अंतिम रूप से पास होना बाकी है। Settings और final deployment evidence pull request/Actions history में दर्ज किए जाएँगे।
+25 focused tests और पूरी 751-test suite / 89 files, typecheck तथा production build पास हैं। Real Google SDK browser check भी पास: consent/refusal, दो public pages = दो views, private navigation, authenticated root, browser opt-out, mobile layout, और delayed consent के बाद campaign labels। Artificial collection requests intercept किए गए; tests से live property में synthetic traffic नहीं भेजा गया। Deployment evidence pull request/Actions history में दर्ज किया जाएगा।
 
 Official guidance:
 

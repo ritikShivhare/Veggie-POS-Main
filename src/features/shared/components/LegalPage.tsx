@@ -64,7 +64,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
         {/* Document Body */}
         <div className="p-8 sm:p-12 prose prose-slate max-w-none text-slate-650 leading-relaxed text-sm space-y-8">
           <div className="text-xs text-slate-400 font-mono flex items-center justify-between pb-4 border-b border-slate-100">
-            <span>Updated: {page === "privacy" ? "November 27, 2026" : "November 12, 2026"}</span>
+            <span>Updated: {page === "privacy" ? "November 28, 2026" : "November 12, 2026"}</span>
             <span>Restaurant account information</span>
           </div>
 

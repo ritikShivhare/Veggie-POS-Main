@@ -72,6 +72,11 @@ export function createWebsiteAnalytics(win: Window, measurementId = WEBSITE_MEAS
       if (script) return;
       browser.gtag = command;
       command("consent", "default", { analytics_storage: "denied", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
+      // These defaults must reach the queue before Google's script initializes.
+      // Setting them only in its load callback can leave an initial automatic view queued.
+      command("set", "send_page_view", false);
+      command("set", "allow_google_signals", false);
+      command("set", "allow_ad_personalization_signals", false);
       script = win.document.createElement("script");
       script.id = "aatmyam-website-google-tag";
       script.async = true;
@@ -84,12 +89,23 @@ export function createWebsiteAnalytics(win: Window, measurementId = WEBSITE_MEAS
     }
     flags[disabledKey] = false;
     if (lastLocation === page.location) return;
+    const pageKey = page.location;
+    // Consent can be granted after following a public link. Preserve only the
+    // original safe campaign labels on the first measured visit, not free text.
+    if (!configured) {
+      const attributed = new URL(page.location);
+      for (const key of campaignKeys) {
+        const value = campaign.get(key);
+        if (value && !attributed.searchParams.has(key)) attributed.searchParams.set(key, value);
+      }
+      page.location = attributed.href;
+    }
     if (!configured) { command("js", new Date()); configured = true; }
     command("consent", "update", { analytics_storage: "granted", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
     const parameters = { page_location: page.location, page_title: page.title, page_referrer: referrer() };
     command("config", measurementId, { ...parameters, ...campaignParameters, send_page_view: false, allow_google_signals: false, allow_ad_personalization_signals: false });
     command("event", "page_view", { ...parameters, send_to: measurementId });
-    lastLocation = page.location;
+    lastLocation = pageKey;
     previousPage = page.location;
   }
 
