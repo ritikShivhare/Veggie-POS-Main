@@ -1,0 +1,5 @@
+नए https://www.aatmyampos.in/ की Search Console URL-prefix property या aatmyampos.in Domain property verify करके नया sitemap submit करना बाकी है। पुराने Render property की verification नए domain की verification का प्रमाण नहीं है।
+
+Google Analytics: website source और live public HTML में GA4/GTM tracking tag नहीं मिला। उपलब्ध reports में Aatmyam hostnames का data नहीं मिला; इसे zero visitors नहीं माना जा सकता। Aatmyam की सही GA4 property/Measurement ID और उसका reporting access पहचानना बाकी है। User से G-… ID या property name पूछा गया है।
+
+Email/WhatsApp से भेजे गए पुराने सामान्य links के exact channel-wise clicks tracking के बिना बाद में नहीं बनाए जा सकते। आगे के लिए अलग campaign-tagged URLs और GA4 measurement की जाँच चाहिए।

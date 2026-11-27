@@ -1,7 +1,7 @@
 import { MARKETING_GUIDES } from "./marketing-guides";
 
 /** Public search metadata. Never derive canonical hosts from request headers or credentials. */
-export const SITE_ORIGIN = "https://aatmyam-marketing-preview.onrender.com";
+export const SITE_ORIGIN = "https://www.aatmyampos.in";
 export const PUBLIC_PAGES = [
   {
     path: "/",

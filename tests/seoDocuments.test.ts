@@ -12,6 +12,7 @@ import {
 } from "../shared/marketing-seo";
 describe("Public search documents", () => {
   it("gives public pages unique metadata and canonical URLs on the chosen hostname", () => {
+    expect(SITE_ORIGIN).toBe("https://www.aatmyampos.in");
     expect(new Set(PUBLIC_PAGES.map((p) => p.title)).size).toBe(
       PUBLIC_PAGES.length,
     );
@@ -26,6 +27,9 @@ describe("Public search documents", () => {
     expect(getPageSeo("/pricing/?utm_source=qa").canonical).toBe(
       SITE_ORIGIN + "/pricing",
     );
+    expect(
+      getPageSeo("https://aatmyam-marketing-preview.onrender.com/product?utm_source=whatsapp&utm_medium=message").canonical,
+    ).toBe("https://www.aatmyampos.in/product");
   });
   it.each([
     "/login",
