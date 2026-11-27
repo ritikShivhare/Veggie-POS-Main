@@ -1,0 +1,5 @@
+पूरा: Owner ने 28 नवंबर 2026 को browser-history pageviews Off करके Save करने की पुष्टि दी। इसके बाद real SDK duplicate-free browser verification पास है। कोई report access permission नहीं बदली गई।
+
+बाद की report access: Measurement ID report पढ़ने की permission नहीं है। Owner अपनी Google Analytics property में Realtime/Traffic acquisition देख सकता है। इस implementation में किसी को अतिरिक्त report access नहीं दी गई है।
+
+पुराने outreach links के exact clicks historical tracking के बिना backfill नहीं हो सकते। नए email/WhatsApp campaigns के लिए SETUP_HI.md में sample links हैं।

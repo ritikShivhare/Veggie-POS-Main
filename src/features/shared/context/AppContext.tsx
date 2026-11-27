@@ -72,6 +72,7 @@ export interface AppContextType {
   handleAddPurchase: (purchase: Purchase) => void;
 
   // Auth / Session states
+  isSessionBootstrapComplete: boolean;
   currentStaff: StaffMember | null;
   setCurrentStaff: React.Dispatch<React.SetStateAction<StaffMember | null>>;
   currentSessionId: string | null;
@@ -91,6 +92,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
   const tenant = useTenantData();
 
   const [currentStaff,setCurrentStaff]=React.useState<StaffMember|null>(null);
+  const [isSessionBootstrapComplete, setIsSessionBootstrapComplete] = React.useState(false);
 
   // Strictly in-memory session identifier (CWE-312 / CWE-922: Never stored in localStorage)
   const [currentSessionId, setCurrentSessionId] = React.useState<string | null>(null);
@@ -103,8 +105,8 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     } catch (e) {}
 
     fetch("/api/auth/session/current", { credentials: "include" })
-      .then((res) => res.json())
-      .then((data) => {
+      .then(async (res) => ({ status: res.status, data: await res.json() }))
+      .then(({ status, data }) => {
         if (data.success && data.session && data.user) {
           setCurrentStaff(data.user);
           setCurrentSessionId(data.session.sessionId);
@@ -113,6 +115,11 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
             tenant.handleRegisterTenant(data.tenant);
             tenant.setActiveTenant(data.tenant);
           }
+        }
+        // Public statistics must wait until cookie-session restoration has finished.
+        // Network/server failures keep statistics off rather than assuming a guest.
+        if (status === 401 || (status === 200 && data.success && data.session && data.user)) {
+          setIsSessionBootstrapComplete(true);
         }
       })
       .catch(() => {
@@ -154,6 +161,7 @@ export function AppContextProvider({ children }: { children: React.ReactNode }) 
     ...sync,
     ...auth,
     handleLoginSuccess,
+    isSessionBootstrapComplete,
     currentStaff,
     setCurrentStaff,
     currentSessionId,

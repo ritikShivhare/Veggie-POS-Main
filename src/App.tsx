@@ -19,6 +19,7 @@ import LandingPage from "./features/shared/components/LandingPage";
 import SignupPage from "./features/shared/components/SignupPage";
 import LegalPage from "./features/shared/components/LegalPage";
 import MarketingApp from "./features/marketing/MarketingApp";
+import WebsiteStatistics from "./features/marketing/components/WebsiteStatistics";
 import AICopilot from "./features/copilot/AICopilot";
 import BackgroundJobsDashboard from "./features/shared/components/BackgroundJobsDashboard";
 import NotificationCenter from "./features/shared/components/NotificationCenter";
@@ -813,6 +814,7 @@ function AppContent() {
 export default function App() {
   return (
     <AppContextProvider>
+      <WebsiteStatistics />
       <AppContent />
       <ToastContainer />
     </AppContextProvider>

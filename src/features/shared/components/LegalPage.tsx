@@ -64,7 +64,7 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
         {/* Document Body */}
         <div className="p-8 sm:p-12 prose prose-slate max-w-none text-slate-650 leading-relaxed text-sm space-y-8">
           <div className="text-xs text-slate-400 font-mono flex items-center justify-between pb-4 border-b border-slate-100">
-            <span>Updated: November 12, 2026</span>
+            <span>Updated: {page === "privacy" ? "November 28, 2026" : "November 12, 2026"}</span>
             <span>Restaurant account information</span>
           </div>
 
@@ -177,6 +177,12 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
                 <h3 className="text-base font-bold text-slate-900 tracking-tight">5. Security Standards</h3>
                 <p>
                   We protect restaurant accounts with sign-in checks, staff permissions and separate access for each restaurant. These safeguards are intended to prevent unauthorised access or information being shown to the wrong restaurant.
+                </p>
+              </section>
+              <section className="space-y-2">
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">6. Website visit statistics</h3>
+                <p>
+                  If you allow website statistics, Google Analytics helps us count visits and understand which public pages people read. Google processes these statistics. Restaurant bills, customer details, staff PINs and signed-in screens are not included. You can choose No thanks or change your choice using Privacy choices on the public website. Your choice does not affect access to the restaurant software.
                 </p>
               </section>
             </div>
