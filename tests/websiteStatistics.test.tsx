@@ -35,15 +35,15 @@ it("waits for session restoration before offering or loading public statistics",
 });
 it("lets an anonymous visitor refuse, reopen preferences and allow statistics", async () => {
   state.isSessionBootstrapComplete = true; await render();
-  expect(host.textContent).toContain("Website statistics"); expect(host.querySelector('a[href="/privacy"]')).not.toBeNull();
-  await click("No thanks"); expect(localStorage.getItem(ANALYTICS_CONSENT_KEY)).toBe("denied");
+  expect(host.textContent).toContain("Cookies & privacy"); expect(host.querySelector('a[href="/privacy"]')).not.toBeNull();
+  await click("Reject optional cookies"); expect(localStorage.getItem(ANALYTICS_CONSENT_KEY)).toBe("denied");
   expect(document.querySelector("#aatmyam-website-google-tag")).toBeNull();
-  await click("Privacy choices"); await click("Allow statistics");
+  await click("Cookie settings"); await click("Accept optional cookies");
   expect(document.querySelector("#aatmyam-website-google-tag")).not.toBeNull();
   expect(localStorage.getItem(ANALYTICS_CONSENT_KEY)).toBe("granted");
 });
 it("removes the public control and blocks measurement on terminal navigation", async () => {
-  state.isSessionBootstrapComplete = true; await render(); await click("Allow statistics");
+  state.isSessionBootstrapComplete = true; await render(); await click("Accept optional cookies");
   await act(async () => { history.pushState({}, "", "/login?tenant=synthetic"); });
   expect(host.textContent).toBe(""); expect((window as any)["ga-disable-G-WPERCLQYVR"]).toBe(true);
 });
