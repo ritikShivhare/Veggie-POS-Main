@@ -26,7 +26,7 @@ export default function WebsiteStatistics() {
     analytics.choose(value); setChoice(value); setPreferencesOpen(false);
   };
   return (
-    <section aria-label="Cookie preferences" className="fixed bottom-3 left-3 right-3 z-50 max-w-sm rounded-2xl border border-[#D5E3C8] bg-[#FBF9F5] p-4 text-[#1C1E1B] shadow-xl">
+    <section aria-label="Cookie preferences" className="fixed bottom-3 left-3 right-3 z-[90] max-w-sm rounded-2xl border border-[#D5E3C8] bg-[#FBF9F5] p-4 text-[#1C1E1B] shadow-xl">
       <h2 className="font-serif text-lg">Cookies &amp; privacy</h2>
       <p className="mt-1 text-xs leading-relaxed">We use essential cookies for sign-in. With your permission, Google Analytics cookies help us understand visits to our public website. You can reject optional cookies and still use the site.</p>
       <p className="mt-1 text-xs leading-relaxed">Restaurant bills, customer details and staff PINs are not included.</p>
