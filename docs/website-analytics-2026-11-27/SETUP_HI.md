@@ -6,11 +6,15 @@ Measurement ID: `G-WPERCLQYVR` (public identifier, not a password).
 
 ## Privacy और access
 
-- पहली visit पर **Allow statistics** या **No thanks** चुना जा सकता है। Allow से पहले Google का script नहीं लोड होता। **Privacy choices** से बाद में बदला जा सकता है। DNT/GPC opt-out भी माना जाता है।
+- पहली visit पर **Accept optional cookies** या **Reject optional cookies** चुना जा सकता है। Allow से पहले Google का script नहीं लोड होता। **Cookie settings** से बाद में बदला जा सकता है। DNT/GPC opt-out भी माना जाता है।
 - Cookie-session restoration पूरी होने तक statistics बंद रहती हैं। Session check fail हो तो भी tracking बंद रहती है। Private app views पर `ga-disable` लागू रहता है।
 - केवल public page addresses/titles और सीमित campaign labels भेजे जाते हैं। कोई staff/customer ID, PIN, order, bill, phone number, email address या form-field value जानबूझकर नहीं भेजी जाती। Ads storage, ad personalization और Google Signals बंद हैं।
 - यह code Analytics reports को public नहीं बनाता और किसी account/person को नई report permissions नहीं देता। Reports उन्हीं accounts को मिलती हैं जिनको Google Analytics property में access है। Measurement ID से report access नहीं मिलता। इस release में property access/data-sharing settings नहीं बदली गई हैं।
 - Reports consenting visitors की page views हैं, सभी taps या हर व्यक्ति की सटीक पहचान नहीं। Browser blockers, consent और processing delay counts पर असर डाल सकते हैं। Health pings/API calls visitors नहीं हैं। Tracking से पहले के clicks बाद में नहीं बनाए जा सकते।
+
+## Cookie संदेश (28 नवंबर 2026)
+
+Public banner अब **Cookies & privacy** कहता है। Accept/Reject के दोनों buttons बराबर दिखाई देते हैं; **Cookie settings** से चुनाव दोबारा बदला जा सकता है। पहले से saved choice सुरक्षित रहती है। यह केवल wording/layout बदलाव है: नया aggregate counter, click tracking या Google advanced consent mode नहीं जोड़ा गया। Reject पर Google Analytics बंद रहता है।
 
 ## Google setting की पुष्टि
 
@@ -20,7 +24,7 @@ Google Analytics → Admin → Data streams → इस Web stream → Enhanced m
 
 ## Realtime जाँच
 
-1. Deploy के बाद अपना public homepage नए/incognito tab में खोलें और **Allow statistics** चुनें।
+1. Deploy के बाद अपना public homepage नए/incognito tab में खोलें और **Accept optional cookies** चुनें।
 2. Product और Pricing pages खोलें।
 3. Google Analytics में इसी Measurement ID वाली property चुनें → Reports → Realtime देखें। सामान्य reports को processing time लग सकता है।
 4. Account/POS pages पर जाकर देखें कि private addresses या tenant details events में नहीं आ रही हैं। Local automated test के सारे artificial Google collection requests intercept किए जाते हैं; कोई QA customer/order वास्तविक database में नहीं बनाया जाता।
