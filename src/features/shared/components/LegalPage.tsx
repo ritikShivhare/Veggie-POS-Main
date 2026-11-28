@@ -180,9 +180,9 @@ export default function LegalPage({ page, onBack }: LegalPageProps) {
                 </p>
               </section>
               <section className="space-y-2">
-                <h3 className="text-base font-bold text-slate-900 tracking-tight">6. Website visit statistics</h3>
+                <h3 className="text-base font-bold text-slate-900 tracking-tight">6. Cookies and website visits</h3>
                 <p>
-                  If you allow website statistics, Google Analytics helps us count visits and understand which public pages people read. Google processes these statistics. Restaurant bills, customer details, staff PINs and signed-in screens are not included. You can choose No thanks or change your choice using Privacy choices on the public website. Your choice does not affect access to the restaurant software.
+                  Essential cookies support sign-in. We also save your cookie choice on this device. If you choose Accept optional cookies, Google Analytics uses cookies to help us understand visits to our public pages. Google processes this visit information. If you choose Reject optional cookies, Google Analytics stays off. Restaurant bills, customer details, staff PINs and signed-in screens are not included. Change your choice at any time using Cookie settings on the public website. Rejecting optional cookies does not affect your access to the website or restaurant software.
                 </p>
               </section>
             </div>
